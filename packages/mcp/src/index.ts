@@ -1,3 +1,5 @@
+import { dirname, isAbsolute, relative, resolve } from "node:path";
+
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -5,12 +7,14 @@ import { z } from "zod";
 import {
   buildGraph,
   buildSearchIndex,
+  diffBundles,
   doctorBundle,
   lintBundle,
   loadBundle,
   okfxVersion,
   validateBundle,
   type BundleIR,
+  type BundleDiffIR,
   type ConceptIR
 } from "@okfx/core";
 
@@ -28,6 +32,15 @@ export interface ConceptSearchResult {
   score: number;
 }
 
+export interface DiffExplanation {
+  beforeRoot: string;
+  afterRoot: string;
+  hasChanges: boolean;
+  summary: string;
+  highlights: string[];
+  diff: BundleDiffIR;
+}
+
 export interface OkfBundleApi {
   load(): Promise<BundleIR>;
   searchConcepts(query: string, limit?: number): Promise<ConceptSearchResult[]>;
@@ -35,16 +48,19 @@ export interface OkfBundleApi {
   getNeighbors(id: string): Promise<{ outgoing: string[]; incoming: string[] }>;
   getBacklinks(id: string): Promise<string[]>;
   getGraph(): Promise<ReturnType<typeof buildGraph>>;
+  explainDiff(comparisonRoot: string, direction?: "baseline-to-current" | "current-to-comparison"): Promise<DiffExplanation>;
   getDiagnostics(): Promise<ReturnType<typeof doctorBundle>>;
   validate(): Promise<ReturnType<typeof validateBundle>>;
   lint(): Promise<ReturnType<typeof lintBundle>>;
 }
 
 export function createOkfBundleApi(root: string): OkfBundleApi {
+  const currentRoot = resolve(root);
+
   return {
-    load: () => loadBundle(root),
+    load: () => loadBundle(currentRoot),
     async searchConcepts(query, limit = 10) {
-      const bundle = await loadBundle(root);
+      const bundle = await loadBundle(currentRoot);
       const index = buildSearchIndex(bundle);
       const terms = tokenize(query);
       const scores = new Map<string, number>();
@@ -77,11 +93,11 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
         .slice(0, limit);
     },
     async getConcept(id) {
-      const bundle = await loadBundle(root);
+      const bundle = await loadBundle(currentRoot);
       return bundle.concepts.find((concept) => concept.id === id);
     },
     async getNeighbors(id) {
-      const graph = buildGraph(await loadBundle(root));
+      const graph = buildGraph(await loadBundle(currentRoot));
       return {
         outgoing: graph.edges
           .filter((edge) => edge.resolved && edge.source === id)
@@ -91,20 +107,37 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
       };
     },
     async getBacklinks(id) {
-      const graph = buildGraph(await loadBundle(root));
+      const graph = buildGraph(await loadBundle(currentRoot));
       return graph.analysis.backlinks[id] ?? [];
     },
     async getGraph() {
-      return buildGraph(await loadBundle(root));
+      return buildGraph(await loadBundle(currentRoot));
+    },
+    async explainDiff(comparisonRoot, direction = "baseline-to-current") {
+      const safeComparisonRoot = resolveSafeComparisonRoot(currentRoot, comparisonRoot);
+      const current = await loadBundle(currentRoot);
+      const comparison = await loadBundle(safeComparisonRoot);
+      const before = direction === "baseline-to-current" ? comparison : current;
+      const after = direction === "baseline-to-current" ? current : comparison;
+      const diff = diffBundles(before, after);
+
+      return {
+        beforeRoot: before.root,
+        afterRoot: after.root,
+        hasChanges: hasDiffChanges(diff),
+        summary: summarizeDiff(diff),
+        highlights: diffHighlights(diff),
+        diff
+      };
     },
     async getDiagnostics() {
-      return doctorBundle(await loadBundle(root));
+      return doctorBundle(await loadBundle(currentRoot));
     },
     async validate() {
-      return validateBundle(await loadBundle(root));
+      return validateBundle(await loadBundle(currentRoot));
     },
     async lint() {
-      return lintBundle(await loadBundle(root));
+      return lintBundle(await loadBundle(currentRoot));
     }
   };
 }
@@ -214,6 +247,15 @@ function registerTools(server: McpServer, api: OkfBundleApi): void {
     description: "Run OKF lint diagnostics."
   }, async () => jsonTool(await api.lint()));
 
+  server.registerTool("okf_explain_diff", {
+    title: "Explain OKF semantic diff",
+    description: "Compare the current local bundle with another local bundle root and return a deterministic semantic diff summary.",
+    inputSchema: z.object({
+      comparisonRoot: z.string(),
+      direction: z.enum(["baseline-to-current", "current-to-comparison"]).default("baseline-to-current")
+    })
+  }, async ({ comparisonRoot, direction }) => jsonTool(await api.explainDiff(comparisonRoot, direction)));
+
   server.registerTool("okf_get_diagnostics", {
     title: "Get OKF diagnostics",
     description: "Return doctor diagnostics and agent-readiness score."
@@ -246,6 +288,45 @@ function registerPrompts(server: McpServer): void {
       }
     }]
   }));
+
+  server.registerPrompt("draft_okf_concept", {
+    title: "Draft OKF concept",
+    description: "Draft a new OKF Markdown concept with valid frontmatter and useful links."
+  }, () => ({
+    messages: [{
+      role: "user",
+      content: {
+        type: "text",
+        text: "Draft a new OKF concept for the requested subject. Include YAML frontmatter with type, title, description, tags, and useful Markdown sections. Link to related concepts when IDs are available."
+      }
+    }]
+  }));
+
+  server.registerPrompt("explain_metric_context", {
+    title: "Explain metric context",
+    description: "Explain a metric concept using linked tables, owners, and runbooks."
+  }, () => ({
+    messages: [{
+      role: "user",
+      content: {
+        type: "text",
+        text: "Explain the selected metric concept using its description, source links, upstream tables, downstream consumers, and nearby runbook context. Call OKF tools to inspect neighbors and backlinks before answering."
+      }
+    }]
+  }));
+
+  server.registerPrompt("trace_table_to_metric", {
+    title: "Trace table to metric",
+    description: "Trace how a table concept contributes to metrics through graph links."
+  }, () => ({
+    messages: [{
+      role: "user",
+      content: {
+        type: "text",
+        text: "Trace the selected table concept to related metric concepts. Use graph neighbors, backlinks, and search results to explain the path and call out missing links."
+      }
+    }]
+  }));
 }
 
 function jsonTool(value: unknown) {
@@ -273,4 +354,44 @@ function tokenize(value: string): string[] {
     .split(/[^\p{L}\p{N}_-]+/u)
     .map((term) => term.trim())
     .filter((term) => term.length >= 2))];
+}
+
+function resolveSafeComparisonRoot(currentRoot: string, comparisonRoot: string): string {
+  const allowedBase = dirname(currentRoot);
+  const resolved = isAbsolute(comparisonRoot)
+    ? resolve(comparisonRoot)
+    : resolve(currentRoot, comparisonRoot);
+  const relativePath = relative(allowedBase, resolved);
+
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error(`comparisonRoot must stay under ${allowedBase}`);
+  }
+
+  return resolved;
+}
+
+function hasDiffChanges(diff: BundleDiffIR): boolean {
+  return diff.stats.addedCount + diff.stats.removedCount + diff.stats.renamedCount + diff.stats.changedCount > 0;
+}
+
+function summarizeDiff(diff: BundleDiffIR): string {
+  if (!hasDiffChanges(diff)) {
+    return "No semantic changes.";
+  }
+
+  return [
+    `${diff.stats.addedCount} added`,
+    `${diff.stats.removedCount} removed`,
+    `${diff.stats.renamedCount} renamed`,
+    `${diff.stats.changedCount} changed`
+  ].join(", ");
+}
+
+function diffHighlights(diff: BundleDiffIR): string[] {
+  return [
+    ...diff.addedConcepts.slice(0, 5).map((id) => `Added concept: ${id}`),
+    ...diff.removedConcepts.slice(0, 5).map((id) => `Removed concept: ${id}`),
+    ...diff.renamedConcepts.slice(0, 5).map((entry) => `Renamed concept: ${entry.from} -> ${entry.to}`),
+    ...diff.changedConcepts.slice(0, 5).map((entry) => `Changed concept: ${entry.id} (${entry.changes.join(", ")})`)
+  ];
 }
