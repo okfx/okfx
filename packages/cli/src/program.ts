@@ -8,6 +8,7 @@ import { createDiffCommand } from "./commands/diff.js";
 import { createFmtCommand } from "./commands/fmt.js";
 import { createGraphCommand } from "./commands/graph.js";
 import { createIndexCommand } from "./commands/index.js";
+import { createImportCommand } from "./commands/import.js";
 import { createLintCommand } from "./commands/lint.js";
 import { createMcpCommand } from "./commands/mcp.js";
 import { createPackCommand } from "./commands/pack.js";
@@ -37,6 +38,7 @@ export const plannedCommands = [
   ["diff", "compare two OKF bundles semantically"],
   ["pack", "create a portable OKF bundle artifact"],
   ["index", "build a local search index"],
+  ["import", "produce reviewable OKF draft files from local metadata"],
   ["mcp", "run a read-only MCP server for a bundle"]
 ] as const;
 
@@ -58,6 +60,8 @@ export function createProgram(context: CliContext): Command {
     program.addCommand(
       name === "init"
         ? createInitCommand(context)
+        : name === "import"
+          ? createImportCommand(context)
         : name === "validate"
           ? createValidateCommand(context)
           : name === "lint"

@@ -8,6 +8,11 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../core" },
-    { "path": "../mcp" }
+    { "path": "../mcp" },
+    { "path": "../adapter-markdown" },
+    { "path": "../adapter-openapi" },
+    { "path": "../adapter-dbt" },
+    { "path": "../adapter-datahub" },
+    { "path": "../adapter-bigquery" }
   ]
 }

@@ -48,9 +48,9 @@ describe("@okfx/cli command shell", () => {
 
   it("returns a runtime/config exit code for placeholder commands", async () => {
     const output = capture();
-    const code = await main(["import", "knowledge"], output.io);
+    const code = await main(["unknown", "knowledge"], output.io);
 
     expect(code).toBe(1);
-    expect(output.stderr()).toContain("error: unknown command 'import'");
+    expect(output.stderr()).toContain("error: unknown command 'unknown'");
   });
 });
