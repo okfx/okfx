@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes "okfx ${GITHUB_REF_NAME}"
+
+  npm-packages:
+    name: NPM package dry run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build TypeScript packages
+        run: npm run build
+
+      - name: Pack workspace packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pkg in packages/*; do
+            if [[ -f "$pkg/package.json" ]]; then
+              echo "::group::npm pack --dry-run $pkg"
+              (cd "$pkg" && npm pack --dry-run)
+              echo "::endgroup::"
+            fi
+          done
+
+  binaries:
+    name: Standalone binary ${{ matrix.target }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64-gnu
+            exe: ""
+            archive: tar.gz
+          - os: macos-14
+            target: darwin-arm64
+            exe: ""
+            archive: tar.gz
+          - os: windows-latest
+            target: win32-x64-msvc
+            exe: ".exe"
+            archive: zip
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test CLI crate
+        run: cargo test -p okfx_cli
+
+      - name: Build CLI binary
+        run: cargo build -p okfx_cli --release
+
+      - name: Package binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          asset="okfx-${{ matrix.target }}.${{ matrix.archive }}"
+          if [[ "${{ matrix.archive }}" == "zip" ]]; then
+            7z a "dist/${asset}" "target/release/okfx${{ matrix.exe }}"
+          else
+            tar -czf "dist/${asset}" -C target/release "okfx${{ matrix.exe }}"
+          fi
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "${GITHUB_REF_NAME}" dist/* --clobber

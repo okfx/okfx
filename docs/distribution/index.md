@@ -45,3 +45,11 @@ names. The package templates live under `npm/wasm` and `npm/core-wasm`.
 
 Native packages must use the same version as `@okfx/core`. If no native package
 matches the current runtime, okfx keeps running through WASM or TypeScript.
+
+## Automation
+
+- `.github/workflows/ci.yml` runs npm build, typecheck, tests, audit, Rust tests,
+  WASM build, and standalone CLI build on pushes and pull requests.
+- `.github/workflows/release.yml` runs on `v*` tags, dry-runs npm package
+  archives, builds standalone `okfx` binaries for Linux, macOS arm64, and
+  Windows x64, then uploads them to the GitHub Release.

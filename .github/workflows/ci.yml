@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build TypeScript packages
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test TypeScript packages
+        run: npm test
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Test Rust workspace
+        run: cargo test --workspace
+
+      - name: Build WASM fallback
+        run: cargo build -p okfx_wasm --target wasm32-unknown-unknown
+
+      - name: Build standalone CLI
+        run: cargo build -p okfx_cli --release
