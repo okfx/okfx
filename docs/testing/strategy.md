@@ -24,6 +24,12 @@ tags:
 Fixtures cover valid bundles, invalid validation cases, lint cases, formatter
 golden inputs, graph topology, and semantic diff behavior.
 
+## Performance Baselines
+
+`packages/core/test/performance.test.ts` generates large synthetic bundles during
+test execution. It covers high concept counts, dense link graphs, search index
+construction, and many-diagnostic lint runs with conservative time budgets.
+
 ## Verification
 
 Current unit and integration tests are under `packages/*/test/`. Fixture
