@@ -196,8 +196,36 @@ const builtInLintRules: BuiltInRule[] = [
     id: "security/suspicious-secret",
     defaultSeverity: "error",
     run: ({ bundle }) => bundle.concepts
-      .filter((concept) => containsSuspiciousSecret(`${JSON.stringify(concept.frontmatter)}\n${concept.body.raw}`))
+      .filter((concept) => containsSuspiciousSecret(conceptSearchableText(concept)))
       .map((concept) => conceptDiagnostic("security/suspicious-secret", "error", concept, "Concept appears to contain a secret or token."))
+  },
+  {
+    id: "security/private-key",
+    defaultSeverity: "error",
+    run: ({ bundle }) => bundle.concepts
+      .filter((concept) => containsPrivateKey(conceptSearchableText(concept)))
+      .map((concept) => conceptDiagnostic("security/private-key", "error", concept, "Concept appears to contain a private key."))
+  },
+  {
+    id: "security/token-looking-value",
+    defaultSeverity: "warning",
+    run: ({ bundle }) => bundle.concepts
+      .filter((concept) => containsTokenLookingValue(conceptSearchableText(concept)))
+      .map((concept) => conceptDiagnostic("security/token-looking-value", "warning", concept, "Concept appears to contain a token-looking value."))
+  },
+  {
+    id: "security/unredacted-email",
+    defaultSeverity: "warning",
+    run: ({ bundle }) => bundle.concepts
+      .filter((concept) => containsUnredactedEmail(conceptSearchableText(concept)))
+      .map((concept) => conceptDiagnostic("security/unredacted-email", "warning", concept, "Concept appears to contain an unredacted email address."))
+  },
+  {
+    id: "security/internal-url",
+    defaultSeverity: "warning",
+    run: ({ bundle }) => bundle.concepts
+      .filter((concept) => containsInternalUrl(conceptSearchableText(concept)))
+      .map((concept) => conceptDiagnostic("security/internal-url", "warning", concept, "Concept contains an internal or private URL outside the resource field."))
   },
   {
     id: "security/private-url",
@@ -370,6 +398,10 @@ function resourceValues(concept: ConceptIR): string[] {
   return concept.resource ? [concept.resource] : [];
 }
 
+function conceptSearchableText(concept: ConceptIR): string {
+  return `${JSON.stringify(concept.frontmatter)}\n${concept.frontmatterRaw ?? ""}\n${concept.body.raw}`;
+}
+
 function frontmatterKeyOrderIsStable(concept: ConceptIR, configuredOrder: string[]): boolean {
   if (concept.frontmatterRaw === undefined) {
     return true;
@@ -394,9 +426,28 @@ function isIsoTimestamp(value: string): boolean {
 }
 
 function containsSuspiciousSecret(value: string): boolean {
-  return /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(value)
-    || /\bAKIA[0-9A-Z]{16}\b/.test(value)
+  return containsPrivateKey(value) || containsTokenLookingValue(value);
+}
+
+function containsPrivateKey(value: string): boolean {
+  return /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(value);
+}
+
+function containsTokenLookingValue(value: string): boolean {
+  return /\bAKIA[0-9A-Z]{16}\b/.test(value)
     || /\b(?:api[_-]?key|secret|token)\b\s*[:=]\s*["']?[A-Za-z0-9_.-]{20,}/i.test(value);
+}
+
+function containsUnredactedEmail(value: string): boolean {
+  return /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(value);
+}
+
+function containsInternalUrl(value: string): boolean {
+  return extractUrls(value).some(isPrivateUrl);
+}
+
+function extractUrls(value: string): string[] {
+  return value.match(/\bhttps?:\/\/[^\s<>"')\]]+/g) ?? [];
 }
 
 function isPrivateUrl(value: string): boolean {

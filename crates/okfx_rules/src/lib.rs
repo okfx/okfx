@@ -554,6 +554,28 @@ fn security_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
             );
         }
 
+        if contains_private_key(&searchable_text) {
+            push_concept_diagnostic(
+                &mut diagnostics,
+                context.options,
+                "security/private-key",
+                Severity::Error,
+                concept,
+                "Concept appears to contain a private key.",
+            );
+        }
+
+        if contains_token_looking_value(&searchable_text) {
+            push_concept_diagnostic(
+                &mut diagnostics,
+                context.options,
+                "security/token-looking-value",
+                Severity::Warning,
+                concept,
+                "Concept appears to contain a token-looking value.",
+            );
+        }
+
         if contains_unredacted_email(&searchable_text) {
             push_concept_diagnostic(
                 &mut diagnostics,
@@ -562,6 +584,17 @@ fn security_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
                 Severity::Warning,
                 concept,
                 "Concept appears to contain an unredacted email address.",
+            );
+        }
+
+        if contains_internal_url(&searchable_text) {
+            push_concept_diagnostic(
+                &mut diagnostics,
+                context.options,
+                "security/internal-url",
+                Severity::Warning,
+                concept,
+                "Concept contains an internal or private URL outside the resource field.",
             );
         }
 
@@ -951,7 +984,7 @@ fn is_kebab_case_tag(tag: &str) -> bool {
 }
 
 fn contains_suspicious_secret(value: &str) -> bool {
-    contains_private_key(value) || contains_aws_access_key(value) || contains_assigned_secret(value)
+    contains_private_key(value) || contains_token_looking_value(value)
 }
 
 fn contains_private_key(value: &str) -> bool {
@@ -968,6 +1001,10 @@ fn contains_aws_access_key(value: &str) -> bool {
                     .chars()
                     .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit())
         })
+}
+
+fn contains_token_looking_value(value: &str) -> bool {
+    contains_aws_access_key(value) || contains_assigned_secret(value)
 }
 
 fn contains_assigned_secret(value: &str) -> bool {
@@ -1005,6 +1042,20 @@ fn contains_unredacted_email(value: &str) -> bool {
                 .chars()
                 .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '.')
     })
+}
+
+fn contains_internal_url(value: &str) -> bool {
+    value
+        .split_whitespace()
+        .map(|token| {
+            token.trim_matches(|ch: char| {
+                matches!(
+                    ch,
+                    ',' | '.' | ';' | ':' | ')' | '(' | ']' | '[' | '"' | '\''
+                )
+            })
+        })
+        .any(is_private_url)
 }
 
 fn is_email_local_char(ch: char) -> bool {
@@ -1096,7 +1147,7 @@ mod tests {
             concepts: vec![
                 concept("a")
                     .with_type("Metric")
-                    .with_body("api_key = abcdefghijklmnopqrstuvwxyz\nContact admin@corp.com")
+                    .with_body("api_key = abcdefghijklmnopqrstuvwxyz\nContact admin@corp.com\nSee http://10.0.0.5/runbook\n-----BEGIN PRIVATE KEY-----")
                     .with_resource("https://example.com/shared")
                     .with_frontmatter("title: A\ntype: Metric")
                     .with_timestamp("2024-01-01")
@@ -1145,7 +1196,10 @@ mod tests {
         assert!(codes.contains(&"agent/api-missing-auth-notes"));
         assert!(codes.contains(&"agent/metric-missing-source"));
         assert!(codes.contains(&"security/suspicious-secret"));
+        assert!(codes.contains(&"security/private-key"));
+        assert!(codes.contains(&"security/token-looking-value"));
         assert!(codes.contains(&"security/unredacted-email"));
+        assert!(codes.contains(&"security/internal-url"));
         assert!(codes.contains(&"security/non-allowlisted-resource"));
         assert_eq!(diagnostics[0].severity, Severity::Error);
     }

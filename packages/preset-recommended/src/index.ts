@@ -9,7 +9,11 @@ const preset: OkfxConfig = {
     "hygiene/empty-body": "warning",
     "graph/broken-internal-link": "warning",
     "graph/orphan-concept": "advice",
-    "security/suspicious-secret": "error"
+    "security/suspicious-secret": "error",
+    "security/private-key": "error",
+    "security/token-looking-value": "warning",
+    "security/unredacted-email": "warning",
+    "security/internal-url": "warning"
   }
 };
 

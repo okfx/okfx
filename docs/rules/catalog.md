@@ -20,6 +20,16 @@ tags:
 - `agent/*`: agent-readiness and production context checks.
 - `security/*`: suspicious secrets and resource policy issues.
 
+## Security Rules
+
+- `security/suspicious-secret`: aggregate error for private keys and token-looking values.
+- `security/private-key`: private key material appears in frontmatter or body content.
+- `security/token-looking-value`: API key, secret, token, or AWS access-key shaped value appears in content.
+- `security/unredacted-email`: raw email address appears in frontmatter or body content.
+- `security/internal-url`: private or local URL appears in frontmatter or body content.
+- `security/private-url`: `resource` points to a private or local host.
+- `security/non-allowlisted-resource`: `resource` host is outside `resourcePolicy.allowHosts`.
+
 ## Failure Threshold
 
 Config `failOn` controls whether `warning`, `advice`, or only `error` diagnostics

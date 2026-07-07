@@ -34,7 +34,9 @@ resource: http://localhost/runbook
 
 [Missing](missing.md)
 
+Contact admin@corp.com and see http://10.0.0.5/runbook.
 api_key = abcdefghijklmnopqrstuvwxyz
+-----BEGIN PRIVATE KEY-----
 `
     }, async (root) => {
       const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
@@ -48,6 +50,10 @@ api_key = abcdefghijklmnopqrstuvwxyz
       expect(codes).toContain("style/file-name-format");
       expect(codes).toContain("security/private-url");
       expect(codes).toContain("security/suspicious-secret");
+      expect(codes).toContain("security/private-key");
+      expect(codes).toContain("security/token-looking-value");
+      expect(codes).toContain("security/unredacted-email");
+      expect(codes).toContain("security/internal-url");
       expect(result.ok).toBe(false);
     });
   });

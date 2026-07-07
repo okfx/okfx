@@ -10,6 +10,10 @@ const preset: OkfxConfig = {
     "graph/no-backlinks": "warning",
     "style/frontmatter-key-order": "warning",
     "style/timestamp-format": "warning",
+    "security/private-key": "error",
+    "security/token-looking-value": "warning",
+    "security/unredacted-email": "warning",
+    "security/internal-url": "warning",
     "security/private-url": "warning",
     "security/non-allowlisted-resource": "error"
   }
