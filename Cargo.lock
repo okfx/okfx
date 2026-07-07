@@ -136,6 +136,10 @@ version = "0.1.0"
 [[package]]
 name = "okfx_pack"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "sha2",
+]
 
 [[package]]
 name = "okfx_parser"
