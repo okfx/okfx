@@ -1,3 +1,4 @@
+import { doctorBundle, type DoctorOptions } from "./doctor.js";
 import type { BundleIR, ConceptIR } from "./types.js";
 
 export interface ConceptRenameIR {
@@ -23,15 +24,26 @@ export interface BundleDiffIR {
   removedConcepts: string[];
   renamedConcepts: ConceptRenameIR[];
   changedConcepts: ConceptChangeIR[];
+  agentReadiness: {
+    beforeScore: number;
+    afterScore: number;
+    delta: number;
+    changed: boolean;
+  };
   stats: {
     addedCount: number;
     removedCount: number;
     renamedCount: number;
     changedCount: number;
+    readinessChanged: boolean;
   };
 }
 
-export function diffBundles(before: BundleIR, after: BundleIR): BundleDiffIR {
+export interface DiffOptions {
+  doctor?: DoctorOptions;
+}
+
+export function diffBundles(before: BundleIR, after: BundleIR, options: DiffOptions = {}): BundleDiffIR {
   const beforeById = new Map(before.concepts.map((concept) => [concept.id, concept]));
   const afterById = new Map(after.concepts.map((concept) => [concept.id, concept]));
   const added = after.concepts.filter((concept) => !beforeById.has(concept.id));
@@ -46,17 +58,27 @@ export function diffBundles(before: BundleIR, after: BundleIR): BundleDiffIR {
     .map(([id, afterConcept]) => changedConcept(beforeById.get(id)!, afterConcept))
     .filter((change): change is ConceptChangeIR => change !== undefined)
     .sort((a, b) => a.id.localeCompare(b.id));
+  const beforeReadiness = doctorBundle(before, options.doctor);
+  const afterReadiness = doctorBundle(after, options.doctor);
+  const readinessDelta = afterReadiness.score - beforeReadiness.score;
 
   return {
     addedConcepts,
     removedConcepts,
     renamedConcepts: renamed,
     changedConcepts,
+    agentReadiness: {
+      beforeScore: beforeReadiness.score,
+      afterScore: afterReadiness.score,
+      delta: readinessDelta,
+      changed: readinessDelta !== 0
+    },
     stats: {
       addedCount: addedConcepts.length,
       removedCount: removedConcepts.length,
       renamedCount: renamed.length,
-      changedCount: changedConcepts.length
+      changedCount: changedConcepts.length,
+      readinessChanged: readinessDelta !== 0
     }
   };
 }

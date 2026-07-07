@@ -52,7 +52,8 @@ function formatDiff(diff: BundleDiffIR, format: DiffFormat): string {
 }
 
 function hasChanges(diff: BundleDiffIR): boolean {
-  return diff.stats.addedCount + diff.stats.removedCount + diff.stats.renamedCount + diff.stats.changedCount > 0;
+  return diff.stats.addedCount + diff.stats.removedCount + diff.stats.renamedCount + diff.stats.changedCount > 0
+    || diff.stats.readinessChanged;
 }
 
 function prettyDiff(diff: BundleDiffIR): string {
@@ -66,6 +67,7 @@ ${section("Added concepts", diff.addedConcepts, "+")}
 ${section("Removed concepts", diff.removedConcepts, "-")}
 ${renameSection(diff)}
 ${changedSection(diff)}
+${readinessSection(diff)}
 `;
 }
 
@@ -80,6 +82,7 @@ ${markdownList("Added concepts", diff.addedConcepts, "+")}
 ${markdownList("Removed concepts", diff.removedConcepts, "-")}
 ${markdownRenameList(diff)}
 ${markdownChangedList(diff)}
+${markdownReadinessSection(diff)}
 `;
 }
 
@@ -107,6 +110,10 @@ function changedSection(diff: BundleDiffIR): string {
   return `Changed concepts:\n${diff.changedConcepts.map((concept) => `  ~ ${concept.id}\n${concept.changes.map((change) => `    ${change}`).join("\n")}`).join("\n")}\n`;
 }
 
+function readinessSection(diff: BundleDiffIR): string {
+  return `Agent readiness:\n  ${diff.agentReadiness.beforeScore} -> ${diff.agentReadiness.afterScore} (${formatDelta(diff.agentReadiness.delta)})\n`;
+}
+
 function markdownList(title: string, values: string[], marker: string): string {
   if (values.length === 0) {
     return `### ${title}\n\nNone.\n`;
@@ -129,4 +136,12 @@ function markdownChangedList(diff: BundleDiffIR): string {
   }
 
   return `### Changed concepts\n\n${diff.changedConcepts.map((concept) => `- \`${concept.id}\`\n${concept.changes.map((change) => `  - ${change}`).join("\n")}`).join("\n")}\n`;
+}
+
+function markdownReadinessSection(diff: BundleDiffIR): string {
+  return `### Agent readiness\n\n${diff.agentReadiness.beforeScore} -> ${diff.agentReadiness.afterScore} (${formatDelta(diff.agentReadiness.delta)})\n`;
+}
+
+function formatDelta(delta: number): string {
+  return delta > 0 ? `+${delta}` : `${delta}`;
 }

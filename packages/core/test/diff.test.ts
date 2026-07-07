@@ -51,6 +51,44 @@ describe("diffBundles", () => {
       });
       expect(diff.changedConcepts[0]?.linksAdded).toEqual(["new-link.md"]);
       expect(diff.changedConcepts[0]?.linksRemoved).toEqual(["old-link.md"]);
+      expect(diff.agentReadiness).toEqual(expect.objectContaining({
+        beforeScore: expect.any(Number),
+        afterScore: expect.any(Number),
+        delta: expect.any(Number),
+        changed: expect.any(Boolean)
+      }));
+    } finally {
+      await before.cleanup();
+      await after.cleanup();
+    }
+  });
+
+  it("reports agent-readiness score changes", async () => {
+    const before = await bundle({
+      "concept.md": "---\ntype: Metric\ntitle: WAU\n---\n# WAU\n"
+    });
+    const after = await bundle({
+      "index.md": "# Index\n[WAU](concept.md)\n[Events](events.md)\n",
+      "concept.md": `---
+type: Metric
+title: WAU
+description: Weekly active users.
+owner: data
+---
+# WAU
+
+## Usage
+
+[Events](events.md)
+`,
+      "events.md": "---\ntype: Table\ntitle: Events\ndescription: Source table.\n---\n# Events\n"
+    });
+
+    try {
+      const diff = diffBundles(before.loaded, after.loaded);
+
+      expect(diff.agentReadiness.changed).toBe(true);
+      expect(diff.agentReadiness.afterScore).toBeGreaterThan(diff.agentReadiness.beforeScore);
     } finally {
       await before.cleanup();
       await after.cleanup();

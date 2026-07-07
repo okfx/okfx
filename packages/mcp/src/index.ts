@@ -391,7 +391,8 @@ function resolveSafeComparisonRoot(currentRoot: string, comparisonRoot: string):
 }
 
 function hasDiffChanges(diff: BundleDiffIR): boolean {
-  return diff.stats.addedCount + diff.stats.removedCount + diff.stats.renamedCount + diff.stats.changedCount > 0;
+  return diff.stats.addedCount + diff.stats.removedCount + diff.stats.renamedCount + diff.stats.changedCount > 0
+    || diff.stats.readinessChanged;
 }
 
 function summarizeDiff(diff: BundleDiffIR): string {

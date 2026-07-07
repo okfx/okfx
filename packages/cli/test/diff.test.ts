@@ -61,6 +61,7 @@ describe("okf diff", () => {
     expect(code).toBe(1);
     expect(output.stdout()).toContain("Bundle diff");
     expect(output.stdout()).toContain("frontmatter.title changed");
+    expect(output.stdout()).toContain("Agent readiness:");
   });
 
   it("returns zero for no changes", async () => {
