@@ -3,6 +3,7 @@ import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { okfxVersion } from "@okfx/core";
 
 import { createInitCommand } from "./commands/init.js";
+import { createGraphCommand } from "./commands/graph.js";
 import { createLintCommand } from "./commands/lint.js";
 import { createValidateCommand } from "./commands/validate.js";
 
@@ -55,6 +56,8 @@ export function createProgram(context: CliContext): Command {
           ? createValidateCommand(context)
           : name === "lint"
             ? createLintCommand(context)
+            : name === "graph"
+              ? createGraphCommand(context)
         : createPlaceholderCommand(name, description, context)
     );
   }
