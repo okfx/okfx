@@ -48,9 +48,9 @@ describe("@okfx/cli command shell", () => {
 
   it("returns a runtime/config exit code for placeholder commands", async () => {
     const output = capture();
-    const code = await main(["mcp", "knowledge"], output.io);
+    const code = await main(["import", "knowledge"], output.io);
 
-    expect(code).toBe(2);
-    expect(output.stderr()).toContain("okf mcp: command implementation is not installed yet");
+    expect(code).toBe(1);
+    expect(output.stderr()).toContain("error: unknown command 'import'");
   });
 });

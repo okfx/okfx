@@ -1,12 +1,9 @@
 {
-  "name": "@okfx/cli",
+  "name": "@okfx/mcp",
   "version": "0.1.0",
-  "description": "Command line interface for OKF bundle tooling.",
+  "description": "Read-only MCP server for OKF bundles.",
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "okf": "./dist/index.js"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,13 +14,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b && node scripts/make-executable.mjs",
+    "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@okfx/core": "0.1.0",
-    "@okfx/mcp": "^0.1.0",
-    "commander": "^15.0.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

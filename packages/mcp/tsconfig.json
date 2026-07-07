@@ -7,7 +7,6 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
-    { "path": "../core" },
-    { "path": "../mcp" }
+    { "path": "../core" }
   ]
 }

@@ -9,6 +9,7 @@ import { createFmtCommand } from "./commands/fmt.js";
 import { createGraphCommand } from "./commands/graph.js";
 import { createIndexCommand } from "./commands/index.js";
 import { createLintCommand } from "./commands/lint.js";
+import { createMcpCommand } from "./commands/mcp.js";
 import { createPackCommand } from "./commands/pack.js";
 import { createValidateCommand } from "./commands/validate.js";
 
@@ -73,6 +74,8 @@ export function createProgram(context: CliContext): Command {
                       ? createPackCommand(context)
                       : name === "index"
                         ? createIndexCommand(context)
+                        : name === "mcp"
+                          ? createMcpCommand(context)
         : createPlaceholderCommand(name, description, context)
     );
   }

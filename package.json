@@ -12,7 +12,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "tsc -b tsconfig.json && node packages/cli/scripts/make-executable.mjs",
     "clean": "npm run clean --workspaces --if-present",
     "test": "vitest run",
     "typecheck": "tsc -b tsconfig.json",
