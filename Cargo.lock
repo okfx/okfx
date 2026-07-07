@@ -164,6 +164,9 @@ dependencies = [
 [[package]]
 name = "okfx_rules"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "okfx_wasm"
