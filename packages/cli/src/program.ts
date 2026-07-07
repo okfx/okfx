@@ -59,36 +59,45 @@ export function createProgram(context: CliContext): Command {
     });
 
   for (const [name, description] of plannedCommands) {
-    program.addCommand(
-      name === "init"
-        ? createInitCommand(context)
-        : name === "import"
-          ? createImportCommand(context)
-        : name === "export"
-          ? createExportCommand(context)
-        : name === "validate"
-          ? createValidateCommand(context)
-          : name === "lint"
-            ? createLintCommand(context)
-            : name === "graph"
-              ? createGraphCommand(context)
-              : name === "doctor"
-                ? createDoctorCommand(context)
-                : name === "fmt"
-                  ? createFmtCommand(context)
-                  : name === "diff"
-                    ? createDiffCommand(context)
-                    : name === "pack"
-                      ? createPackCommand(context)
-                      : name === "index"
-                        ? createIndexCommand(context)
-                        : name === "mcp"
-                          ? createMcpCommand(context)
-        : createPlaceholderCommand(name, description, context)
-    );
+    program.addCommand(createPlannedCommand(name, description, context));
   }
 
   return program;
+}
+
+function createPlannedCommand(
+  name: typeof plannedCommands[number][0],
+  description: string,
+  context: CliContext
+): Command {
+  switch (name) {
+    case "init":
+      return createInitCommand(context);
+    case "validate":
+      return createValidateCommand(context);
+    case "lint":
+      return createLintCommand(context);
+    case "fmt":
+      return createFmtCommand(context);
+    case "graph":
+      return createGraphCommand(context);
+    case "doctor":
+      return createDoctorCommand(context);
+    case "diff":
+      return createDiffCommand(context);
+    case "pack":
+      return createPackCommand(context);
+    case "index":
+      return createIndexCommand(context);
+    case "import":
+      return createImportCommand(context);
+    case "export":
+      return createExportCommand(context);
+    case "mcp":
+      return createMcpCommand(context);
+  }
+
+  throw new Error(`No command implementation registered for ${description}.`);
 }
 
 export async function runProgram(argv: string[], io: CliIO): Promise<number> {
@@ -116,19 +125,4 @@ export async function runProgram(argv: string[], io: CliIO): Promise<number> {
     io.stderr.write(error instanceof Error ? `${error.message}\n` : "unknown error\n");
     return 2;
   }
-}
-
-function createPlaceholderCommand(name: string, description: string, context: CliContext): Command {
-  return new Command(name)
-    .description(description)
-    .argument("[bundle]", "OKF bundle root", ".")
-    .option("--format <format>", "output format", "pretty")
-    .option("--out <path>", "write output to a file")
-    .option("--debug", "print debug diagnostics")
-    .option("--trace", "print trace diagnostics")
-    .option("--timings", "print runtime timings")
-    .action(() => {
-      context.io.stderr.write(`okf ${name}: command implementation is not installed yet\n`);
-      context.setExitCode(2);
-    });
 }

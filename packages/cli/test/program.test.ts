@@ -46,7 +46,7 @@ describe("@okfx/cli command shell", () => {
     }
   });
 
-  it("returns a runtime/config exit code for placeholder commands", async () => {
+  it("returns a command error for unknown commands", async () => {
     const output = capture();
     const code = await main(["unknown", "knowledge"], output.io);
 
