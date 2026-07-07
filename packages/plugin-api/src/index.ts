@@ -3,12 +3,19 @@ import type { BundleIR, DiagnosticIR, GraphIR, ResolvedOkfxConfig } from "@okfx/
 export interface OkfxRuleContext {
   bundle: BundleIR;
   config: ResolvedOkfxConfig;
+  plugin?: {
+    name: string;
+    source?: string;
+    version?: string;
+  };
+  options?: Record<string, unknown>;
 }
 
 export interface OkfxRule {
   meta: {
     description: string;
     defaultSeverity?: DiagnosticIR["severity"];
+    severity?: DiagnosticIR["severity"];
   };
   run(context: OkfxRuleContext): DiagnosticIR[] | Promise<DiagnosticIR[]>;
 }
@@ -28,6 +35,7 @@ export interface OkfxConsumerAdapter {
 
 export interface OkfxPlugin {
   name: string;
+  version?: string;
   rules?: Record<string, OkfxRule>;
   adapters?: Record<string, OkfxProducerAdapter | OkfxConsumerAdapter>;
   mcpTools?: Record<string, unknown>;

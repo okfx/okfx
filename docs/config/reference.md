@@ -27,6 +27,28 @@ tags:
 `resourcePolicy.allowHosts` restricts resource URLs when configured. No network
 request is made to verify resources.
 
+## Plugins
+
+`plugins` is an explicit allowlist of executable plugin modules. Entries can be
+package specifiers or objects with package, enabled, and options fields.
+
+```ts
+export default {
+  plugins: [
+    "@acme/okfx-plugin",
+    {
+      package: "./local-plugin.ts",
+      enabled: true,
+      options: {
+        requiredOwner: "data-platform"
+      }
+    }
+  ]
+};
+```
+
+Use `okf lint --no-plugins` to disable configured plugins for one run.
+
 ## Verification
 
 - Config loading tests under `packages/core/test/bundle.test.ts`.

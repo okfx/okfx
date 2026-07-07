@@ -182,6 +182,16 @@ describe("resolveConfig", () => {
   it("expands built-in presets and keeps explicit rule overrides", () => {
     const config = resolveConfig({
       presets: ["@okfx/preset-strict", "agent-ready"],
+      plugins: [
+        "@acme/okfx-plugin",
+        {
+          package: "./local-plugin.ts",
+          enabled: false,
+          options: {
+            requiredOwner: "data-platform"
+          }
+        }
+      ],
       rules: {
         "hygiene/missing-title": "off"
       }
@@ -191,5 +201,19 @@ describe("resolveConfig", () => {
     expect(config.rules["hygiene/missing-description"]).toBe("error");
     expect(config.rules["agent/metric-missing-source"]).toBe("warning");
     expect(config.rules["hygiene/missing-title"]).toBe("off");
+    expect(config.plugins).toEqual([
+      {
+        package: "@acme/okfx-plugin",
+        enabled: true,
+        options: {}
+      },
+      {
+        package: "./local-plugin.ts",
+        enabled: false,
+        options: {
+          requiredOwner: "data-platform"
+        }
+      }
+    ]);
   });
 });

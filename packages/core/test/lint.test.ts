@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { lintBundle, loadBundle } from "../src/index.js";
+import { lintBundle, lintBundleWithPlugins, loadBundle } from "../src/index.js";
 
 async function withBundle(files: Record<string, string>, fn: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "okfx-lint-"));
@@ -97,6 +97,53 @@ api_key = abcdefghijklmnopqrstuvwxyz
       });
 
       expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("security/non-allowlisted-resource");
+    });
+  });
+
+  it("runs configured plugin rules and honors rule overrides", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    }, async (root) => {
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      const result = await lintBundleWithPlugins(bundle, {
+        config: {
+          rules: {
+            "custom/owner-required": "error"
+          }
+        },
+        plugins: [{
+          name: "custom-plugin",
+          source: "inline",
+          options: {},
+          rules: {
+            "custom/owner-required": {
+              meta: {
+                description: "Concepts must declare an owner.",
+                defaultSeverity: "warning"
+              },
+              run: ({ bundle: pluginBundle }) => pluginBundle.concepts
+                .filter((concept) => typeof concept.frontmatter.owner !== "string")
+                .map((concept) => ({
+                  code: "custom/owner-required",
+                  severity: "warning",
+                  message: "Concept should declare an owner.",
+                  path: concept.path,
+                  conceptId: concept.id
+                }))
+            }
+          }
+        }]
+      });
+
+      const diagnostic = result.diagnostics.find((entry) => entry.code === "custom/owner-required");
+      expect(diagnostic?.severity).toBe("error");
+      expect(result.plugins).toEqual([{
+        name: "custom-plugin",
+        source: "inline",
+        version: undefined,
+        ruleCount: 1
+      }]);
+      expect(result.ok).toBe(false);
     });
   });
 });

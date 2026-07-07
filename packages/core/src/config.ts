@@ -8,12 +8,24 @@ import type { DiagnosticSeverity } from "./types.js";
 
 export type RuleLevel = DiagnosticSeverity | "off";
 export type RuleConfig = RuleLevel | [RuleLevel, Record<string, unknown>];
+export type OkfxPluginReference = string | {
+  package: string;
+  enabled?: boolean;
+  options?: Record<string, unknown>;
+};
+
+export interface ResolvedOkfxPluginReference {
+  package: string;
+  enabled: boolean;
+  options: Record<string, unknown>;
+}
 
 export interface OkfxConfig {
   okfVersion?: string;
   include?: string[];
   exclude?: string[];
   presets?: string[];
+  plugins?: OkfxPluginReference[];
   rules?: Record<string, RuleConfig>;
   failOn?: DiagnosticSeverity;
   frontmatter?: {
@@ -34,6 +46,7 @@ export interface ResolvedOkfxConfig {
   include: string[];
   exclude: string[];
   presets: string[];
+  plugins: ResolvedOkfxPluginReference[];
   rules: Record<string, RuleConfig>;
   failOn: DiagnosticSeverity;
   frontmatter: {
@@ -64,6 +77,7 @@ export const defaultConfig: ResolvedOkfxConfig = {
   include: ["**/*.md"],
   exclude: ["node_modules/**", ".git/**", ".okfx/**", "dist/**"],
   presets: ["recommended"],
+  plugins: [],
   rules: {},
   failOn: "error",
   frontmatter: {
@@ -144,6 +158,7 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
     include: config.include ?? [...defaultConfig.include],
     exclude: config.exclude ?? [...defaultConfig.exclude],
     presets,
+    plugins: normalizePluginReferences(config.plugins ?? []),
     rules: {
       ...presetRules,
       ...(config.rules ?? {})
@@ -162,6 +177,24 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
     },
     configPath
   };
+}
+
+function normalizePluginReferences(plugins: OkfxPluginReference[]): ResolvedOkfxPluginReference[] {
+  return plugins.map((plugin) => {
+    if (typeof plugin === "string") {
+      return {
+        package: plugin,
+        enabled: true,
+        options: {}
+      };
+    }
+
+    return {
+      package: plugin.package,
+      enabled: plugin.enabled ?? true,
+      options: plugin.options ?? {}
+    };
+  });
 }
 
 function resolvePreset(name: string): OkfxConfig | undefined {

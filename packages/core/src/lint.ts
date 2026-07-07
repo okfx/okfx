@@ -1,11 +1,21 @@
 import { conceptIdFromPath } from "./paths.js";
 import { countDiagnostics, diagnosticsExceedThreshold, sortDiagnostics, type DiagnosticCounts } from "./diagnostics.js";
 import { resolveConfig, type OkfxConfig, type ResolvedOkfxConfig, type RuleConfig } from "./config.js";
+import type { LoadedOkfxPlugin } from "./plugins.js";
 import { validateBundle } from "./validation.js";
 import type { BundleIR, ConceptIR, DiagnosticIR, DiagnosticSeverity, LinkIR } from "./types.js";
 
 export interface LintOptions {
   config?: OkfxConfig | ResolvedOkfxConfig;
+  plugins?: LoadedOkfxPlugin[];
+  pluginDiagnostics?: DiagnosticIR[];
+}
+
+export interface LintPluginSummary {
+  name: string;
+  source: string;
+  version?: string;
+  ruleCount: number;
 }
 
 export interface LintResult {
@@ -13,6 +23,7 @@ export interface LintResult {
   diagnostics: DiagnosticIR[];
   counts: DiagnosticCounts;
   failOn: DiagnosticSeverity;
+  plugins: LintPluginSummary[];
 }
 
 interface RuleContext {
@@ -34,17 +45,44 @@ interface BuiltInRule {
 export function lintBundle(bundle: BundleIR, options: LintOptions = {}): LintResult {
   const config = resolveConfig(options.config ?? {});
   const context = createRuleContext(bundle, config);
-  const diagnostics = sortDiagnostics([
+  return createLintResult(config, [
     ...validateBundle(bundle).diagnostics,
-    ...builtInLintRules.flatMap((rule) => runRule(rule, context))
-  ]);
+    ...builtInLintRules.flatMap((rule) => runRule(rule, context)),
+    ...(options.pluginDiagnostics ?? [])
+  ], []);
+}
+
+export async function lintBundleWithPlugins(bundle: BundleIR, options: LintOptions = {}): Promise<LintResult> {
+  const config = resolveConfig(options.config ?? {});
+  const context = createRuleContext(bundle, config);
+  const pluginDiagnostics = await runPluginRules(options.plugins ?? [], context);
+  return createLintResult(config, [
+    ...validateBundle(bundle).diagnostics,
+    ...builtInLintRules.flatMap((rule) => runRule(rule, context)),
+    ...(options.pluginDiagnostics ?? []),
+    ...pluginDiagnostics
+  ], options.plugins ?? []);
+}
+
+function createLintResult(
+  config: ResolvedOkfxConfig,
+  diagnosticsInput: DiagnosticIR[],
+  plugins: LoadedOkfxPlugin[]
+): LintResult {
+  const diagnostics = sortDiagnostics(diagnosticsInput);
   const counts = countDiagnostics(diagnostics);
 
   return {
     ok: !diagnosticsExceedThreshold(diagnostics, config.failOn),
     diagnostics,
     counts,
-    failOn: config.failOn
+    failOn: config.failOn,
+    plugins: plugins.map((plugin) => ({
+      name: plugin.name,
+      source: plugin.source,
+      version: plugin.version,
+      ruleCount: Object.keys(plugin.rules).length
+    }))
   };
 }
 
@@ -195,6 +233,44 @@ function runRule(rule: BuiltInRule, context: RuleContext): DiagnosticIR[] {
     ...diagnostic,
     severity
   }));
+}
+
+async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext): Promise<DiagnosticIR[]> {
+  const diagnostics: DiagnosticIR[] = [];
+
+  for (const plugin of plugins) {
+    for (const [ruleId, rule] of Object.entries(plugin.rules)) {
+      const severity = resolveRuleLevel(
+        context.config.rules[ruleId],
+        rule.meta?.defaultSeverity ?? rule.meta?.severity ?? "warning"
+      );
+      if (severity === "off") {
+        continue;
+      }
+
+      try {
+        const ruleDiagnostics = await rule.run({
+          bundle: context.bundle,
+          config: context.config,
+          plugin,
+          options: plugin.options
+        });
+        diagnostics.push(...ruleDiagnostics.map((diagnostic) => ({
+          ...diagnostic,
+          code: diagnostic.code || ruleId,
+          severity
+        })));
+      } catch (error) {
+        diagnostics.push({
+          code: "plugin/rule-failed",
+          severity: "error",
+          message: `Plugin rule "${ruleId}" from "${plugin.name}" failed: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    }
+  }
+
+  return diagnostics;
 }
 
 function resolveRuleLevel(config: RuleConfig | undefined, defaultSeverity: DiagnosticSeverity): DiagnosticSeverity | "off" {

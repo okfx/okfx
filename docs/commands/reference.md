@@ -26,6 +26,11 @@ tags:
 | `okf index` | Build a deterministic local full-text index. |
 | `okf mcp` | Run a read-only stdio MCP server. |
 
+## Plugin Safety
+
+`okf lint` loads plugins declared in `okfx.config.*`. Use
+`okf lint --no-plugins` to run only built-in validation and lint rules.
+
 ## Exit Codes
 
 - `0`: command completed and did not cross its failure threshold.

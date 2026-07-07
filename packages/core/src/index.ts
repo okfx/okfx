@@ -12,6 +12,7 @@ export * from "./native.js";
 export * from "./pack.js";
 export * from "./parser.js";
 export * from "./paths.js";
+export * from "./plugins.js";
 export * from "./search-index.js";
 export * from "./types.js";
 export * from "./validation.js";

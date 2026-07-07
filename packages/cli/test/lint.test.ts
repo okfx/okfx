@@ -124,4 +124,48 @@ describe("okf lint", () => {
     expect(code).toBe(1);
     expect(output.stdout()).toContain("security/suspicious-secret");
   });
+
+  it("loads configured plugin rules and supports --no-plugins", async () => {
+    const root = await tempRoot();
+    await write(root, "okfx.config.ts", "export default { plugins: ['./owner-plugin.ts'] };\n");
+    await write(root, "owner-plugin.ts", `export default {
+  name: "owner-plugin",
+  version: "1.0.0",
+  rules: {
+    "custom/owner-required": {
+      meta: {
+        description: "Concepts must declare an owner.",
+        defaultSeverity: "warning"
+      },
+      run({ bundle }) {
+        return bundle.concepts
+          .filter((concept) => typeof concept.frontmatter.owner !== "string")
+          .map((concept) => ({
+            code: "custom/owner-required",
+            severity: "warning",
+            message: "Concept should declare an owner.",
+            path: concept.path,
+            conceptId: concept.id
+          }));
+      }
+    }
+  }
+};
+`);
+    await write(root, "concept.md", "---\ntype: Note\ntitle: Concept\ndescription: Demo\n---\n# Concept\n");
+
+    const withPlugins = capture();
+    const withPluginsCode = await main(["lint", root], withPlugins.io);
+
+    expect(withPluginsCode).toBe(0);
+    expect(withPlugins.stdout()).toContain("plugins: owner-plugin@1.0.0");
+    expect(withPlugins.stdout()).toContain("custom/owner-required");
+
+    const withoutPlugins = capture();
+    const withoutPluginsCode = await main(["lint", root, "--no-plugins"], withoutPlugins.io);
+
+    expect(withoutPluginsCode).toBe(0);
+    expect(withoutPlugins.stdout()).toContain("plugins: none");
+    expect(withoutPlugins.stdout()).not.toContain("custom/owner-required");
+  });
 });
