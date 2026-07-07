@@ -8,6 +8,11 @@
     { "path": "packages/preset-recommended" },
     { "path": "packages/preset-strict" },
     { "path": "packages/preset-agent-ready" },
-    { "path": "packages/github-action" }
+    { "path": "packages/github-action" },
+    { "path": "packages/adapter-markdown" },
+    { "path": "packages/adapter-openapi" },
+    { "path": "packages/adapter-dbt" },
+    { "path": "packages/adapter-datahub" },
+    { "path": "packages/adapter-bigquery" }
   ]
 }
