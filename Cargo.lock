@@ -101,6 +101,9 @@ version = "0.1.0"
 [[package]]
 name = "okfx_diff"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "okfx_fmt"
