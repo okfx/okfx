@@ -104,6 +104,10 @@ function conceptDoctorDiagnostics(concept: ConceptIR, bundle: BundleIR, now: Dat
     diagnostics.push(conceptDiagnostic("agent/stale-timestamp", "warning", concept, "Concept timestamp is older than 180 days."));
   }
 
+  if (isDeprecatedConcept(concept) && !hasDeprecationPath(concept, headings)) {
+    diagnostics.push(conceptDiagnostic("agent/deprecated-missing-replacement", "warning", concept, "Deprecated concept should identify a replacement, migration path, or deprecation notes."));
+  }
+
   return diagnostics;
 }
 
@@ -145,6 +149,22 @@ function timestampIsStale(timestamp: string, now: Date): boolean {
 
   const maxAgeMs = 180 * 24 * 60 * 60 * 1000;
   return now.getTime() - parsed > maxAgeMs;
+}
+
+function isDeprecatedConcept(concept: ConceptIR): boolean {
+  return stringFrontmatter(concept, "status").toLowerCase() === "deprecated"
+    || (concept.tags ?? []).some((tag) => tag.toLowerCase() === "deprecated");
+}
+
+function hasDeprecationPath(concept: ConceptIR, headings: string[]): boolean {
+  return ["replacement", "replaced_by", "replacedBy", "superseded_by", "supersededBy"]
+    .some((key) => stringFrontmatter(concept, key).trim().length > 0)
+    || headings.some((heading) => heading.includes("replacement") || heading.includes("migration") || heading.includes("deprecation"));
+}
+
+function stringFrontmatter(concept: ConceptIR, key: string): string {
+  const value = concept.frontmatter[key];
+  return typeof value === "string" ? value : "";
 }
 
 function readinessScore(counts: DiagnosticCounts): number {

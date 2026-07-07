@@ -30,6 +30,10 @@ tags:
 - `security/private-url`: `resource` points to a private or local host.
 - `security/non-allowlisted-resource`: `resource` host is outside `resourcePolicy.allowHosts`.
 
+## Agent Rules
+
+- `agent/deprecated-missing-replacement`: deprecated concepts should identify a replacement, migration path, or deprecation notes.
+
 ## Failure Threshold
 
 Config `failOn` controls whether `warning`, `advice`, or only `error` diagnostics

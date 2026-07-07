@@ -84,4 +84,21 @@ description: Weekly active users.
       expect(result.failOn).toBe("warning");
     });
   });
+
+  it("reports deprecated concepts without replacement context", async () => {
+    await withBundle({
+      "old.md": "---\ntype: Note\ntitle: Old\nstatus: deprecated\n---\n# Old\n",
+      "tagged.md": "---\ntype: Note\ntitle: Tagged\ntags:\n  - deprecated\nreplacement: new\n---\n# Tagged\n"
+    }, async (root) => {
+      const result = doctorBundle(await loadBundle(root, { loadConfigFile: false }));
+      const deprecatedDiagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === "agent/deprecated-missing-replacement");
+
+      expect(deprecatedDiagnostics).toEqual([
+        expect.objectContaining({
+          path: "old.md",
+          severity: "warning"
+        })
+      ]);
+    });
+  });
 });
