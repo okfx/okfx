@@ -13,6 +13,7 @@
     { "path": "packages/adapter-openapi" },
     { "path": "packages/adapter-dbt" },
     { "path": "packages/adapter-datahub" },
-    { "path": "packages/adapter-bigquery" }
+    { "path": "packages/adapter-bigquery" },
+    { "path": "packages/vscode" }
   ]
 }

@@ -1,0 +1,60 @@
+{
+  "name": "@okfx/vscode",
+  "displayName": "okfx",
+  "version": "0.1.0",
+  "description": "VS Code extension scaffold for OKF diagnostics and formatting.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onCommand:okfx.validate",
+    "onCommand:okfx.lint",
+    "onCommand:okfx.doctor",
+    "onCommand:okfx.format"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "okfx.validate",
+        "title": "OKF: Validate Bundle"
+      },
+      {
+        "command": "okfx.lint",
+        "title": "OKF: Lint Bundle"
+      },
+      {
+        "command": "okfx.doctor",
+        "title": "OKF: Doctor Bundle"
+      },
+      {
+        "command": "okfx.format",
+        "title": "OKF: Format Bundle"
+      }
+    ]
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@okfx/core": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/vscode": "^1.125.0",
+    "typescript": "^6.0.3"
+  }
+}
