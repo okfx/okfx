@@ -82,6 +82,7 @@ export async function loadBundle(rootInput: string, options: LoadBundleOptions =
       tags: stringArray(frontmatter.tags),
       timestamp: stringValue(frontmatter.timestamp),
       frontmatter,
+      frontmatterRaw: parsed.frontmatterRaw,
       body: parsed.body,
       links: parsed.links,
       contentHash: parsed.contentHash

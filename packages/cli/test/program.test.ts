@@ -48,9 +48,9 @@ describe("@okfx/cli command shell", () => {
 
   it("returns a runtime/config exit code for placeholder commands", async () => {
     const output = capture();
-    const code = await main(["validate", "knowledge"], output.io);
+    const code = await main(["mcp", "knowledge"], output.io);
 
     expect(code).toBe(2);
-    expect(output.stderr()).toContain("okf validate: command implementation is not installed yet");
+    expect(output.stderr()).toContain("okf mcp: command implementation is not installed yet");
   });
 });

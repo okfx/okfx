@@ -61,6 +61,7 @@ export interface ConceptIR {
   tags?: string[];
   timestamp?: string;
   frontmatter: Record<string, unknown>;
+  frontmatterRaw?: string;
   body: MarkdownBodyIR;
   links: LinkIR[];
   contentHash: string;
