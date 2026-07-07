@@ -16,7 +16,8 @@
     "onCommand:okfx.doctor",
     "onCommand:okfx.format",
     "onCommand:okfx.graphPreview",
-    "onCommand:okfx.doctorPanel"
+    "onCommand:okfx.doctorPanel",
+    "onCommand:okfx.backlinksPanel"
   ],
   "contributes": {
     "commands": [
@@ -43,6 +44,10 @@
       {
         "command": "okfx.doctorPanel",
         "title": "OKF: Open Doctor Panel"
+      },
+      {
+        "command": "okfx.backlinksPanel",
+        "title": "OKF: Open Backlinks Panel"
       }
     ],
     "configuration": {

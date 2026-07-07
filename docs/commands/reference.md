@@ -27,6 +27,12 @@ tags:
 | `okf export` | Export reviewable consumer files such as a static site. |
 | `okf mcp` | Run a read-only stdio MCP server. |
 
+## Editor Surface
+
+The VS Code extension exposes diagnostics, formatting, frontmatter and link
+completion, go-to-definition, graph preview, doctor panel, backlinks panel, and
+quick fixes for common missing frontmatter diagnostics.
+
 ## Plugin Safety
 
 `okf lint` loads plugins declared in `okfx.config.*`. Use

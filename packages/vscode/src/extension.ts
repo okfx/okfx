@@ -1,9 +1,10 @@
-import { relative, sep } from "node:path";
+import { basename, relative, sep } from "node:path";
 
 import * as vscode from "vscode";
 
 import {
   buildGraph,
+  conceptIdFromPath,
   doctorBundle,
   formatMarkdownFile,
   graphToHtml,
@@ -37,6 +38,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("okfx.format", () => runWithErrors("format", () => runFormat())),
     vscode.commands.registerCommand("okfx.graphPreview", () => runWithErrors("graph preview", () => showGraphPreview(context))),
     vscode.commands.registerCommand("okfx.doctorPanel", () => runWithErrors("doctor panel", () => showDoctorPanel(context))),
+    vscode.commands.registerCommand("okfx.backlinksPanel", () => runWithErrors("backlinks panel", () => showBacklinksPanel(context))),
     vscode.workspace.onDidSaveTextDocument((document) => onDidSave(document)),
     vscode.languages.registerDocumentFormattingEditProvider({ language: "markdown" }, {
       provideDocumentFormattingEdits: (document) => formatDocument(document)
@@ -46,6 +48,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }, "[", "/", "-"),
     vscode.languages.registerDefinitionProvider({ language: "markdown" }, {
       provideDefinition: (document, position) => provideDefinition(document, position)
+    }),
+    vscode.languages.registerCodeActionsProvider({ language: "markdown" }, {
+      provideCodeActions: (document, range, codeActionContext) => provideQuickFixes(document, range, codeActionContext)
+    }, {
+      providedCodeActionKinds: [vscode.CodeActionKind.QuickFix]
     })
   );
 }
@@ -149,6 +156,29 @@ async function showDoctorPanel(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(panel);
 }
 
+async function showBacklinksPanel(context: vscode.ExtensionContext): Promise<void> {
+  const root = workspaceRoot();
+  const editor = vscode.window.activeTextEditor;
+  if (!root || !editor || editor.document.languageId !== "markdown") {
+    await vscode.window.showInformationMessage("Open an OKF Markdown concept to inspect backlinks.");
+    return;
+  }
+
+  const sourcePath = relativePosix(root, editor.document.uri.fsPath);
+  const conceptId = conceptIdFromPath(sourcePath);
+  const bundle = await loadBundle(root);
+  const graph = buildGraph(bundle);
+  const backlinks = graph.analysis.backlinks[conceptId] ?? [];
+  const panel = vscode.window.createWebviewPanel(
+    "okfxBacklinks",
+    "OKF Backlinks",
+    vscode.ViewColumn.Beside,
+    { enableScripts: false }
+  );
+  panel.webview.html = backlinksHtml(conceptId, backlinks, bundle);
+  context.subscriptions.push(panel);
+}
+
 function formatDocument(document: vscode.TextDocument): vscode.TextEdit[] {
   if (!config().get<boolean>("format.enableFormatter", true)) {
     return [];
@@ -226,6 +256,67 @@ async function provideDefinition(
   return new vscode.Location(vscode.Uri.file(`${root}/${concept.path}`), new vscode.Position(0, 0));
 }
 
+function provideQuickFixes(
+  document: vscode.TextDocument,
+  _range: vscode.Range,
+  context: vscode.CodeActionContext
+): vscode.CodeAction[] {
+  return context.diagnostics
+    .filter((diagnostic) => diagnostic.source === "okfx")
+    .flatMap((diagnostic) => quickFixForDiagnostic(document, diagnostic));
+}
+
+function quickFixForDiagnostic(document: vscode.TextDocument, diagnostic: vscode.Diagnostic): vscode.CodeAction[] {
+  const code = typeof diagnostic.code === "string" ? diagnostic.code : undefined;
+  const fix = fieldFixForCode(document, code);
+  if (!fix) {
+    return [];
+  }
+
+  const action = new vscode.CodeAction(`OKF: Add ${fix.field}`, vscode.CodeActionKind.QuickFix);
+  action.diagnostics = [diagnostic];
+  action.isPreferred = true;
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, fix.position, fix.text);
+  action.edit = edit;
+  return [action];
+}
+
+function fieldFixForCode(document: vscode.TextDocument, code: string | undefined): { field: string; position: vscode.Position; text: string } | undefined {
+  const field = code === "spec/missing-type"
+    ? "type"
+    : code === "hygiene/missing-title"
+      ? "title"
+      : code === "hygiene/missing-description"
+        ? "description"
+        : code === "agent/missing-owner"
+          ? "owner"
+          : undefined;
+  if (!field) {
+    return undefined;
+  }
+
+  const value = field === "type"
+    ? "Note"
+    : field === "title"
+      ? titleFromDocument(document)
+      : "TODO";
+  const insert = frontmatterInsertionPoint(document);
+  if (insert) {
+    return {
+      field,
+      position: insert,
+      text: `${field}: ${value}\n`
+    };
+  }
+
+  return {
+    field,
+    position: new vscode.Position(0, 0),
+    text: `---\n${field}: ${value}\n---\n\n`
+  };
+}
+
 function publishDiagnostics(root: string, entries: DiagnosticIR[]): void {
   if (!diagnostics) {
     return;
@@ -289,6 +380,20 @@ function markdownTargetAt(line: string, character: number): string | undefined {
   return line.slice(targetStart, targetEnd === -1 ? undefined : targetEnd).trim() || undefined;
 }
 
+function frontmatterInsertionPoint(document: vscode.TextDocument): vscode.Position | undefined {
+  if (document.lineCount === 0 || document.lineAt(0).text.trim() !== "---") {
+    return undefined;
+  }
+
+  return new vscode.Position(1, 0);
+}
+
+function titleFromDocument(document: vscode.TextDocument): string {
+  return basename(document.fileName, ".md")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function relativePosix(root: string, path: string): string {
   return relative(root, path).split(sep).join("/");
 }
@@ -305,6 +410,23 @@ function doctorHtml(bundle: BundleIR, score: number, entries: DiagnosticIR[]): s
     <p>Concepts: ${bundle.stats.conceptCount} | Links: ${bundle.stats.linkCount} | Broken links: ${bundle.stats.brokenLinkCount}</p>
     <h2>Diagnostics</h2>
     <ul>${diagnosticsHtml || "<li>none</li>"}</ul>
+  </body>
+</html>`;
+}
+
+function backlinksHtml(conceptId: string, backlinks: string[], bundle: BundleIR): string {
+  const conceptsById = new Map(bundle.concepts.map((concept) => [concept.id, concept]));
+  const backlinksHtml = backlinks.map((id) => {
+    const concept = conceptsById.get(id);
+    return `<li><code>${escapeHtml(id)}</code>${concept?.title ? ` - ${escapeHtml(concept.title)}` : ""}</li>`;
+  }).join("");
+
+  return `<!doctype html>
+<html>
+  <body>
+    <h1>OKF Backlinks</h1>
+    <p><code>${escapeHtml(conceptId)}</code></p>
+    <ul>${backlinksHtml || "<li>none</li>"}</ul>
   </body>
 </html>`;
 }
