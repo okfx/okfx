@@ -11,10 +11,31 @@ export interface GraphAnalysisIR {
   orphanConceptIds: string[];
   isolatedClusterCount: number;
   cycles: string[][];
+  highDegreeHubs: Array<{
+    id: string;
+    incoming: number;
+    outgoing: number;
+    degree: number;
+  }>;
+  missingIndexSuggestions: Array<{
+    path: string;
+    reason: string;
+  }>;
+  staleSubgraphs: Array<{
+    conceptIds: string[];
+    latestTimestamp?: string;
+    staleConceptCount: number;
+  }>;
   topReferencedConcepts: Array<{
     id: string;
     count: number;
   }>;
+}
+
+export interface GraphOptions {
+  highDegreeThreshold?: number;
+  now?: Date;
+  staleAfterDays?: number;
 }
 
 export interface OkfxGraphIR extends GraphIR {
@@ -45,7 +66,7 @@ export interface CytoscapeGraphIR {
   };
 }
 
-export function buildGraph(bundle: BundleIR): OkfxGraphIR {
+export function buildGraph(bundle: BundleIR, options: GraphOptions = {}): OkfxGraphIR {
   const nodes = [
     ...bundle.concepts.map(graphNode),
     ...bundle.indexes.map((file) => reservedNode(file, "Index")),
@@ -57,7 +78,7 @@ export function buildGraph(bundle: BundleIR): OkfxGraphIR {
       .map(graphEdge),
     ...bundle.concepts.flatMap(metadataEdges)
   ];
-  const analysis = analyzeGraph(bundle, edges);
+  const analysis = analyzeGraph(bundle, edges, options);
 
   return {
     nodes,
@@ -258,7 +279,7 @@ function uniqueNonEmpty(values: string[]): string[] {
   return result;
 }
 
-function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[]): GraphAnalysisIR {
+function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[], options: GraphOptions): GraphAnalysisIR {
   const conceptIds = new Set(bundle.concepts.map((concept) => concept.id));
   const pathsBySourceId = new Map([
     ...bundle.concepts.map((concept) => [concept.id, concept.path] as const),
@@ -293,7 +314,9 @@ function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[]): GraphAnalysisIR {
   const orphanConceptIds = [...conceptIds]
     .filter((id) => (incoming.get(id)?.size ?? 0) === 0 && (outgoing.get(id)?.size ?? 0) === 0)
     .sort();
+  const clusters = connectedConceptClusters(conceptIds, outgoing, incoming);
   const cycles = findCycles(conceptIds, outgoing);
+  const highDegreeHubs = findHighDegreeHubs(conceptIds, incoming, outgoing, options.highDegreeThreshold ?? 25);
   const topReferencedConcepts = [...incoming.entries()]
     .map(([id, sources]) => ({ id, count: sources.size }))
     .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
@@ -303,8 +326,11 @@ function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[]): GraphAnalysisIR {
     backlinks,
     brokenLinks,
     orphanConceptIds,
-    isolatedClusterCount: countIsolatedClusters(conceptIds, outgoing, incoming),
+    isolatedClusterCount: clusters.length,
     cycles,
+    highDegreeHubs,
+    missingIndexSuggestions: findMissingIndexSuggestions(bundle),
+    staleSubgraphs: findStaleSubgraphs(bundle, clusters, options.now ?? new Date(), options.staleAfterDays ?? 180),
     topReferencedConcepts
   };
 }
@@ -342,26 +368,102 @@ function findCycles(conceptIds: Set<string>, adjacency: Map<string, Set<string>>
   }
 }
 
-function countIsolatedClusters(
+function findHighDegreeHubs(
+  conceptIds: Set<string>,
+  incoming: Map<string, Set<string>>,
+  outgoing: Map<string, Set<string>>,
+  threshold: number
+): GraphAnalysisIR["highDegreeHubs"] {
+  if (threshold <= 0) {
+    return [];
+  }
+
+  return [...conceptIds]
+    .map((id) => {
+      const incomingCount = incoming.get(id)?.size ?? 0;
+      const outgoingCount = outgoing.get(id)?.size ?? 0;
+      return {
+        id,
+        incoming: incomingCount,
+        outgoing: outgoingCount,
+        degree: incomingCount + outgoingCount
+      };
+    })
+    .filter((hub) => hub.degree >= threshold)
+    .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id));
+}
+
+function findMissingIndexSuggestions(bundle: BundleIR): GraphAnalysisIR["missingIndexSuggestions"] {
+  const conceptDirs = new Set(bundle.concepts.map((concept) => pathDir(concept.path)));
+  if (conceptDirs.size === 0) {
+    conceptDirs.add("");
+  }
+
+  const indexDirs = new Set(bundle.indexes.map((index) => pathDir(index.path)));
+  return [...conceptDirs]
+    .filter((dir) => !indexDirs.has(dir))
+    .sort()
+    .map((dir) => ({
+      path: indexPathForDir(dir),
+      reason: "Directory has concepts but no index.md entrypoint."
+    }));
+}
+
+function findStaleSubgraphs(
+  bundle: BundleIR,
+  clusters: string[][],
+  now: Date,
+  staleAfterDays: number
+): GraphAnalysisIR["staleSubgraphs"] {
+  const conceptsById = new Map(bundle.concepts.map((concept) => [concept.id, concept]));
+  const staleAfterMs = staleAfterDays * 24 * 60 * 60 * 1000;
+
+  return clusters.flatMap((conceptIds) => {
+    const timestamped = conceptIds
+      .map((id) => conceptsById.get(id))
+      .map((concept) => concept?.timestamp)
+      .filter((timestamp): timestamp is string => timestamp !== undefined)
+      .map((timestamp) => ({ timestamp, parsed: Date.parse(timestamp) }))
+      .filter((entry) => !Number.isNaN(entry.parsed));
+    if (timestamped.length === 0) {
+      return [];
+    }
+
+    const stale = timestamped.filter((entry) => now.getTime() - entry.parsed > staleAfterMs);
+    if (stale.length === 0 || stale.length !== timestamped.length) {
+      return [];
+    }
+
+    const latest = [...timestamped].sort((a, b) => b.parsed - a.parsed)[0];
+    return [{
+      conceptIds,
+      latestTimestamp: latest?.timestamp,
+      staleConceptCount: stale.length
+    }];
+  });
+}
+
+function connectedConceptClusters(
   conceptIds: Set<string>,
   outgoing: Map<string, Set<string>>,
   incoming: Map<string, Set<string>>
-): number {
+): string[][] {
   const visited = new Set<string>();
-  let clusters = 0;
+  const clusters: string[][] = [];
 
-  for (const id of conceptIds) {
+  for (const id of [...conceptIds].sort()) {
     if (visited.has(id)) {
       continue;
     }
 
-    clusters += 1;
+    const cluster: string[] = [];
     const queue = [id];
     for (const current of queue) {
       if (visited.has(current)) {
         continue;
       }
       visited.add(current);
+      cluster.push(current);
       for (const next of outgoing.get(current) ?? []) {
         queue.push(next);
       }
@@ -369,6 +471,7 @@ function countIsolatedClusters(
         queue.push(next);
       }
     }
+    clusters.push(cluster.sort());
   }
 
   return clusters;
@@ -387,4 +490,13 @@ function escapeHtml(value: string): string {
 
 function labelFromTarget(target: string): string {
   return target.replace(/^(resource|tag):/, "");
+}
+
+function pathDir(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index === -1 ? "" : path.slice(0, index);
+}
+
+function indexPathForDir(dir: string): string {
+  return dir ? `${dir}/index.md` : "index.md";
 }

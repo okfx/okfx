@@ -62,6 +62,37 @@ describe("buildGraph", () => {
       expect(graph.analysis.backlinks.a).toEqual([]);
     });
   });
+
+  it("reports advanced graph analysis", async () => {
+    await withBundle({
+      "hub.md": "---\ntype: Note\ntitle: Hub\n---\n[A](a.md)\n[B](b.md)\n",
+      "a.md": "---\ntype: Note\ntitle: A\n---\n# A\n",
+      "b.md": "---\ntype: Note\ntitle: B\n---\n# B\n",
+      "old-a.md": "---\ntype: Note\ntitle: Old A\ntimestamp: 2025-01-01T00:00:00.000Z\n---\n[Old B](old-b.md)\n",
+      "old-b.md": "---\ntype: Note\ntitle: Old B\ntimestamp: 2025-01-02T00:00:00.000Z\n---\n# Old B\n"
+    }, async (root) => {
+      const graph = buildGraph(await loadBundle(root, { loadConfigFile: false }), {
+        highDegreeThreshold: 2,
+        now: new Date("2026-07-07T00:00:00.000Z")
+      });
+
+      expect(graph.analysis.highDegreeHubs).toEqual([{
+        id: "hub",
+        incoming: 0,
+        outgoing: 2,
+        degree: 2
+      }]);
+      expect(graph.analysis.missingIndexSuggestions).toEqual([{
+        path: "index.md",
+        reason: "Directory has concepts but no index.md entrypoint."
+      }]);
+      expect(graph.analysis.staleSubgraphs).toEqual([{
+        conceptIds: ["old-a", "old-b"],
+        latestTimestamp: "2025-01-02T00:00:00.000Z",
+        staleConceptCount: 2
+      }]);
+    });
+  });
 });
 
 describe("graph formatters", () => {

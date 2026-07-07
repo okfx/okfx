@@ -42,6 +42,8 @@ interface BuiltInRule {
   run: RuleRunner;
 }
 
+const DEFAULT_HIGH_DEGREE_THRESHOLD = 25;
+
 export function lintBundle(bundle: BundleIR, options: LintOptions = {}): LintResult {
   const config = resolveConfig(options.config ?? {});
   const context = createRuleContext(bundle, config);
@@ -158,6 +160,13 @@ const builtInLintRules: BuiltInRule[] = [
       .filter((concept) => (incomingByConceptId.get(concept.id) ?? 0) === 0)
       .filter((concept) => (outgoingByConceptId.get(concept.id) ?? 0) > 0)
       .map((concept) => conceptDiagnostic("graph/no-backlinks", "advice", concept, "Concept has no backlinks."))
+  },
+  {
+    id: "graph/high-degree-hub",
+    defaultSeverity: "advice",
+    run: ({ bundle, incomingByConceptId, outgoingByConceptId }) => bundle.concepts
+      .filter((concept) => ((incomingByConceptId.get(concept.id) ?? 0) + (outgoingByConceptId.get(concept.id) ?? 0)) >= DEFAULT_HIGH_DEGREE_THRESHOLD)
+      .map((concept) => conceptDiagnostic("graph/high-degree-hub", "advice", concept, "Concept has unusually high graph degree and may need a hub/index split."))
   },
   {
     id: "graph/circular-reference",

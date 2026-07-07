@@ -72,6 +72,23 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("reports high-degree graph hubs", async () => {
+    const leafFiles = Object.fromEntries(Array.from({ length: 25 }, (_, index) => [
+      `leaf-${index}.md`,
+      `---\ntype: Note\ntitle: Leaf ${index}\n---\n# Leaf ${index}\n`
+    ]));
+    const links = Array.from({ length: 25 }, (_, index) => `[Leaf ${index}](leaf-${index}.md)`).join("\n");
+
+    await withBundle({
+      "hub.md": `---\ntype: Note\ntitle: Hub\n---\n${links}\n`,
+      ...leafFiles
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("graph/high-degree-hub");
+    });
+  });
+
   it("honors rule overrides and fail thresholds", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\n---\n# Concept\n"

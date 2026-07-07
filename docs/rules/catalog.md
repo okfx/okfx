@@ -30,6 +30,10 @@ tags:
 - `security/private-url`: `resource` points to a private or local host.
 - `security/non-allowlisted-resource`: `resource` host is outside `resourcePolicy.allowHosts`.
 
+## Graph Rules
+
+- `graph/high-degree-hub`: concept has unusually high incoming plus outgoing graph degree.
+
 ## Agent Rules
 
 - `agent/deprecated-missing-replacement`: deprecated concepts should identify a replacement, migration path, or deprecation notes.

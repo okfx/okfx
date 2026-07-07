@@ -29,7 +29,8 @@ tags:
 
 `okf graph --format json` emits `markdown-link`, `resource`, and `tag` edges.
 Graph analysis such as backlinks, orphan concepts, and cycles is computed from
-resolved concept-to-concept links.
+resolved concept-to-concept links. The JSON analysis also reports high-degree
+hubs, missing `index.md` suggestions, and stale subgraphs.
 
 `okf index` builds `full-text` indexes by default. `vector` and `hybrid` modes
 must be requested explicitly and require a configured vector provider.
