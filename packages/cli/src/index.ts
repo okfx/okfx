@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 
-import { okfxVersion } from "@okfx/core";
+import { runProgram, type CliIO } from "./program.js";
 
-export async function main(argv = process.argv.slice(2)): Promise<number> {
-  if (argv.includes("--version") || argv.includes("-v")) {
-    process.stdout.write(`${okfxVersion}\n`);
-    return 0;
-  }
-
-  process.stderr.write("okf: command implementation is not installed yet\n");
-  return 2;
+export async function main(
+  argv = process.argv.slice(2),
+  io: CliIO = { stdout: process.stdout, stderr: process.stderr }
+): Promise<number> {
+  return runProgram(argv, io);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

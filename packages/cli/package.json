@@ -21,7 +21,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/core": "0.1.0"
+    "@okfx/core": "0.1.0",
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
