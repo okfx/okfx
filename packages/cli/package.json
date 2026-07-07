@@ -1,0 +1,30 @@
+{
+  "name": "@okfx/cli",
+  "version": "0.1.0",
+  "description": "Command line interface for OKF bundle tooling.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "okf": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b && node scripts/make-executable.mjs",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@okfx/core": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "typescript": "^6.0.3"
+  }
+}

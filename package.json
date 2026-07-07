@@ -1,0 +1,26 @@
+{
+  "name": "okfx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Developer toolkit for Open Knowledge Format bundles.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "test": "vitest run",
+    "typecheck": "tsc -b tsconfig.json",
+    "okf": "npm --workspace @okfx/cli exec okf --"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
