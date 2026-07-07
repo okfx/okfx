@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadBundle, parseMarkdownDocument } from "../src/index.js";
+import { loadBundle, parseMarkdownDocument, resolveConfig } from "../src/index.js";
 
 const roots: string[] = [];
 
@@ -175,5 +175,21 @@ describe("parseMarkdownDocument", () => {
         }
       }
     });
+  });
+});
+
+describe("resolveConfig", () => {
+  it("expands built-in presets and keeps explicit rule overrides", () => {
+    const config = resolveConfig({
+      presets: ["@okfx/preset-strict", "agent-ready"],
+      rules: {
+        "hygiene/missing-title": "off"
+      }
+    });
+
+    expect(config.failOn).toBe("warning");
+    expect(config.rules["hygiene/missing-description"]).toBe("error");
+    expect(config.rules["agent/metric-missing-source"]).toBe("warning");
+    expect(config.rules["hygiene/missing-title"]).toBe("off");
   });
 });

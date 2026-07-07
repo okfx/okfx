@@ -79,6 +79,47 @@ export const defaultConfig: ResolvedOkfxConfig = {
   }
 };
 
+export const builtinPresets: Record<string, OkfxConfig> = {
+  recommended: {
+    rules: {
+      "spec/missing-type": "error",
+      "spec/invalid-frontmatter": "error",
+      "hygiene/missing-title": "warning",
+      "hygiene/missing-description": "warning",
+      "hygiene/empty-body": "warning",
+      "graph/broken-internal-link": "warning",
+      "graph/orphan-concept": "advice",
+      "security/suspicious-secret": "error"
+    }
+  },
+  strict: {
+    failOn: "warning",
+    rules: {
+      "hygiene/missing-title": "error",
+      "hygiene/missing-description": "error",
+      "hygiene/empty-body": "error",
+      "graph/broken-internal-link": "error",
+      "graph/no-backlinks": "warning",
+      "style/frontmatter-key-order": "warning",
+      "style/timestamp-format": "warning",
+      "security/private-url": "warning",
+      "security/non-allowlisted-resource": "error"
+    }
+  },
+  "agent-ready": {
+    rules: {
+      "agent/missing-summary": "advice",
+      "agent/missing-usage": "advice",
+      "agent/missing-owner": "advice",
+      "agent/metric-missing-source": "warning",
+      "agent/runbook-missing-symptoms": "warning",
+      "agent/api-missing-auth-notes": "advice",
+      "graph/no-backlinks": "advice",
+      "graph/orphan-concept": "advice"
+    }
+  }
+};
+
 export const configFileNames = [
   "okfx.config.ts",
   "okfx.config.mts",
@@ -93,13 +134,21 @@ export function defineConfig<TConfig extends OkfxConfig>(config: TConfig): TConf
 }
 
 export function resolveConfig(config: OkfxConfig = {}, configPath?: string): ResolvedOkfxConfig {
+  const presets = config.presets ?? [...defaultConfig.presets];
+  const presetConfigs = presets.map(resolvePreset).filter((preset): preset is OkfxConfig => preset !== undefined);
+  const presetRules = Object.assign({}, ...presetConfigs.map((preset) => preset.rules ?? {})) as Record<string, RuleConfig>;
+  const presetFailOn = [...presetConfigs].reverse().find((preset) => preset.failOn)?.failOn;
+
   return {
     okfVersion: config.okfVersion ?? defaultConfig.okfVersion,
     include: config.include ?? [...defaultConfig.include],
     exclude: config.exclude ?? [...defaultConfig.exclude],
-    presets: config.presets ?? [...defaultConfig.presets],
-    rules: config.rules ?? {},
-    failOn: config.failOn ?? defaultConfig.failOn,
+    presets,
+    rules: {
+      ...presetRules,
+      ...(config.rules ?? {})
+    },
+    failOn: config.failOn ?? presetFailOn ?? defaultConfig.failOn,
     frontmatter: {
       keyOrder: config.frontmatter?.keyOrder ?? [...defaultConfig.frontmatter.keyOrder]
     },
@@ -113,6 +162,16 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
     },
     configPath
   };
+}
+
+function resolvePreset(name: string): OkfxConfig | undefined {
+  return builtinPresets[normalizePresetName(name)];
+}
+
+function normalizePresetName(name: string): string {
+  return name
+    .replace(/^@okfx\/preset-/, "")
+    .replace(/^preset-/, "");
 }
 
 export async function findConfigFile(root: string): Promise<string | undefined> {
