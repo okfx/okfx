@@ -8,6 +8,7 @@ import { createDiffCommand } from "./commands/diff.js";
 import { createFmtCommand } from "./commands/fmt.js";
 import { createGraphCommand } from "./commands/graph.js";
 import { createLintCommand } from "./commands/lint.js";
+import { createPackCommand } from "./commands/pack.js";
 import { createValidateCommand } from "./commands/validate.js";
 
 export interface CliIO {
@@ -67,6 +68,8 @@ export function createProgram(context: CliContext): Command {
                   ? createFmtCommand(context)
                   : name === "diff"
                     ? createDiffCommand(context)
+                    : name === "pack"
+                      ? createPackCommand(context)
         : createPlaceholderCommand(name, description, context)
     );
   }
