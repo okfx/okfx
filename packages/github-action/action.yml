@@ -13,10 +13,30 @@ inputs:
     description: Graph JSON output path.
     required: false
     default: okf-graph.json
+  lint-json-out:
+    description: Lint JSON output path used for summaries and PR comments.
+    required: false
+    default: okf-lint.json
+  doctor-json-out:
+    description: Doctor JSON output path used for summaries and PR comments.
+    required: false
+    default: okf-doctor.json
   doctor:
     description: Run okf doctor.
     required: false
     default: "true"
+  summary:
+    description: Write an OKF summary to the GitHub Step Summary.
+    required: false
+    default: "true"
+  pr-comment:
+    description: Comment the OKF summary on pull requests.
+    required: false
+    default: "false"
+  github-token:
+    description: GitHub token for pull request comments.
+    required: false
+    default: ${{ github.token }}
 runs:
   using: composite
   steps:
@@ -24,15 +44,140 @@ runs:
       shell: bash
       run: npm install -g @okfx/cli
     - name: Validate OKF
+      id: validate
       shell: bash
-      run: okf validate "${{ inputs.bundle }}"
+      run: |
+        set +e
+        okf validate "${{ inputs.bundle }}"
+        status=$?
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        exit 0
     - name: Lint OKF
+      id: lint
       shell: bash
-      run: okf lint "${{ inputs.bundle }}" --format "${{ inputs.lint-format }}"
+      run: |
+        set +e
+        okf lint "${{ inputs.bundle }}" --format "${{ inputs.lint-format }}"
+        status=$?
+        okf lint "${{ inputs.bundle }}" --format json --out "${{ inputs.lint-json-out }}" >/dev/null 2>&1 || true
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        exit 0
     - name: Build graph
+      id: graph
       shell: bash
-      run: okf graph "${{ inputs.bundle }}" --out "${{ inputs.graph-out }}"
+      run: |
+        set +e
+        okf graph "${{ inputs.bundle }}" --out "${{ inputs.graph-out }}"
+        status=$?
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        exit 0
     - name: Doctor
+      id: doctor
       if: ${{ inputs.doctor == 'true' }}
       shell: bash
-      run: okf doctor "${{ inputs.bundle }}"
+      run: |
+        set +e
+        okf doctor "${{ inputs.bundle }}" --json --out "${{ inputs.doctor-json-out }}"
+        status=$?
+        echo "status=$status" >> "$GITHUB_OUTPUT"
+        exit 0
+    - name: Write OKF summary
+      if: ${{ inputs.summary == 'true' }}
+      shell: bash
+      env:
+        OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_LINT_JSON: ${{ inputs.lint-json-out }}
+        OKF_DOCTOR_JSON: ${{ inputs.doctor-json-out }}
+        OKF_GRAPH_JSON: ${{ inputs.graph-out }}
+      run: |
+        node <<'NODE'
+        const fs = require("node:fs");
+        const readJson = (path) => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, "utf8")) : undefined;
+        const doctor = readJson(process.env.OKF_DOCTOR_JSON);
+        const lint = readJson(process.env.OKF_LINT_JSON);
+        const source = doctor ?? lint ?? {};
+        const summary = source.summary ?? {};
+        const counts = source.counts ?? {};
+        const lines = [
+          "## OKF Summary",
+          "",
+          `Bundle: \`${process.env.OKF_BUNDLE}\``,
+          source.score === undefined ? undefined : `Agent readiness: **${source.score}/100**`,
+          "",
+          "### Concepts",
+          `- Concepts: ${summary.conceptCount ?? 0}`,
+          `- Links: ${summary.linkCount ?? 0}`,
+          `- Broken links: ${summary.brokenLinkCount ?? 0}`,
+          `- Orphan concepts: ${summary.orphanCount ?? 0}`,
+          `- Cycles: ${summary.cycleCount ?? 0}`,
+          "",
+          "### Diagnostics",
+          `- Errors: ${counts.error ?? 0}`,
+          `- Warnings: ${counts.warning ?? 0}`,
+          `- Advice: ${counts.advice ?? 0}`,
+          `- Info: ${counts.info ?? 0}`,
+          "",
+          "### Artifacts",
+          `- Lint JSON: \`${process.env.OKF_LINT_JSON}\``,
+          `- Graph JSON: \`${process.env.OKF_GRAPH_JSON}\``,
+          fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: \`${process.env.OKF_DOCTOR_JSON}\`` : undefined
+        ].filter(Boolean).join("\n") + "\n";
+        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines);
+        NODE
+    - name: Comment OKF summary
+      if: ${{ inputs.pr-comment == 'true' && github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      env:
+        OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_LINT_JSON: ${{ inputs.lint-json-out }}
+        OKF_DOCTOR_JSON: ${{ inputs.doctor-json-out }}
+        OKF_GRAPH_JSON: ${{ inputs.graph-out }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require("node:fs");
+          const readJson = (path) => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, "utf8")) : undefined;
+          const doctor = readJson(process.env.OKF_DOCTOR_JSON);
+          const lint = readJson(process.env.OKF_LINT_JSON);
+          const source = doctor ?? lint ?? {};
+          const summary = source.summary ?? {};
+          const counts = source.counts ?? {};
+          const body = [
+            "## OKF Summary",
+            "",
+            `Bundle: \`${process.env.OKF_BUNDLE}\``,
+            source.score === undefined ? undefined : `Agent readiness: **${source.score}/100**`,
+            "",
+            "### Concepts",
+            `- Concepts: ${summary.conceptCount ?? 0}`,
+            `- Links: ${summary.linkCount ?? 0}`,
+            `- Broken links: ${summary.brokenLinkCount ?? 0}`,
+            `- Orphan concepts: ${summary.orphanCount ?? 0}`,
+            `- Cycles: ${summary.cycleCount ?? 0}`,
+            "",
+            "### Diagnostics",
+            `- Errors: ${counts.error ?? 0}`,
+            `- Warnings: ${counts.warning ?? 0}`,
+            `- Advice: ${counts.advice ?? 0}`,
+            `- Info: ${counts.info ?? 0}`,
+            "",
+            "### Artifacts",
+            `- Lint JSON: \`${process.env.OKF_LINT_JSON}\``,
+            `- Graph JSON: \`${process.env.OKF_GRAPH_JSON}\``,
+            fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: \`${process.env.OKF_DOCTOR_JSON}\`` : undefined
+          ].filter(Boolean).join("\n");
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.payload.pull_request.number,
+            body
+          });
+    - name: OKF quality gate
+      shell: bash
+      run: |
+        status=0
+        if [ "${{ steps.validate.outputs.status }}" != "0" ]; then status=${{ steps.validate.outputs.status }}; fi
+        if [ "${{ steps.lint.outputs.status }}" != "0" ]; then status=${{ steps.lint.outputs.status }}; fi
+        if [ "${{ steps.graph.outputs.status }}" != "0" ]; then status=${{ steps.graph.outputs.status }}; fi
+        if [ "${{ inputs.doctor }}" = "true" ] && [ "${{ steps.doctor.outputs.status }}" != "0" ]; then status=${{ steps.doctor.outputs.status }}; fi
+        exit "$status"
