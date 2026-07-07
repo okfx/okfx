@@ -2,7 +2,7 @@
 type: test-plan
 title: okfx Testing Strategy
 description: Verification commands and fixture strategy for okfx.
-owner: NEEDS_OWNER
+owner: okfx-maintainers
 status: proposed
 tags:
   - testing

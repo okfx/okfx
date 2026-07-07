@@ -2,7 +2,7 @@
 type: repo-overview
 title: okfx
 description: Developer toolkit for Open Knowledge Format bundles.
-owner: NEEDS_OWNER
+owner: okfx-maintainers
 status: proposed
 tags:
   - okf

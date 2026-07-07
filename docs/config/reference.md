@@ -2,7 +2,7 @@
 type: contract
 title: okfx Configuration
 description: Config file names, presets, rule overrides, and resource policy.
-owner: NEEDS_OWNER
+owner: okfx-maintainers
 status: proposed
 tags:
   - config

@@ -2,7 +2,7 @@
 type: contract
 title: okfx Rule Catalog
 description: Built-in rule categories and diagnostic behavior.
-owner: NEEDS_OWNER
+owner: okfx-maintainers
 status: proposed
 tags:
   - rules

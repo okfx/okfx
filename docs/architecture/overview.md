@@ -2,7 +2,7 @@
 type: architecture
 title: okfx Architecture
 description: System boundaries and implementation strategy for the OKF developer toolkit.
-owner: NEEDS_OWNER
+owner: okfx-maintainers
 status: proposed
 tags:
   - architecture

@@ -2,7 +2,7 @@
 type: contract
 title: okfx MCP Server
 description: Read-only MCP server resources, tools, prompts, and safety defaults.
-owner: NEEDS_OWNER
+owner: okfx-maintainers
 status: proposed
 tags:
   - mcp
