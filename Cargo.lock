@@ -138,6 +138,10 @@ dependencies = [
 [[package]]
 name = "okfx_resolver"
 version = "0.1.0"
+dependencies = [
+ "okfx_parser",
+ "serde",
+]
 
 [[package]]
 name = "okfx_rules"

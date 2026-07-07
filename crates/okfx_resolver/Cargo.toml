@@ -7,3 +7,7 @@ repository.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+okfx_parser = { path = "../okfx_parser" }
+serde = { version = "1.0", features = ["derive"] }
