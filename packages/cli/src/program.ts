@@ -3,6 +3,7 @@ import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { okfxVersion } from "@okfx/core";
 
 import { createInitCommand } from "./commands/init.js";
+import { createLintCommand } from "./commands/lint.js";
 import { createValidateCommand } from "./commands/validate.js";
 
 export interface CliIO {
@@ -52,6 +53,8 @@ export function createProgram(context: CliContext): Command {
         ? createInitCommand(context)
         : name === "validate"
           ? createValidateCommand(context)
+          : name === "lint"
+            ? createLintCommand(context)
         : createPlaceholderCommand(name, description, context)
     );
   }

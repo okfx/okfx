@@ -2,6 +2,7 @@ export * from "./bundle.js";
 export * from "./config.js";
 export * from "./diagnostics.js";
 export * from "./hash.js";
+export * from "./lint.js";
 export * from "./markdown.js";
 export * from "./parser.js";
 export * from "./paths.js";
