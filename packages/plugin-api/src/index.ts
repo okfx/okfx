@@ -1,4 +1,4 @@
-import type { BundleIR, DiagnosticIR, GraphIR, ResolvedOkfxConfig } from "@okfx/core";
+import type { BundleIR, DiagnosticIR, OkfxGraphIR, ResolvedOkfxConfig } from "@okfx/core";
 
 export interface OkfxRuleContext {
   bundle: BundleIR;
@@ -30,7 +30,7 @@ export interface OkfxProducerAdapter {
 }
 
 export interface OkfxConsumerAdapter {
-  consume(context: OkfxAdapterContext & { bundle: BundleIR; graph?: GraphIR }): Promise<void>;
+  consume(context: OkfxAdapterContext & { bundle: BundleIR; graph?: OkfxGraphIR }): Promise<Array<{ path: string; content: string }> | void>;
 }
 
 export interface OkfxPlugin {

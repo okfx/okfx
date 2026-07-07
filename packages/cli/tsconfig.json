@@ -13,6 +13,7 @@
     { "path": "../adapter-openapi" },
     { "path": "../adapter-dbt" },
     { "path": "../adapter-datahub" },
-    { "path": "../adapter-bigquery" }
+    { "path": "../adapter-bigquery" },
+    { "path": "../adapter-static-site" }
   ]
 }

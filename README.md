@@ -26,6 +26,7 @@ npm run okf -- validate ./knowledge
 npm run okf -- lint ./knowledge
 npm run okf -- graph ./knowledge --out graph.json
 npm run okf -- doctor ./knowledge
+npm run okf -- export static-site ./knowledge --out ./site
 ```
 
 ## Packages
@@ -36,6 +37,7 @@ npm run okf -- doctor ./knowledge
 - `@okfx/plugin-api` defines plugin and adapter contracts.
 - `@okfx/preset-*` packages define recommended, strict, and agent-ready rule profiles.
 - `@okfx/adapter-*` packages produce reviewable OKF draft files from local metadata.
+- `@okfx/adapter-static-site` exports reviewable static HTML files from an OKF bundle.
 
 ## Verification
 

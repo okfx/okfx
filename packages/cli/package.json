@@ -26,6 +26,7 @@
     "@okfx/adapter-dbt": "^0.1.0",
     "@okfx/adapter-markdown": "^0.1.0",
     "@okfx/adapter-openapi": "^0.1.0",
+    "@okfx/adapter-static-site": "^0.1.0",
     "@okfx/core": "0.1.0",
     "@okfx/mcp": "^0.1.0",
     "commander": "^15.0.0"

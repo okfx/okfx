@@ -5,6 +5,7 @@ import { okfxVersion } from "@okfx/core";
 import { createInitCommand } from "./commands/init.js";
 import { createDoctorCommand } from "./commands/doctor.js";
 import { createDiffCommand } from "./commands/diff.js";
+import { createExportCommand } from "./commands/export.js";
 import { createFmtCommand } from "./commands/fmt.js";
 import { createGraphCommand } from "./commands/graph.js";
 import { createIndexCommand } from "./commands/index.js";
@@ -39,6 +40,7 @@ export const plannedCommands = [
   ["pack", "create a portable OKF bundle artifact"],
   ["index", "build a local search index"],
   ["import", "produce reviewable OKF draft files from local metadata"],
+  ["export", "export an OKF bundle to a consumer surface"],
   ["mcp", "run a read-only MCP server for a bundle"]
 ] as const;
 
@@ -62,6 +64,8 @@ export function createProgram(context: CliContext): Command {
         ? createInitCommand(context)
         : name === "import"
           ? createImportCommand(context)
+        : name === "export"
+          ? createExportCommand(context)
         : name === "validate"
           ? createValidateCommand(context)
           : name === "lint"

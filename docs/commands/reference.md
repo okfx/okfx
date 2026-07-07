@@ -24,6 +24,7 @@ tags:
 | `okf diff` | Compare two bundles semantically. |
 | `okf pack` | Write `.okfx` metadata and `.okf.tar.gz` archive. |
 | `okf index` | Build a deterministic local full-text index. |
+| `okf export` | Export reviewable consumer files such as a static site. |
 | `okf mcp` | Run a read-only stdio MCP server. |
 
 ## Plugin Safety

@@ -1,3 +1,3 @@
 # Adapters
 
-- [Producer adapters](producers.md) - Local metadata to OKF draft file conversion.
+- [Producer and consumer adapters](producers.md) - Local metadata import and reviewable export conversion.
