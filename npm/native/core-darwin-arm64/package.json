@@ -1,0 +1,19 @@
+{
+  "name": "@okfx/core-darwin-arm64",
+  "version": "0.1.0",
+  "description": "Native okfx N-API binding for macOS arm64.",
+  "license": "MIT",
+  "main": "./okfx_napi.node",
+  "files": [
+    "okfx_napi.node"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

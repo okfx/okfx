@@ -1,0 +1,22 @@
+{
+  "name": "@okfx/core-linux-x64-gnu",
+  "version": "0.1.0",
+  "description": "Native okfx N-API binding for Linux x64 glibc.",
+  "license": "MIT",
+  "main": "./okfx_napi.node",
+  "files": [
+    "okfx_napi.node"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

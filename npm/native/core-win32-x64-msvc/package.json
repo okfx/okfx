@@ -1,0 +1,19 @@
+{
+  "name": "@okfx/core-win32-x64-msvc",
+  "version": "0.1.0",
+  "description": "Native okfx N-API binding for Windows x64 MSVC.",
+  "license": "MIT",
+  "main": "./okfx_napi.node",
+  "files": [
+    "okfx_napi.node"
+  ],
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

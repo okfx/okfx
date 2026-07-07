@@ -1,0 +1,13 @@
+{
+  "name": "@okfx/native",
+  "version": "0.1.0",
+  "description": "Portable native okfx N-API binding package.",
+  "license": "MIT",
+  "main": "./okfx_napi.node",
+  "files": [
+    "okfx_napi.node"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -7,6 +7,7 @@ import { formatMarkdownFile } from "./format.js";
 import { parseMarkdownDocument, type ParsedMarkdownDocument } from "./parser.js";
 
 export type NativeBackendKind = "native" | "wasm";
+export type NativeLibc = "gnu" | "musl";
 
 export interface NativeBindingStatus {
   kind: NativeBackendKind;
@@ -28,6 +29,14 @@ export interface NativeCallOptions {
   binding?: NativeJsonBinding | null;
 }
 
+export interface NativePlatformPackage {
+  packageName: string;
+  os: NodeJS.Platform;
+  arch: NodeJS.Architecture;
+  libc?: NativeLibc;
+  binary: string;
+}
+
 export interface FormatAcceleratedResult {
   formatted: string;
   changed: boolean;
@@ -40,6 +49,41 @@ export interface FormatAcceleratedResult {
 }
 
 const requireFromHere = createRequire(import.meta.url);
+
+export const NATIVE_PLATFORM_PACKAGES: readonly NativePlatformPackage[] = [
+  {
+    packageName: "@okfx/core-darwin-arm64",
+    os: "darwin",
+    arch: "arm64",
+    binary: "okfx_napi.node"
+  },
+  {
+    packageName: "@okfx/core-darwin-x64",
+    os: "darwin",
+    arch: "x64",
+    binary: "okfx_napi.node"
+  },
+  {
+    packageName: "@okfx/core-linux-x64-gnu",
+    os: "linux",
+    arch: "x64",
+    libc: "gnu",
+    binary: "okfx_napi.node"
+  },
+  {
+    packageName: "@okfx/core-linux-x64-musl",
+    os: "linux",
+    arch: "x64",
+    libc: "musl",
+    binary: "okfx_napi.node"
+  },
+  {
+    packageName: "@okfx/core-win32-x64-msvc",
+    os: "win32",
+    arch: "x64",
+    binary: "okfx_napi.node"
+  }
+];
 
 export function getNativeBackendStatus(): NativeBackendStatus {
   return {
@@ -100,6 +144,38 @@ export function nativeCapabilities(binding = loadOptionalNativeBinding()): unkno
     interface: "json",
     capabilities: []
   };
+}
+
+export function nativePlatformPackageName(
+  platform: NodeJS.Platform = process.platform,
+  arch: NodeJS.Architecture = process.arch,
+  libc: NativeLibc | undefined = detectLinuxLibc(platform)
+): string | undefined {
+  return NATIVE_PLATFORM_PACKAGES.find((target) => {
+    if (target.os !== platform || target.arch !== arch) {
+      return false;
+    }
+    return target.libc === undefined || target.libc === libc;
+  })?.packageName;
+}
+
+export function nativeBindingPackageNames(
+  platform: NodeJS.Platform = process.platform,
+  arch: NodeJS.Architecture = process.arch,
+  libc: NativeLibc | undefined = detectLinuxLibc(platform)
+): string[] {
+  const platformPackage = nativePlatformPackageName(platform, arch, libc);
+  return [
+    ...(platformPackage ? [platformPackage] : []),
+    "@okfx/native"
+  ];
+}
+
+export function wasmBindingPackageNames(): string[] {
+  return [
+    "@okfx/wasm",
+    "@okfx/core-wasm"
+  ];
 }
 
 export function parseMarkdownDocumentAccelerated(
@@ -194,8 +270,7 @@ function nativeBindingCandidates(): BindingCandidate[] {
   const envPath = process.env.OKFX_NATIVE_BINDING;
   return [
     ...(envPath ? [{ specifier: envPath, path: envPath }] : []),
-    { specifier: "@okfx/native" },
-    { specifier: "@okfx/native-darwin-arm64" },
+    ...nativeBindingPackageNames().map((specifier) => ({ specifier })),
     localCandidate("../native/okfx_napi.node")
   ];
 }
@@ -204,9 +279,18 @@ function wasmBindingCandidates(): BindingCandidate[] {
   const envPath = process.env.OKFX_WASM_BINDING;
   return [
     ...(envPath ? [{ specifier: envPath, path: envPath }] : []),
-    { specifier: "@okfx/wasm" },
+    ...wasmBindingPackageNames().map((specifier) => ({ specifier })),
     localCandidate("../wasm/okfx_wasm.js")
   ];
+}
+
+function detectLinuxLibc(platform: NodeJS.Platform = process.platform): NativeLibc | undefined {
+  if (platform !== "linux") {
+    return undefined;
+  }
+
+  const report = process.report?.getReport?.() as { header?: { glibcVersionRuntime?: string } } | undefined;
+  return report?.header?.glibcVersionRuntime ? "gnu" : "musl";
 }
 
 function localCandidate(relative: string): BindingCandidate {

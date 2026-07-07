@@ -1,0 +1,22 @@
+{
+  "name": "@okfx/core-linux-x64-musl",
+  "version": "0.1.0",
+  "description": "Native okfx N-API binding for Linux x64 musl.",
+  "license": "MIT",
+  "main": "./okfx_napi.node",
+  "files": [
+    "okfx_napi.node"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "musl"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

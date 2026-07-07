@@ -8,6 +8,7 @@
 - [Plugins](plugins/api.md) - Plugin API and trust boundary.
 - [Adapters](adapters/producers.md) - Producer adapter behavior and review workflow.
 - [Testing strategy](testing/strategy.md) - Verification commands and fixture strategy.
+- [Distribution](distribution/index.md) - npm, native package, WASM, and release packaging strategy.
 
 # Subdirectories
 
@@ -19,3 +20,4 @@
 - [Plugins](plugins/index.md)
 - [Adapters](adapters/index.md)
 - [Testing](testing/index.md)
+- [Distribution](distribution/index.md)

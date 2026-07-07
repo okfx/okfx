@@ -1,0 +1,21 @@
+{
+  "name": "@okfx/wasm",
+  "version": "0.1.0",
+  "description": "WASM fallback build for okfx core.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./okfx_wasm.d.ts",
+      "default": "./okfx_wasm.js"
+    }
+  },
+  "files": [
+    "okfx_wasm.js",
+    "okfx_wasm_bg.wasm",
+    "okfx_wasm.d.ts"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
