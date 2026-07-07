@@ -1,5 +1,6 @@
 import { normalizeRelativePath } from "./paths.js";
 import { countDiagnostics, sortDiagnostics, type DiagnosticCounts } from "./diagnostics.js";
+import { isSupportedOkfVersion, supportedOkfVersions } from "./version.js";
 import type { BundleIR, ConceptIR, DiagnosticIR } from "./types.js";
 
 export interface ValidationResult {
@@ -11,6 +12,7 @@ export interface ValidationResult {
 export function validateBundle(bundle: BundleIR): ValidationResult {
   const diagnostics = sortDiagnostics([
     ...bundle.diagnostics,
+    ...validateOkfVersion(bundle),
     ...bundle.concepts.flatMap((concept) => validateConcept(concept, bundle.diagnostics))
   ]);
   const counts = countDiagnostics(diagnostics);
@@ -20,6 +22,18 @@ export function validateBundle(bundle: BundleIR): ValidationResult {
     diagnostics,
     counts
   };
+}
+
+function validateOkfVersion(bundle: BundleIR): DiagnosticIR[] {
+  if (isSupportedOkfVersion(bundle.okfVersion)) {
+    return [];
+  }
+
+  return [{
+    code: "spec/unsupported-okf-version",
+    severity: "error",
+    message: `Unsupported OKF version "${bundle.okfVersion ?? "(missing)"}". Supported versions: ${supportedOkfVersions.join(", ")}.`
+  }];
 }
 
 function validateConcept(concept: ConceptIR, existingDiagnostics: DiagnosticIR[]): DiagnosticIR[] {

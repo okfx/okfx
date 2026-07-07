@@ -22,6 +22,12 @@ tags:
 - `strict`: CI-oriented warning threshold and stricter severities.
 - `agent-ready`: agent-readiness diagnostics.
 
+## OKF Version
+
+`okfVersion` defaults to `0.1`. Unsupported versions are reported by
+`okf validate` as `spec/unsupported-okf-version`; use
+`okf validate --okf-version 0.1` to override the config value for a single run.
+
 ## Resource Policy
 
 `resourcePolicy.allowHosts` restricts resource URLs when configured. No network

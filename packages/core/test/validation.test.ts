@@ -72,4 +72,23 @@ describe("validateBundle", () => {
       expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(["spec/invalid-frontmatter"]);
     });
   });
+
+  it("reports unsupported OKF versions", async () => {
+    await withBundle({
+      "concepts/example.md": "---\ntype: Note\n---\n# Example\n"
+    }, async (root) => {
+      const result = validateBundle(await loadBundle(root, {
+        loadConfigFile: false,
+        config: {
+          okfVersion: "9.9"
+        }
+      }));
+
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics[0]).toMatchObject({
+        code: "spec/unsupported-okf-version",
+        severity: "error"
+      });
+    });
+  });
 });

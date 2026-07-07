@@ -146,13 +146,22 @@ function resolveLinks(
 
 function mergeConfig(base: ResolvedOkfxConfig, override: OkfxConfig = {}): ResolvedOkfxConfig {
   const resolvedOverride = resolveConfig(override, base.configPath);
+  const overridePresets = override.presets !== undefined;
+
   return {
     ...base,
-    ...resolvedOverride,
+    okfVersion: override.okfVersion ?? base.okfVersion,
     include: override.include ?? base.include,
     exclude: override.exclude ?? base.exclude,
     presets: override.presets ?? base.presets,
-    rules: override.rules ?? base.rules,
+    plugins: override.plugins !== undefined ? resolvedOverride.plugins : base.plugins,
+    rules: overridePresets
+      ? resolvedOverride.rules
+      : {
+          ...base.rules,
+          ...(override.rules ?? {})
+        },
+    failOn: override.failOn ?? (overridePresets ? resolvedOverride.failOn : base.failOn),
     frontmatter: {
       keyOrder: override.frontmatter?.keyOrder ?? base.frontmatter.keyOrder
     },

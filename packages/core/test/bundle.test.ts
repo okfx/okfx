@@ -146,6 +146,22 @@ type: Metric
     expect(bundle.okfVersion).toBe("0.1");
     expect(bundle.concepts.map((concept) => concept.path)).toEqual(["knowledge/kept.md"]);
   });
+
+  it("preserves config file OKF version unless explicitly overridden", async () => {
+    const root = await tempBundle();
+    await write(root, "okfx.config.ts", "export default { okfVersion: '9.9' };\n");
+    await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
+
+    const configured = await loadBundle(root);
+    const overridden = await loadBundle(root, {
+      config: {
+        okfVersion: "0.1"
+      }
+    });
+
+    expect(configured.okfVersion).toBe("9.9");
+    expect(overridden.okfVersion).toBe("0.1");
+  });
 });
 
 describe("parseMarkdownDocument", () => {

@@ -31,6 +31,12 @@ tags:
 `okf lint` loads plugins declared in `okfx.config.*`. Use
 `okf lint --no-plugins` to run only built-in validation and lint rules.
 
+## OKF Version
+
+`okf validate --okf-version 0.1` overrides the configured OKF compatibility
+version for one run. Unsupported versions produce
+`spec/unsupported-okf-version`.
+
 ## Exit Codes
 
 - `0`: command completed and did not cross its failure threshold.

@@ -98,4 +98,22 @@ describe("okf validate", () => {
     expect(output.stdout()).toBe("");
     expect(JSON.parse(await readFile(out, "utf8"))).toMatchObject({ ok: true });
   });
+
+  it("supports explicit OKF version compatibility override", async () => {
+    const root = await tempRoot();
+    await write(root, "okfx.config.ts", "export default { okfVersion: '9.9' };\n");
+    await write(root, "concepts/example.md", "---\ntype: Note\n---\n# Example\n");
+
+    const unsupported = capture();
+    const unsupportedCode = await main(["validate", root], unsupported.io);
+
+    expect(unsupportedCode).toBe(1);
+    expect(unsupported.stdout()).toContain("spec/unsupported-okf-version");
+
+    const overridden = capture();
+    const overriddenCode = await main(["validate", root, "--okf-version", "0.1"], overridden.io);
+
+    expect(overriddenCode).toBe(0);
+    expect(overridden.stdout()).toContain("OKF validation passed");
+  });
 });
