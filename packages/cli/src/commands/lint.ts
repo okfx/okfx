@@ -53,7 +53,7 @@ export function createLintCommand(context: CliContext): Command {
       if (options.debug || options.trace || options.timings) {
         context.io.stderr.write(formatDebug({ root, config, loaded, result, elapsedMs: performance.now() - startedAt, trace: options.trace }));
       }
-      context.setExitCode(result.ok ? 0 : 1);
+      context.setExitCode(exitCodeForLint(result));
     });
 }
 
@@ -198,4 +198,12 @@ function formatPluginSummary(result: LintResult): string {
   return result.plugins
     .map((plugin) => `${plugin.name}${plugin.version ? `@${plugin.version}` : ""} (${plugin.source}, ${plugin.ruleCount} rules)`)
     .join(", ");
+}
+
+function exitCodeForLint(result: LintResult): number {
+  if (result.diagnostics.some((diagnostic) => diagnostic.code.startsWith("plugin/"))) {
+    return 3;
+  }
+
+  return result.ok ? 0 : 1;
 }

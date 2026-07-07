@@ -168,4 +168,16 @@ describe("okf lint", () => {
     expect(withoutPlugins.stdout()).toContain("plugins: none");
     expect(withoutPlugins.stdout()).not.toContain("custom/owner-required");
   });
+
+  it("returns exit code 3 for plugin failures", async () => {
+    const root = await tempRoot();
+    await write(root, "okfx.config.ts", "export default { plugins: ['./missing-plugin.ts'] };\n");
+    await write(root, "concept.md", "---\ntype: Note\ntitle: Concept\ndescription: Demo\n---\n# Concept\n");
+    const output = capture();
+
+    const code = await main(["lint", root], output.io);
+
+    expect(code).toBe(3);
+    expect(output.stdout()).toContain("plugin/load-failed");
+  });
 });

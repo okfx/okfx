@@ -57,6 +57,7 @@ version for one run. Unsupported versions produce
 - `0`: command completed and did not cross its failure threshold.
 - `1`: diagnostics, diff changes, or format check differences crossed the command threshold.
 - `2`: runtime/config/argument failure.
+- `3`: plugin load or execution failure.
 
 ## Verification
 
