@@ -2,6 +2,8 @@ import { Command, CommanderError, InvalidArgumentError } from "commander";
 
 import { okfxVersion } from "@okfx/core";
 
+import { createInitCommand } from "./commands/init.js";
+
 export interface CliIO {
   stdout: {
     write(text: string): unknown;
@@ -44,7 +46,11 @@ export function createProgram(context: CliContext): Command {
     });
 
   for (const [name, description] of plannedCommands) {
-    program.addCommand(createPlaceholderCommand(name, description, context));
+    program.addCommand(
+      name === "init"
+        ? createInitCommand(context)
+        : createPlaceholderCommand(name, description, context)
+    );
   }
 
   return program;

@@ -16,7 +16,7 @@
     "clean": "npm run clean --workspaces --if-present",
     "test": "vitest run",
     "typecheck": "tsc -b tsconfig.json",
-    "okf": "npm --workspace @okfx/cli exec okf --"
+    "okf": "node_modules/.bin/okf"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { runProgram, type CliIO } from "./program.js";
 
 export async function main(
@@ -9,6 +12,14 @@ export async function main(
   return runProgram(argv, io);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectExecution()) {
   process.exitCode = await main();
+}
+
+function isDirectExecution(): boolean {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
 }
