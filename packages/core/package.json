@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "fast-glob": "^3.3.3",
+    "jiti": "^2.7.0",
     "yaml": "^2.6.1"
   },
   "devDependencies": {

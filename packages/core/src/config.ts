@@ -2,6 +2,8 @@ import { pathToFileURL } from "node:url";
 import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { createJiti } from "jiti";
+
 import type { DiagnosticSeverity } from "./types.js";
 
 export type RuleLevel = DiagnosticSeverity | "off";
@@ -78,8 +80,11 @@ export const defaultConfig: ResolvedOkfxConfig = {
 };
 
 export const configFileNames = [
+  "okfx.config.ts",
+  "okfx.config.mts",
   "okfx.config.mjs",
   "okfx.config.js",
+  "okfx.config.cjs",
   "okfx.config.json"
 ] as const;
 
@@ -135,6 +140,10 @@ export async function loadConfig(root: string): Promise<ResolvedOkfxConfig> {
     return resolveConfig(config, configPath);
   }
 
-  const module = (await import(pathToFileURL(configPath).href)) as { default?: OkfxConfig };
-  return resolveConfig(module.default ?? {}, configPath);
+  const jiti = createJiti(pathToFileURL(configPath).href, {
+    interopDefault: true,
+    moduleCache: false
+  });
+  const config = await jiti.import<OkfxConfig>(configPath, { default: true });
+  return resolveConfig(config ?? {}, configPath);
 }

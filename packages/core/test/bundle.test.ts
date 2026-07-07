@@ -125,6 +125,27 @@ type: Metric
 
     expect(bundle.concepts.map((concept) => concept.path)).toEqual(["knowledge/kept.md"]);
   });
+
+  it("loads okfx.config.ts files", async () => {
+    const root = await tempBundle();
+    await write(
+      root,
+      "okfx.config.ts",
+      `export default {
+  include: ["knowledge/**/*.md"],
+  exclude: ["**/ignored.md"],
+  okfVersion: "0.1"
+};
+`
+    );
+    await write(root, "knowledge/kept.md", "---\ntype: Note\n---\n# Kept\n");
+    await write(root, "knowledge/ignored.md", "---\ntype: Note\n---\n# Ignored\n");
+
+    const bundle = await loadBundle(root);
+
+    expect(bundle.okfVersion).toBe("0.1");
+    expect(bundle.concepts.map((concept) => concept.path)).toEqual(["knowledge/kept.md"]);
+  });
 });
 
 describe("parseMarkdownDocument", () => {
