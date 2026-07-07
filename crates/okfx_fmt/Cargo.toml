@@ -7,3 +7,6 @@ repository.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+serde_yaml = "0.9"

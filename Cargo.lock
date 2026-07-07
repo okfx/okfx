@@ -105,6 +105,9 @@ version = "0.1.0"
 [[package]]
 name = "okfx_fmt"
 version = "0.1.0"
+dependencies = [
+ "serde_yaml",
+]
 
 [[package]]
 name = "okfx_fs"
