@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 
 import { Command } from "commander";
 
-import { startStdioServer } from "@okfx/mcp";
+import { OKF_MCP_PROMPTS, OKF_MCP_TOOLS, startStdioServer } from "@okfx/mcp";
 
 import type { CliContext } from "../program.js";
 
@@ -22,16 +22,8 @@ export function createMcpCommand(context: CliContext): Command {
           root,
           readonly,
           transport: "stdio",
-          tools: [
-            "okf_search_concepts",
-            "okf_get_concept",
-            "okf_get_neighbors",
-            "okf_get_backlinks",
-            "okf_get_graph",
-            "okf_validate_bundle",
-            "okf_lint_bundle",
-            "okf_get_diagnostics"
-          ]
+          tools: OKF_MCP_TOOLS,
+          prompts: OKF_MCP_PROMPTS
         }, null, 2)}\n`);
         return;
       }

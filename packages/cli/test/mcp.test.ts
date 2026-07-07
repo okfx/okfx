@@ -43,11 +43,13 @@ describe("okf mcp", () => {
     const output = capture();
 
     const code = await main(["mcp", root, "--describe"], output.io);
-    const parsed = JSON.parse(output.stdout()) as { root: string; readonly: boolean; tools: string[] };
+    const parsed = JSON.parse(output.stdout()) as { root: string; readonly: boolean; tools: string[]; prompts: string[] };
 
     expect(code).toBe(0);
     expect(parsed.root).toBe(root);
     expect(parsed.readonly).toBe(true);
     expect(parsed.tools).toContain("okf_search_concepts");
+    expect(parsed.tools).toContain("okf_explain_diff");
+    expect(parsed.prompts).toContain("draft_okf_concept");
   });
 });
