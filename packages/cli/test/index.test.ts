@@ -68,4 +68,15 @@ describe("okf index", () => {
     expect(code).toBe(0);
     expect(parsed).toMatchObject({ ok: true, documentCount: 1 });
   });
+
+  it("requires explicit provider configuration for vector modes", async () => {
+    const root = await tempRoot();
+    await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Concept\n---\n# Concept\n", "utf8");
+    const output = capture();
+
+    const code = await main(["index", root, "--mode", "vector"], output.io);
+
+    expect(code).toBe(2);
+    expect(output.stderr()).toContain("vector index mode requires explicit --vector-provider configuration");
+  });
 });

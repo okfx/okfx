@@ -31,6 +31,9 @@ tags:
 Graph analysis such as backlinks, orphan concepts, and cycles is computed from
 resolved concept-to-concept links.
 
+`okf index` builds `full-text` indexes by default. `vector` and `hybrid` modes
+must be requested explicitly and require a configured vector provider.
+
 ## Editor Surface
 
 The VS Code extension exposes diagnostics, formatting, frontmatter and link
