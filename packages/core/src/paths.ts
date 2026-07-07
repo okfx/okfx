@@ -1,0 +1,64 @@
+import { basename, dirname, extname, isAbsolute, posix, relative, resolve, sep } from "node:path";
+
+const reservedFileNames = new Set(["index.md", "log.md"]);
+
+export function toPosixPath(path: string): string {
+  return path.split(sep).join("/").replace(/\\/g, "/");
+}
+
+export function normalizeRelativePath(path: string): string {
+  const normalized = posix.normalize(toPosixPath(path));
+  if (normalized === ".") {
+    return "";
+  }
+
+  return normalized.replace(/^\.\//, "");
+}
+
+export function relativePosixPath(root: string, filePath: string): string {
+  return normalizeRelativePath(toPosixPath(relative(root, filePath)));
+}
+
+export function resolveBundleRoot(root: string): string {
+  return resolve(root);
+}
+
+export function conceptIdFromPath(path: string): string {
+  const normalized = normalizeRelativePath(path);
+  const ext = extname(normalized);
+  return ext === ".md" ? normalized.slice(0, -ext.length) : normalized;
+}
+
+export function isReservedMarkdownFile(path: string): boolean {
+  return reservedFileNames.has(basename(path));
+}
+
+export function reservedFileKind(path: string): "index" | "log" | undefined {
+  const name = basename(path);
+  if (name === "index.md") {
+    return "index";
+  }
+  if (name === "log.md") {
+    return "log";
+  }
+  return undefined;
+}
+
+export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): string | undefined {
+  const [withoutHash] = targetRaw.split("#", 1);
+  const [withoutQuery] = withoutHash.split("?", 1);
+  if (!withoutQuery) {
+    return undefined;
+  }
+
+  const targetPath = withoutQuery.startsWith("/")
+    ? withoutQuery.slice(1)
+    : posix.join(dirname(normalizeRelativePath(sourcePath)), withoutQuery);
+
+  const normalized = normalizeRelativePath(targetPath);
+  if (normalized.startsWith("../") || normalized === ".." || isAbsolute(normalized)) {
+    return undefined;
+  }
+
+  return conceptIdFromPath(normalized);
+}

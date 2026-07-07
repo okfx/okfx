@@ -18,6 +18,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
+    "fast-glob": "^3.3.3",
     "yaml": "^2.6.1"
   },
   "devDependencies": {
