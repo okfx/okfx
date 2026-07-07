@@ -19,14 +19,14 @@ integration surfaces.
 ## Quick start
 
 ```bash
-npm install
-npm run build
-npm run okf -- init ./knowledge
-npm run okf -- validate ./knowledge
-npm run okf -- lint ./knowledge
-npm run okf -- graph ./knowledge --out graph.json
-npm run okf -- doctor ./knowledge
-npm run okf -- export static-site ./knowledge --out ./site
+pnpm install
+pnpm build
+pnpm okf init ./knowledge
+pnpm okf validate ./knowledge
+pnpm okf lint ./knowledge
+pnpm okf graph ./knowledge --out graph.json
+pnpm okf doctor ./knowledge
+pnpm okf export static-site ./knowledge --out ./site
 ```
 
 ## Packages
@@ -41,8 +41,8 @@ npm run okf -- export static-site ./knowledge --out ./site
 
 ## Verification
 
-- `npm run build`
-- `npm run typecheck`
-- `npm test`
-- `npm audit --audit-level=moderate`
+- `pnpm build`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm audit --audit-level moderate`
 - `cargo test --workspace`

@@ -40,6 +40,6 @@ What this shows: current runtime behavior flows through TypeScript core; Rust is
 
 ## Verification
 
-- TypeScript behavior: `npm run build && npm run typecheck && npm test`
-- Dependency and audit gate: `npm audit --audit-level=moderate`
+- TypeScript behavior: `pnpm build && pnpm typecheck && pnpm test`
+- Dependency and audit gate: `pnpm audit --audit-level moderate`
 - Rust scaffold: `cargo test --workspace`

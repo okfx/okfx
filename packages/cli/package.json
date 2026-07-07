@@ -21,14 +21,14 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/adapter-bigquery": "^0.1.0",
-    "@okfx/adapter-datahub": "^0.1.0",
-    "@okfx/adapter-dbt": "^0.1.0",
-    "@okfx/adapter-markdown": "^0.1.0",
-    "@okfx/adapter-openapi": "^0.1.0",
-    "@okfx/adapter-static-site": "^0.1.0",
-    "@okfx/core": "0.1.0",
-    "@okfx/mcp": "^0.1.0",
+    "@okfx/adapter-bigquery": "workspace:*",
+    "@okfx/adapter-datahub": "workspace:*",
+    "@okfx/adapter-dbt": "workspace:*",
+    "@okfx/adapter-markdown": "workspace:*",
+    "@okfx/adapter-openapi": "workspace:*",
+    "@okfx/adapter-static-site": "workspace:*",
+    "@okfx/core": "workspace:*",
+    "@okfx/mcp": "workspace:*",
     "commander": "^15.0.0"
   },
   "devDependencies": {

@@ -13,10 +13,10 @@ tags:
 
 ## Required Commands
 
-- `npm run build`
-- `npm run typecheck`
-- `npm test`
-- `npm audit --audit-level=moderate`
+- `pnpm build`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm audit --audit-level moderate`
 - `cargo test --workspace`
 
 ## Fixture Coverage

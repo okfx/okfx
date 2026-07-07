@@ -16,8 +16,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/core": "0.1.0",
-    "@okfx/plugin-api": "0.1.0"
+    "@okfx/core": "workspace:*",
+    "@okfx/plugin-api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

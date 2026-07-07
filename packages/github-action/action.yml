@@ -42,7 +42,17 @@ runs:
   steps:
     - name: Setup okfx
       shell: bash
-      run: npm install -g @okfx/cli
+      run: |
+        set -euo pipefail
+        corepack enable
+        corepack prepare pnpm@11.8.0 --activate
+        install_dir="${RUNNER_TEMP:-/tmp}/okfx-action-cli"
+        rm -rf "$install_dir"
+        mkdir -p "$install_dir"
+        cd "$install_dir"
+        printf '{"private":true,"dependencies":{"@okfx/cli":"latest"}}\n' > package.json
+        pnpm install --prod
+        echo "$install_dir/node_modules/.bin" >> "$GITHUB_PATH"
     - name: Validate OKF
       id: validate
       shell: bash

@@ -62,4 +62,4 @@ version for one run. Unsupported versions produce
 ## Verification
 
 - CLI integration tests under `packages/cli/test/`.
-- Manual smoke command: `npm run okf -- --help`.
+- Manual smoke command: `pnpm okf --help`.

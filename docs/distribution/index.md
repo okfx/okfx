@@ -1,10 +1,11 @@
 # Distribution
 
 okfx publishes a TypeScript-first toolchain with optional native acceleration.
-The default user path remains npm:
+Packages are published to the npm registry; the recommended package manager is
+pnpm:
 
 ```bash
-npm install -g @okfx/cli
+pnpm add -g @okfx/cli
 ```
 
 The `okf` command works without native artifacts. `@okfx/core` first tries a
@@ -35,12 +36,12 @@ names. The package templates live under `npm/wasm` and `npm/core-wasm`.
 
 ## Release Checklist
 
-1. Build TypeScript packages with `npm run build`.
+1. Build TypeScript packages with `pnpm build`.
 2. Run `cargo test --workspace`.
 3. Build `okfx_napi.node` for each native target.
 4. Copy each binary into its matching `npm/native/*` template directory.
 5. Build the WASM package artifacts from `crates/okfx_wasm`.
-6. Run `npm pack --dry-run` in every package directory.
+6. Run `pnpm pack --dry-run` in every package directory.
 7. Publish platform packages before publishing `@okfx/core` and `@okfx/cli`.
 
 Native packages must use the same version as `@okfx/core`. If no native package
@@ -48,8 +49,8 @@ matches the current runtime, okfx keeps running through WASM or TypeScript.
 
 ## Automation
 
-- `.github/workflows/ci.yml` runs npm build, typecheck, tests, audit, Rust tests,
+- `.github/workflows/ci.yml` runs pnpm build, typecheck, tests, audit, Rust tests,
   WASM build, and standalone CLI build on pushes and pull requests.
-- `.github/workflows/release.yml` runs on `v*` tags, dry-runs npm package
+- `.github/workflows/release.yml` runs on `v*` tags, dry-runs pnpm package
   archives, builds standalone `okfx` binaries for Linux, macOS arm64, and
   Windows x64, then uploads them to the GitHub Release.

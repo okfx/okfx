@@ -51,4 +51,4 @@ an LLM.
 ## Verification
 
 - MCP API tests under `packages/mcp/test/api.test.ts`.
-- CLI describe smoke: `npm run okf -- mcp . --describe`.
+- CLI describe smoke: `pnpm okf mcp . --describe`.

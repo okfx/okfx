@@ -83,4 +83,4 @@ error diagnostic.
 ## Verification
 
 - Type surface: `packages/plugin-api/src/index.ts`.
-- Build gate: `npm run typecheck`.
+- Build gate: `pnpm typecheck`.

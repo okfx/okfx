@@ -2,21 +2,19 @@
   "name": "okfx",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.8.0",
   "description": "Developer toolkit for Open Knowledge Format bundles.",
   "license": "MIT",
   "type": "module",
-  "workspaces": [
-    "packages/*"
-  ],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "build": "tsc -b tsconfig.json && node packages/cli/scripts/make-executable.mjs",
-    "clean": "npm run clean --workspaces --if-present",
+    "clean": "pnpm -r --if-present run clean",
     "test": "vitest run",
     "typecheck": "tsc -b tsconfig.json",
-    "okf": "node_modules/.bin/okf"
+    "okf": "okf"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
