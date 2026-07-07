@@ -1,6 +1,7 @@
 export * from "./bundle.js";
 export * from "./config.js";
 export * from "./diagnostics.js";
+export * from "./diff.js";
 export * from "./doctor.js";
 export * from "./format.js";
 export * from "./graph.js";
