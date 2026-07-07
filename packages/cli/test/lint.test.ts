@@ -88,6 +88,32 @@ describe("okf lint", () => {
     expect(parsed.diagnostics.map((diagnostic) => diagnostic.code)).toContain("hygiene/missing-title");
   });
 
+  it("prints SARIF output", async () => {
+    const root = await tempRoot();
+    await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
+    const output = capture();
+
+    const code = await main(["lint", root, "--format", "sarif"], output.io);
+    const parsed = JSON.parse(output.stdout()) as { version: string; runs: Array<{ results: Array<{ ruleId: string }> }> };
+
+    expect(code).toBe(0);
+    expect(parsed.version).toBe("2.1.0");
+    expect(parsed.runs[0]?.results.map((result) => result.ruleId)).toContain("hygiene/missing-title");
+  });
+
+  it("prints debug and trace output to stderr", async () => {
+    const root = await tempRoot();
+    await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
+    const output = capture();
+
+    const code = await main(["lint", root, "--debug", "--trace", "--timings"], output.io);
+
+    expect(code).toBe(0);
+    expect(output.stderr()).toContain("okfx debug:");
+    expect(output.stderr()).toContain("filesScanned: 1");
+    expect(output.stderr()).toContain("diagnostics:");
+  });
+
   it("fails on suspicious secrets", async () => {
     const root = await tempRoot();
     await write(root, "concept.md", "---\ntype: Note\ntitle: Concept\ndescription: Demo\n---\napi_key = abcdefghijklmnopqrstuvwxyz\n");
