@@ -113,6 +113,11 @@ version = "0.1.0"
 [[package]]
 name = "okfx_graph"
 version = "0.1.0"
+dependencies = [
+ "okfx_parser",
+ "okfx_resolver",
+ "serde",
+]
 
 [[package]]
 name = "okfx_index"
