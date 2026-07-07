@@ -18,6 +18,7 @@ write tools and does not call external networks or LLMs.
 
 ## Tools
 
+- `okf_list_bundles`
 - `okf_search_concepts`
 - `okf_get_concept`
 - `okf_get_neighbors`

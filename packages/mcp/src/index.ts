@@ -24,6 +24,7 @@ export interface OkfMcpServerOptions {
 }
 
 export const OKF_MCP_TOOLS = [
+  "okf_list_bundles",
   "okf_search_concepts",
   "okf_get_concept",
   "okf_get_neighbors",
@@ -52,6 +53,14 @@ export interface ConceptSearchResult {
   score: number;
 }
 
+export interface BundleListEntry {
+  id: "current";
+  root: string;
+  okfVersion?: string;
+  conceptCount: number;
+  linkCount: number;
+}
+
 export interface DiffExplanation {
   beforeRoot: string;
   afterRoot: string;
@@ -63,6 +72,7 @@ export interface DiffExplanation {
 
 export interface OkfBundleApi {
   load(): Promise<BundleIR>;
+  listBundles(): Promise<BundleListEntry[]>;
   searchConcepts(query: string, limit?: number): Promise<ConceptSearchResult[]>;
   getConcept(id: string): Promise<ConceptIR | undefined>;
   getNeighbors(id: string): Promise<{ outgoing: string[]; incoming: string[] }>;
@@ -79,6 +89,16 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
 
   return {
     load: () => loadBundle(currentRoot),
+    async listBundles() {
+      const bundle = await loadBundle(currentRoot);
+      return [{
+        id: "current",
+        root: currentRoot,
+        okfVersion: bundle.okfVersion,
+        conceptCount: bundle.stats.conceptCount,
+        linkCount: bundle.stats.linkCount
+      }];
+    },
     async searchConcepts(query, limit = 10) {
       const bundle = await loadBundle(currentRoot);
       const index = buildSearchIndex(bundle);
@@ -219,6 +239,11 @@ function registerResources(server: McpServer, api: OkfBundleApi): void {
 }
 
 function registerTools(server: McpServer, api: OkfBundleApi): void {
+  server.registerTool("okf_list_bundles", {
+    title: "List OKF bundles",
+    description: "List bundles available to this local MCP server."
+  }, async () => jsonTool(await api.listBundles()));
+
   server.registerTool("okf_search_concepts", {
     title: "Search OKF concepts",
     description: "Search concepts in the current OKF bundle using the local full-text index.",

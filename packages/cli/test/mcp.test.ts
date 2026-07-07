@@ -48,6 +48,7 @@ describe("okf mcp", () => {
     expect(code).toBe(0);
     expect(parsed.root).toBe(root);
     expect(parsed.readonly).toBe(true);
+    expect(parsed.tools).toContain("okf_list_bundles");
     expect(parsed.tools).toContain("okf_search_concepts");
     expect(parsed.tools).toContain("okf_explain_diff");
     expect(parsed.prompts).toContain("draft_okf_concept");

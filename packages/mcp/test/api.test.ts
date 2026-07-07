@@ -26,7 +26,9 @@ description: Demo metric.
       await writeFile(join(root, "tables/events.md"), "---\ntype: Table\ntitle: Events\n---\n# Events\n", "utf8");
 
       const api = createOkfBundleApi(root);
+      const bundles = await api.listBundles();
 
+      expect(bundles[0]).toMatchObject({ id: "current", root, conceptCount: 2 });
       expect((await api.searchConcepts("weekly"))[0]).toMatchObject({ id: "metrics/wau" });
       expect(await api.getBacklinks("metrics/wau")).toEqual(["index"]);
       expect(await api.getNeighbors("metrics/wau")).toMatchObject({ outgoing: ["tables/events"] });
