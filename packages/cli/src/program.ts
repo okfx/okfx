@@ -4,6 +4,7 @@ import { okfxVersion } from "@okfx/core";
 
 import { createInitCommand } from "./commands/init.js";
 import { createDoctorCommand } from "./commands/doctor.js";
+import { createFmtCommand } from "./commands/fmt.js";
 import { createGraphCommand } from "./commands/graph.js";
 import { createLintCommand } from "./commands/lint.js";
 import { createValidateCommand } from "./commands/validate.js";
@@ -61,6 +62,8 @@ export function createProgram(context: CliContext): Command {
               ? createGraphCommand(context)
               : name === "doctor"
                 ? createDoctorCommand(context)
+                : name === "fmt"
+                  ? createFmtCommand(context)
         : createPlaceholderCommand(name, description, context)
     );
   }

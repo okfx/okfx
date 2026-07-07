@@ -2,6 +2,7 @@ export * from "./bundle.js";
 export * from "./config.js";
 export * from "./diagnostics.js";
 export * from "./doctor.js";
+export * from "./format.js";
 export * from "./graph.js";
 export * from "./hash.js";
 export * from "./lint.js";
