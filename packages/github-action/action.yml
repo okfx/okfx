@@ -1,0 +1,38 @@
+name: OKF
+description: Validate, lint, graph, and doctor an Open Knowledge Format bundle.
+inputs:
+  bundle:
+    description: OKF bundle root.
+    required: false
+    default: .
+  lint-format:
+    description: Lint output format.
+    required: false
+    default: pretty
+  graph-out:
+    description: Graph JSON output path.
+    required: false
+    default: okf-graph.json
+  doctor:
+    description: Run okf doctor.
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Setup okfx
+      shell: bash
+      run: npm install -g @okfx/cli
+    - name: Validate OKF
+      shell: bash
+      run: okf validate "${{ inputs.bundle }}"
+    - name: Lint OKF
+      shell: bash
+      run: okf lint "${{ inputs.bundle }}" --format "${{ inputs.lint-format }}"
+    - name: Build graph
+      shell: bash
+      run: okf graph "${{ inputs.bundle }}" --out "${{ inputs.graph-out }}"
+    - name: Doctor
+      if: ${{ inputs.doctor == 'true' }}
+      shell: bash
+      run: okf doctor "${{ inputs.bundle }}"
