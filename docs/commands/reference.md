@@ -27,6 +27,10 @@ tags:
 | `okf export` | Export reviewable consumer files such as a static site. |
 | `okf mcp` | Run a read-only stdio MCP server. |
 
+`okf graph --format json` emits `markdown-link`, `resource`, and `tag` edges.
+Graph analysis such as backlinks, orphan concepts, and cycles is computed from
+resolved concept-to-concept links.
+
 ## Editor Surface
 
 The VS Code extension exposes diagnostics, formatting, frontmatter and link

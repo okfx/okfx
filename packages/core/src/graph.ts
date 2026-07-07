@@ -27,9 +27,12 @@ export function buildGraph(bundle: BundleIR): OkfxGraphIR {
     ...bundle.indexes.map((file) => reservedNode(file, "Index")),
     ...bundle.logs.map((file) => reservedNode(file, "Log"))
   ];
-  const edges = bundle.links
-    .filter((link) => link.kind === "internal")
-    .map(graphEdge);
+  const edges = [
+    ...bundle.links
+      .filter((link) => link.kind === "internal")
+      .map(graphEdge),
+    ...bundle.concepts.flatMap(metadataEdges)
+  ];
   const analysis = analyzeGraph(bundle, edges);
 
   return {
@@ -146,6 +149,49 @@ function graphEdge(link: LinkIR): GraphEdgeIR {
     resolved: link.resolved,
     label: link.text
   };
+}
+
+function metadataEdges(concept: ConceptIR): GraphEdgeIR[] {
+  return [
+    ...uniqueNonEmpty(resourceValues(concept)).map((resource) => ({
+      source: concept.id,
+      target: `resource:${resource}`,
+      kind: "resource" as const,
+      resolved: true,
+      label: resource
+    })),
+    ...uniqueNonEmpty(concept.tags ?? []).map((tag) => ({
+      source: concept.id,
+      target: `tag:${tag}`,
+      kind: "tag" as const,
+      resolved: true,
+      label: tag
+    }))
+  ];
+}
+
+function resourceValues(concept: ConceptIR): string[] {
+  if (Array.isArray(concept.resource)) {
+    return concept.resource;
+  }
+
+  return concept.resource ? [concept.resource] : [];
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+
+  return result;
 }
 
 function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[]): GraphAnalysisIR {

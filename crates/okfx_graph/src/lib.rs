@@ -10,6 +10,9 @@ pub struct ConceptNodeInput {
     pub path: String,
     pub concept_type: String,
     pub title: Option<String>,
+    #[serde(default)]
+    pub resource: Vec<String>,
+    #[serde(default)]
     pub tags: Vec<String>,
 }
 
@@ -83,7 +86,7 @@ pub fn build_graph(concepts: Vec<ConceptNodeInput>, links: Vec<ResolvedLink>) ->
         .iter()
         .map(|concept| concept.id.clone())
         .collect::<BTreeSet<_>>();
-    let edges = links
+    let mut edges = links
         .into_iter()
         .filter(|link| matches!(link.kind, okfx_parser::LinkKind::Internal))
         .map(|link| GraphEdge {
@@ -94,6 +97,9 @@ pub fn build_graph(concepts: Vec<ConceptNodeInput>, links: Vec<ResolvedLink>) ->
             label: link.text,
         })
         .collect::<Vec<_>>();
+    for concept in &concepts {
+        edges.extend(metadata_edges(concept));
+    }
     let analysis = analyze_graph(&concept_ids, &edges);
     let stats = GraphStats {
         node_count: nodes.len(),
@@ -109,6 +115,45 @@ pub fn build_graph(concepts: Vec<ConceptNodeInput>, links: Vec<ResolvedLink>) ->
         stats,
         analysis,
     }
+}
+
+fn metadata_edges(concept: &ConceptNodeInput) -> Vec<GraphEdge> {
+    unique_non_empty(&concept.resource)
+        .into_iter()
+        .map(|resource| GraphEdge {
+            source: concept.id.clone(),
+            target: format!("resource:{resource}"),
+            kind: "resource".to_string(),
+            resolved: true,
+            label: Some(resource),
+        })
+        .chain(
+            unique_non_empty(&concept.tags)
+                .into_iter()
+                .map(|tag| GraphEdge {
+                    source: concept.id.clone(),
+                    target: format!("tag:{tag}"),
+                    kind: "tag".to_string(),
+                    resolved: true,
+                    label: Some(tag),
+                }),
+        )
+        .collect()
+}
+
+fn unique_non_empty(values: &[String]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut result = Vec::new();
+
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
+            continue;
+        }
+        result.push(trimmed.to_string());
+    }
+
+    result
 }
 
 fn analyze_graph(concept_ids: &BTreeSet<String>, edges: &[GraphEdge]) -> GraphAnalysis {
@@ -248,7 +293,7 @@ fn count_isolated_clusters(
 mod tests {
     use super::*;
     use okfx_parser::parse_markdown_document;
-    use okfx_resolver::{resolve_links, LinkEntry};
+    use okfx_resolver::{LinkEntry, resolve_links};
 
     #[test]
     fn exposes_crate_name() {
@@ -257,7 +302,11 @@ mod tests {
 
     #[test]
     fn builds_graph_analysis() {
-        let a = parse_markdown_document("a.md", "---\ntype: Note\n---\n[B](b.md)\n[Missing](missing.md)\n", "a");
+        let a = parse_markdown_document(
+            "a.md",
+            "---\ntype: Note\n---\n[B](b.md)\n[Missing](missing.md)\n",
+            "a",
+        );
         let b = parse_markdown_document("b.md", "---\ntype: Note\n---\n[A](a.md)\n", "b");
         let resolved = resolve_links(
             a.links
@@ -274,11 +323,7 @@ mod tests {
             ["a".to_string(), "b".to_string(), "orphan".to_string()],
         );
         let graph = build_graph(
-            vec![
-                concept("a"),
-                concept("b"),
-                concept("orphan"),
-            ],
+            vec![concept("a"), concept("b"), concept("orphan")],
             resolved.links,
         );
 
@@ -292,12 +337,69 @@ mod tests {
         assert_eq!(graph.stats.cycle_count, 1);
     }
 
+    #[test]
+    fn includes_resource_and_tag_edges() {
+        let graph = build_graph(
+            vec![ConceptNodeInput {
+                id: "a".to_string(),
+                path: "a.md".to_string(),
+                concept_type: "Note".to_string(),
+                title: Some("A".to_string()),
+                resource: vec![
+                    "https://docs.example.com/a".to_string(),
+                    "bigquery://project/dataset/table".to_string(),
+                    "https://docs.example.com/a".to_string(),
+                ],
+                tags: vec![
+                    "analytics".to_string(),
+                    "trusted".to_string(),
+                    "analytics".to_string(),
+                ],
+            }],
+            Vec::new(),
+        );
+
+        let edges = graph
+            .edges
+            .iter()
+            .map(|edge| {
+                (
+                    edge.kind.as_str(),
+                    edge.target.as_str(),
+                    edge.label.as_deref(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(graph.stats.edge_count, 4);
+        assert_eq!(graph.stats.orphan_count, 1);
+        assert_eq!(
+            edges,
+            vec![
+                (
+                    "resource",
+                    "resource:https://docs.example.com/a",
+                    Some("https://docs.example.com/a")
+                ),
+                (
+                    "resource",
+                    "resource:bigquery://project/dataset/table",
+                    Some("bigquery://project/dataset/table")
+                ),
+                ("tag", "tag:analytics", Some("analytics")),
+                ("tag", "tag:trusted", Some("trusted")),
+            ]
+        );
+        assert!(graph.analysis.backlinks["a"].is_empty());
+    }
+
     fn concept(id: &str) -> ConceptNodeInput {
         ConceptNodeInput {
             id: id.to_string(),
             path: format!("{id}.md"),
             concept_type: "Note".to_string(),
             title: Some(id.to_string()),
+            resource: Vec::new(),
             tags: Vec::new(),
         }
     }

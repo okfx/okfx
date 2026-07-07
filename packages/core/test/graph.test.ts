@@ -41,6 +41,27 @@ describe("buildGraph", () => {
       expect(graph.analysis.topReferencedConcepts[0]).toEqual({ id: "a", count: 1 });
     });
   });
+
+  it("includes resource and tag metadata edges", async () => {
+    await withBundle({
+      "a.md": "---\ntype: Note\ntitle: A\nresource:\n  - https://docs.example.com/a\n  - bigquery://project/dataset/table\n  - https://docs.example.com/a\ntags:\n  - analytics\n  - trusted\n  - analytics\n---\n# A\n"
+    }, async (root) => {
+      const graph = buildGraph(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(graph.stats).toMatchObject({
+        nodeCount: 1,
+        edgeCount: 4,
+        orphanCount: 1
+      });
+      expect(graph.edges.map((edge) => [edge.kind, edge.target, edge.label])).toEqual([
+        ["resource", "resource:https://docs.example.com/a", "https://docs.example.com/a"],
+        ["resource", "resource:bigquery://project/dataset/table", "bigquery://project/dataset/table"],
+        ["tag", "tag:analytics", "analytics"],
+        ["tag", "tag:trusted", "trusted"]
+      ]);
+      expect(graph.analysis.backlinks.a).toEqual([]);
+    });
+  });
 });
 
 describe("graph formatters", () => {

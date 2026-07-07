@@ -305,7 +305,8 @@ mod tests {
                         "path": "a.md",
                         "concept_type": "Note",
                         "title": "A",
-                        "tags": []
+                        "resource": ["https://docs.example.com/a"],
+                        "tags": ["analytics"]
                     }],
                     "links": []
                 })
@@ -314,6 +315,9 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(graph["stats"]["node_count"], 1);
+        assert_eq!(graph["stats"]["edge_count"], 2);
+        assert_eq!(graph["edges"][0]["kind"], "resource");
+        assert_eq!(graph["edges"][1]["kind"], "tag");
 
         let index = parse_value(
             &build_search_index_json(
