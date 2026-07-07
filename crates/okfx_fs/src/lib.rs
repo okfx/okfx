@@ -1,15 +1,448 @@
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::fs;
+use std::path::{Path, PathBuf};
+
 pub const CRATE_NAME: &str = "okfx_fs";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscoveryOptions {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    pub follow_symlinks: bool,
+    pub include_dotfiles: bool,
+}
+
+impl Default for DiscoveryOptions {
+    fn default() -> Self {
+        Self {
+            include: vec!["**/*.md".to_string()],
+            exclude: vec![
+                "node_modules/**".to_string(),
+                ".git/**".to_string(),
+                ".okfx/**".to_string(),
+                "dist/**".to_string(),
+            ],
+            follow_symlinks: false,
+            include_dotfiles: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkdownFileKind {
+    Concept,
+    Index,
+    Log,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscoveredFile {
+    pub path: String,
+    pub kind: MarkdownFileKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FsError {
+    Io { path: PathBuf, message: String },
+    OutsideRoot { root: PathBuf, path: PathBuf },
+}
+
+impl fmt::Display for FsError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FsError::Io { path, message } => {
+                write!(formatter, "I/O error at {}: {message}", path.display())
+            }
+            FsError::OutsideRoot { root, path } => write!(
+                formatter,
+                "path {} is outside bundle root {}",
+                path.display(),
+                root.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for FsError {}
 
 pub fn crate_name() -> &'static str {
     CRATE_NAME
 }
 
+pub fn resolve_bundle_root(root: impl AsRef<Path>) -> Result<PathBuf, FsError> {
+    let root = root.as_ref();
+    if root.is_absolute() {
+        return Ok(root.to_path_buf());
+    }
+
+    std::env::current_dir()
+        .map(|cwd| cwd.join(root))
+        .map_err(|error| FsError::Io {
+            path: root.to_path_buf(),
+            message: error.to_string(),
+        })
+}
+
+pub fn discover_markdown_files(
+    root: impl AsRef<Path>,
+    options: &DiscoveryOptions,
+) -> Result<Vec<String>, FsError> {
+    Ok(discover_files(root, options)?
+        .into_iter()
+        .map(|file| file.path)
+        .collect())
+}
+
+pub fn discover_files(
+    root: impl AsRef<Path>,
+    options: &DiscoveryOptions,
+) -> Result<Vec<DiscoveredFile>, FsError> {
+    let root = resolve_bundle_root(root)?;
+    let mut files = Vec::new();
+    walk_directory(&root, &root, options, &mut files)?;
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    files.dedup_by(|left, right| left.path == right.path);
+    Ok(files)
+}
+
+pub fn to_posix_path(path: impl AsRef<str>) -> String {
+    path.as_ref().replace('\\', "/")
+}
+
+pub fn normalize_relative_path(path: impl AsRef<str>) -> String {
+    let path = to_posix_path(path);
+    let mut segments = Vec::new();
+    let is_absolute = path.starts_with('/');
+
+    for segment in path.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                if segments.last().is_some_and(|entry| *entry != "..") {
+                    segments.pop();
+                } else if !is_absolute {
+                    segments.push("..");
+                }
+            }
+            value => segments.push(value),
+        }
+    }
+
+    let normalized = segments.join("/");
+    if is_absolute {
+        format!("/{normalized}").trim_end_matches('/').to_string()
+    } else {
+        normalized
+    }
+}
+
+pub fn relative_posix_path(
+    root: impl AsRef<Path>,
+    file_path: impl AsRef<Path>,
+) -> Result<String, FsError> {
+    let root = root.as_ref();
+    let file_path = file_path.as_ref();
+    let relative = file_path
+        .strip_prefix(root)
+        .map_err(|_| FsError::OutsideRoot {
+            root: root.to_path_buf(),
+            path: file_path.to_path_buf(),
+        })?;
+    Ok(normalize_relative_path(relative.to_string_lossy()))
+}
+
+pub fn concept_id_from_path(path: impl AsRef<str>) -> String {
+    let normalized = normalize_relative_path(path);
+    normalized
+        .strip_suffix(".md")
+        .unwrap_or(&normalized)
+        .to_string()
+}
+
+pub fn is_reserved_markdown_file(path: impl AsRef<str>) -> bool {
+    reserved_file_kind(path).is_some()
+}
+
+pub fn reserved_file_kind(path: impl AsRef<str>) -> Option<MarkdownFileKind> {
+    match basename(path.as_ref()) {
+        "index.md" => Some(MarkdownFileKind::Index),
+        "log.md" => Some(MarkdownFileKind::Log),
+        _ => None,
+    }
+}
+
+pub fn resolve_markdown_target(
+    source_path: impl AsRef<str>,
+    target_raw: impl AsRef<str>,
+) -> Option<String> {
+    let target_raw = target_raw.as_ref();
+    let without_hash = target_raw.split('#').next().unwrap_or_default();
+    let without_query = without_hash.split('?').next().unwrap_or_default();
+    if without_query.is_empty() {
+        return None;
+    }
+
+    let target_path = if let Some(root_relative) = without_query.strip_prefix('/') {
+        root_relative.to_string()
+    } else {
+        let source_dir = dirname(&normalize_relative_path(source_path));
+        if source_dir.is_empty() {
+            without_query.to_string()
+        } else {
+            format!("{source_dir}/{without_query}")
+        }
+    };
+
+    let normalized = normalize_relative_path(target_path);
+    if normalized.starts_with("../") || normalized == ".." || normalized.starts_with('/') {
+        return None;
+    }
+
+    Some(concept_id_from_path(normalized))
+}
+
+fn walk_directory(
+    root: &Path,
+    directory: &Path,
+    options: &DiscoveryOptions,
+    files: &mut Vec<DiscoveredFile>,
+) -> Result<(), FsError> {
+    let mut entries = fs::read_dir(directory)
+        .map_err(|error| FsError::Io {
+            path: directory.to_path_buf(),
+            message: error.to_string(),
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| FsError::Io {
+            path: directory.to_path_buf(),
+            message: error.to_string(),
+        })?;
+    entries.sort_by_key(|entry| entry.file_name());
+
+    for entry in entries {
+        let path = entry.path();
+        let metadata = if options.follow_symlinks {
+            fs::metadata(&path)
+        } else {
+            fs::symlink_metadata(&path)
+        }
+        .map_err(|error| FsError::Io {
+            path: path.clone(),
+            message: error.to_string(),
+        })?;
+        let relative = relative_posix_path(root, &path)?;
+
+        if !options.include_dotfiles && contains_dot_segment(&relative) {
+            continue;
+        }
+        if is_excluded(&options.exclude, &relative) {
+            continue;
+        }
+
+        if metadata.is_dir() {
+            walk_directory(root, &path, options, files)?;
+            continue;
+        }
+
+        if !metadata.is_file() || !is_included(&options.include, &relative) {
+            continue;
+        }
+
+        files.push(DiscoveredFile {
+            kind: reserved_file_kind(&relative).unwrap_or(MarkdownFileKind::Concept),
+            path: relative,
+        });
+    }
+
+    Ok(())
+}
+
+fn is_included(patterns: &[String], path: &str) -> bool {
+    patterns.iter().any(|pattern| glob_matches(pattern, path))
+}
+
+fn is_excluded(patterns: &[String], path: &str) -> bool {
+    patterns.iter().any(|pattern| glob_matches(pattern, path))
+}
+
+fn glob_matches(pattern: &str, path: &str) -> bool {
+    let pattern = normalize_relative_path(pattern);
+    let path = normalize_relative_path(path);
+
+    if pattern.ends_with("/**") {
+        let base = pattern.trim_end_matches("/**");
+        if path == base || path.starts_with(&format!("{base}/")) {
+            return true;
+        }
+    }
+
+    let pattern_segments = split_segments(&pattern);
+    let path_segments = split_segments(&path);
+    match_segments(&pattern_segments, &path_segments)
+}
+
+fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
+    match (pattern.split_first(), path.split_first()) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some((head, rest)), _) if *head == "**" => {
+            match_segments(rest, path) || (!path.is_empty() && match_segments(pattern, &path[1..]))
+        }
+        (Some((head, rest)), Some((path_head, path_rest))) => {
+            segment_matches(head, path_head) && match_segments(rest, path_rest)
+        }
+        (Some(_), None) => false,
+    }
+}
+
+fn segment_matches(pattern: &str, value: &str) -> bool {
+    segment_matches_inner(
+        &pattern.chars().collect::<Vec<_>>(),
+        &value.chars().collect::<Vec<_>>(),
+    )
+}
+
+fn segment_matches_inner(pattern: &[char], value: &[char]) -> bool {
+    match (pattern.split_first(), value.split_first()) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some(('*', rest)), _) => {
+            segment_matches_inner(rest, value)
+                || (!value.is_empty() && segment_matches_inner(pattern, &value[1..]))
+        }
+        (Some(('?', rest)), Some((_, value_rest))) => segment_matches_inner(rest, value_rest),
+        (Some((pattern_head, rest)), Some((value_head, value_rest))) => {
+            pattern_head == value_head && segment_matches_inner(rest, value_rest)
+        }
+        (Some(_), None) => false,
+    }
+}
+
+fn split_segments(value: &str) -> Vec<&str> {
+    if value.is_empty() {
+        Vec::new()
+    } else {
+        value.split('/').collect()
+    }
+}
+
+fn contains_dot_segment(path: &str) -> bool {
+    path.split('/').any(|segment| segment.starts_with('.'))
+}
+
+fn basename(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+fn dirname(path: &str) -> String {
+    normalize_relative_path(path)
+        .rsplit_once('/')
+        .map(|(directory, _)| directory.to_string())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn exposes_crate_name() {
         assert_eq!(crate_name(), "okfx_fs");
+    }
+
+    #[test]
+    fn normalizes_paths_and_resolves_markdown_targets() {
+        assert_eq!(
+            normalize_relative_path("./concepts/../metrics/wau.md"),
+            "metrics/wau.md"
+        );
+        assert_eq!(concept_id_from_path("metrics/wau.md"), "metrics/wau");
+        assert_eq!(
+            reserved_file_kind("docs/index.md"),
+            Some(MarkdownFileKind::Index)
+        );
+        assert_eq!(
+            resolve_markdown_target("concepts/metrics/wau.md", "../tables/events.md#schema"),
+            Some("concepts/tables/events".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("concepts/metrics/wau.md", "/shared/glossary.md"),
+            Some("shared/glossary".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("concepts/metrics/wau.md", "../../../outside.md"),
+            None
+        );
+    }
+
+    #[test]
+    fn discovers_markdown_files_with_default_excludes() {
+        let root = temp_root("discover-default");
+        write(&root, "index.md", "# Index");
+        write(&root, "concepts/wau.md", "# WAU");
+        write(&root, ".hidden/kept.md", "# Hidden");
+        write(&root, "node_modules/pkg/readme.md", "# Ignored");
+        write(&root, ".okfx/cache/item.md", "# Ignored");
+        write(&root, "dist/out.md", "# Ignored");
+        write(&root, "notes.txt", "Ignored");
+
+        let files = discover_files(&root, &DiscoveryOptions::default()).unwrap();
+        let paths = files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            paths,
+            vec![".hidden/kept.md", "concepts/wau.md", "index.md"]
+        );
+        assert_eq!(files[2].kind, MarkdownFileKind::Index);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn honors_include_exclude_and_dotfile_options() {
+        let root = temp_root("discover-custom");
+        write(&root, "concepts/active/a.md", "# A");
+        write(&root, "concepts/drafts/b.md", "# B");
+        write(&root, ".hidden/c.md", "# C");
+        write(&root, "index.md", "# Index");
+
+        let files = discover_markdown_files(
+            &root,
+            &DiscoveryOptions {
+                include: vec!["concepts/**/*.md".to_string(), ".hidden/*.md".to_string()],
+                exclude: vec!["concepts/drafts/**".to_string()],
+                include_dotfiles: false,
+                ..DiscoveryOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(files, vec!["concepts/active/a.md"]);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn temp_root(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("okfx-fs-{name}-{suffix}"));
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn write(root: &Path, path: &str, content: &str) {
+        let path = root.join(path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, content).unwrap();
     }
 }
