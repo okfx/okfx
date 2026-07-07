@@ -21,6 +21,30 @@ export interface OkfxGraphIR extends GraphIR {
   analysis: GraphAnalysisIR;
 }
 
+export interface CytoscapeGraphIR {
+  elements: {
+    nodes: Array<{
+      data: {
+        id: string;
+        label: string;
+        type: string;
+        path?: string;
+        tags?: string[];
+      };
+    }>;
+    edges: Array<{
+      data: {
+        id: string;
+        source: string;
+        target: string;
+        kind: GraphEdgeIR["kind"];
+        label?: string;
+        resolved: boolean;
+      };
+    }>;
+  };
+}
+
 export function buildGraph(bundle: BundleIR): OkfxGraphIR {
   const nodes = [
     ...bundle.concepts.map(graphNode),
@@ -120,6 +144,46 @@ export function graphToHtml(graph: OkfxGraphIR): string {
 </body>
 </html>
 `;
+}
+
+export function graphToCytoscape(graph: OkfxGraphIR): CytoscapeGraphIR {
+  const nodesById = new Map<string, CytoscapeGraphIR["elements"]["nodes"][number]>(graph.nodes.map((node) => [node.id, {
+    data: {
+      id: node.id,
+      label: node.title ?? node.id,
+      type: node.type,
+      path: node.path,
+      tags: node.tags
+    }
+  }]));
+
+  for (const edge of graph.edges) {
+    if (!nodesById.has(edge.target)) {
+      nodesById.set(edge.target, {
+        data: {
+          id: edge.target,
+          label: edge.label ?? labelFromTarget(edge.target),
+          type: edge.resolved ? edge.kind : "Unresolved"
+        }
+      });
+    }
+  }
+
+  return {
+    elements: {
+      nodes: [...nodesById.values()].sort((a, b) => a.data.id.localeCompare(b.data.id)),
+      edges: graph.edges.map((edge, index) => ({
+        data: {
+          id: `${edge.source}->${edge.target}:${edge.kind}:${index}`,
+          source: edge.source,
+          target: edge.target,
+          kind: edge.kind,
+          label: edge.label,
+          resolved: edge.resolved
+        }
+      }))
+    }
+  };
 }
 
 function graphNode(concept: ConceptIR): GraphNodeIR {
@@ -319,4 +383,8 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function labelFromTarget(target: string): string {
+  return target.replace(/^(resource|tag):/, "");
 }

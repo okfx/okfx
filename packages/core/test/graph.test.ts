@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { buildGraph, graphToDot, graphToHtml, loadBundle } from "../src/index.js";
+import { buildGraph, graphToCytoscape, graphToDot, graphToHtml, loadBundle } from "../src/index.js";
 
 async function withBundle(files: Record<string, string>, fn: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "okfx-graph-"));
@@ -74,6 +74,15 @@ describe("graph formatters", () => {
 
       expect(graphToDot(graph)).toContain('"a" -> "b"');
       expect(graphToHtml(graph)).toContain("<title>OKF Graph</title>");
+      expect(graphToCytoscape(graph).elements).toMatchObject({
+        nodes: expect.arrayContaining([
+          { data: expect.objectContaining({ id: "a", label: "A", type: "Note" }) },
+          { data: expect.objectContaining({ id: "b", label: "B", type: "Note" }) }
+        ]),
+        edges: [
+          { data: expect.objectContaining({ source: "a", target: "b", kind: "markdown-link" }) }
+        ]
+      });
     });
   });
 });

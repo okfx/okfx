@@ -87,4 +87,18 @@ describe("okf graph", () => {
     expect(code).toBe(0);
     expect(output.stdout()).toContain("<title>OKF Graph</title>");
   });
+
+  it("prints Cytoscape elements", async () => {
+    const root = await tempRoot();
+    await write(root, "a.md", "---\ntype: Note\ntitle: A\ntags:\n  - analytics\n---\n[B](b.md)\n");
+    await write(root, "b.md", "---\ntype: Note\ntitle: B\n---\n# B\n");
+    const output = capture();
+
+    const code = await main(["graph", root, "--format", "cytoscape"], output.io);
+    const cytoscape = JSON.parse(output.stdout()) as { elements: { nodes: Array<{ data: { id: string } }>; edges: Array<{ data: { kind: string } }> } };
+
+    expect(code).toBe(0);
+    expect(cytoscape.elements.nodes.map((node) => node.data.id)).toContain("tag:analytics");
+    expect(cytoscape.elements.edges.map((edge) => edge.data.kind)).toContain("markdown-link");
+  });
 });

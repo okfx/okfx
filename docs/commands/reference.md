@@ -19,7 +19,7 @@ tags:
 | `okf validate` | Check hard OKF conformance. |
 | `okf lint` | Run quality, graph, style, and security rules. |
 | `okf fmt` | Format Markdown and YAML frontmatter conservatively. |
-| `okf graph` | Build graph JSON, DOT, or HTML. |
+| `okf graph` | Build graph JSON, DOT, HTML, or Cytoscape elements. |
 | `okf doctor` | Compute agent-readiness diagnostics and score. |
 | `okf diff` | Compare two bundles semantically. |
 | `okf pack` | Write `.okfx` metadata and `.okf.tar.gz` archive. |
