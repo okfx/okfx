@@ -1,4 +1,5 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import { InvalidArgumentError, Command } from "commander";
@@ -21,20 +22,24 @@ export function createInitCommand(context: CliContext, runtime: CliRuntime): Com
       const root = resolve(bundle);
       const timestamp = generationTimestamp(runtime.now());
       const files = filesForTemplate(options.template, timestamp);
-      const existing = options.force ? [] : await existingGeneratedFiles(root, files);
+      await ensureSafeRoot(root);
+      const existing = await existingGeneratedFiles(root, files);
       if (existing.length > 0) {
-        context.io.stderr.write(
-          `okf init: refusing to overwrite existing files: ${existing.join(", ")}\n`
-        );
-        context.setExitCode(2);
-        return;
+        if (!options.force) {
+          context.io.stderr.write(
+            `okf init: refusing to overwrite existing files: ${existing.join(", ")}\n`
+          );
+          context.setExitCode(2);
+          return;
+        }
       }
 
-      await Promise.all(files.map(async (file) => {
+      for (const file of files) {
         const path = join(root, file.path);
-        await mkdir(dirname(path), { recursive: true });
-        await writeFile(path, file.content, "utf8");
-      }));
+        await ensureSafeTemplateParent(root, file.path);
+        await inspectTemplatePath(root, file.path);
+        await writeTemplateFile(path, file.content, options.force);
+      }
 
       context.io.stdout.write(`Created OKF bundle at ${root}\n`);
       for (const file of files) {
@@ -57,21 +62,101 @@ function parseTemplate(value: string): InitTemplate {
 }
 
 async function existingGeneratedFiles(root: string, files: TemplateFile[]): Promise<string[]> {
-  const existing = new Set(await listExistingFiles(root));
-  return files.map((file) => file.path).filter((path) => existing.has(path));
+  const existing = await Promise.all(files.map((file) => inspectTemplatePath(root, file.path)));
+  return files.filter((_, index) => existing[index]).map((file) => file.path);
 }
 
-async function listExistingFiles(root: string, prefix = ""): Promise<string[]> {
+async function ensureSafeRoot(root: string): Promise<void> {
   try {
-    const entries = await readdir(join(root, prefix), { withFileTypes: true });
-    const paths = await Promise.all(entries.map(async (entry) => {
-      const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-      return entry.isDirectory() ? listExistingFiles(root, path) : [path];
-    }));
-    return paths.flat().sort((a, b) => a.localeCompare(b));
-  } catch {
-    return [];
+    const entry = await lstat(root);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Refusing to initialize through symbolic link bundle root: ${root}`);
+    }
+    if (!entry.isDirectory()) {
+      throw new Error(`Refusing to initialize non-directory bundle root: ${root}`);
+    }
+  } catch (error) {
+    if (!isFileSystemError(error, "ENOENT")) {
+      throw error;
+    }
+    await mkdir(root, { recursive: true });
+    const entry = await lstat(root);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw new Error(`Refusing to initialize unsafe bundle root: ${root}`);
+    }
   }
+}
+
+async function inspectTemplatePath(root: string, relativePath: string): Promise<boolean> {
+  const segments = relativePath.split("/");
+  let current = root;
+
+  for (const [index, segment] of segments.entries()) {
+    current = join(current, segment);
+    try {
+      const entry = await lstat(current);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Refusing to write through symbolic link in template path: ${relativePath}`);
+      }
+      if (index < segments.length - 1 && !entry.isDirectory()) {
+        throw new Error(`Refusing to write through non-directory template path: ${relativePath}`);
+      }
+      if (index === segments.length - 1 && !entry.isFile()) {
+        throw new Error(`Refusing to overwrite non-file template path: ${relativePath}`);
+      }
+    } catch (error) {
+      if (isFileSystemError(error, "ENOENT")) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  return true;
+}
+
+async function ensureSafeTemplateParent(root: string, relativePath: string): Promise<void> {
+  const parent = dirname(relativePath);
+  if (parent === ".") {
+    return;
+  }
+
+  let current = root;
+  for (const segment of parent.split("/")) {
+    current = join(current, segment);
+    try {
+      const entry = await lstat(current);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Refusing to write through symbolic link in template path: ${relativePath}`);
+      }
+      if (!entry.isDirectory()) {
+        throw new Error(`Refusing to write through non-directory template path: ${relativePath}`);
+      }
+    } catch (error) {
+      if (!isFileSystemError(error, "ENOENT")) {
+        throw error;
+      }
+      await mkdir(current);
+    }
+  }
+}
+
+async function writeTemplateFile(path: string, content: string, force: boolean): Promise<void> {
+  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+  const flags = constants.O_WRONLY
+    | constants.O_CREAT
+    | noFollow
+    | (force ? constants.O_TRUNC : constants.O_EXCL);
+  const handle = await open(path, flags, 0o666);
+  try {
+    await handle.writeFile(content, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+function isFileSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === code;
 }
 
 function filesForTemplate(template: InitTemplate, timestamp: string): TemplateFile[] {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -127,5 +127,22 @@ describe("okf init", () => {
 
     expect(await main(["init", root, "--force"], forced.io)).toBe(0);
     expect(await readFile(join(root, "index.md"), "utf8")).toContain("# Knowledge Index");
+  });
+
+  it("refuses to write through symlinked template directories even when forced", async () => {
+    const base = await tempRoot();
+    const root = join(base, "knowledge");
+    const external = join(base, "external");
+    await mkdir(root);
+    await mkdir(external);
+    await symlink(external, join(root, "concepts"), process.platform === "win32" ? "junction" : "dir");
+    const output = capture();
+
+    const code = await main(["init", root, "--force"], output.io);
+
+    expect(code).toBe(2);
+    expect(output.stderr()).toContain("symbolic link");
+    await expect(stat(join(external, "example.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(root, "index.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
