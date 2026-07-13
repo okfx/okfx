@@ -681,9 +681,10 @@ where
 fn duplicate_resources(context: &RuleContext<'_>) -> Vec<Diagnostic> {
     let mut concepts_by_resource: BTreeMap<String, Vec<&ConceptRuleInput>> = BTreeMap::new();
     for concept in context.concepts {
+        let mut seen_resources = BTreeSet::new();
         for resource in &concept.resource {
             let key = resource.trim().to_lowercase();
-            if !key.is_empty() {
+            if !key.is_empty() && seen_resources.insert(key.clone()) {
                 concepts_by_resource.entry(key).or_default().push(concept);
             }
         }
@@ -1346,6 +1347,26 @@ mod tests {
                 .iter()
                 .all(|diagnostic| diagnostic.code != "graph/high-degree-hub")
         );
+    }
+
+    #[test]
+    fn reports_each_concept_once_for_normalized_duplicate_resources() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("a")
+                    .with_resource(" https://example.com/shared ")
+                    .with_resource("https://example.com/shared"),
+                concept("b").with_resource("https://EXAMPLE.com/shared"),
+            ],
+            ..RuleInput::default()
+        });
+
+        let paths = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "hygiene/duplicate-resource")
+            .filter_map(|diagnostic| diagnostic.path.as_deref())
+            .collect::<Vec<_>>();
+        assert_eq!(paths, vec!["a.md", "b.md"]);
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
