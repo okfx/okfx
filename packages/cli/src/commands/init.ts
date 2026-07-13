@@ -94,6 +94,7 @@ function filesForTemplate(template: InitTemplate, timestamp: string): TemplateFi
           type: "API",
           title: "Orders API",
           description: "Service API for reading and updating orders.",
+          owner: "orders-team",
           tags: ["api", "orders"],
           body: `# Orders API
 
@@ -102,6 +103,10 @@ Use this API for order lookup and order lifecycle operations.
 ## Usage
 
 - [Orders Runbook](../runbooks/orders-api.md)
+
+## Auth Notes
+
+Requests require a bearer token with the appropriate orders scope.
 `
         }, timestamp)
       },
@@ -111,6 +116,7 @@ Use this API for order lookup and order lifecycle operations.
           type: "Runbook",
           title: "Orders API Runbook",
           description: "Operational guide for Orders API incidents.",
+          owner: "orders-team",
           tags: ["runbook", "orders"],
           body: `# Orders API Runbook
 
@@ -181,7 +187,7 @@ function commonFiles(indexTitle: string, indexTarget: string, timestamp: string)
   presets: ["recommended", "agent-ready"],
   failOn: "error",
   frontmatter: {
-    keyOrder: ["type", "title", "description", "resource", "tags", "timestamp"]
+    keyOrder: ["type", "title", "description", "owner", "resource", "tags", "timestamp"]
   },
   mcp: {
     readonly: true,
@@ -201,11 +207,16 @@ function metricConcept(path: string, timestamp: string): TemplateFile {
       type: "Metric",
       title: "Weekly Active Users",
       description: "Number of unique users active in the last 7 days.",
+      owner: "analytics-team",
       resource: "https://docs.example.com/metrics/wau",
       tags: ["analytics", "engagement"],
       body: `# Weekly Active Users
 
 Weekly Active Users measures the number of unique users who performed at least one qualifying event in the last 7 days.
+
+## Usage
+
+Use this metric to monitor weekly engagement trends and compare cohorts.
 
 ## Source Tables
 
@@ -243,17 +254,19 @@ function concept(input: {
   type: string;
   title: string;
   description: string;
+  owner?: string;
   resource?: string;
   tags: string[];
   body: string;
 }, timestamp: string): string {
+  const owner = input.owner ? `owner: ${input.owner}\n` : "";
   const resource = input.resource ? `resource: ${input.resource}\n` : "";
   const tags = input.tags.map((tag) => `  - ${tag}`).join("\n");
   return `---
 type: ${input.type}
 title: ${input.title}
 description: ${input.description}
-${resource}tags:
+${owner}${resource}tags:
 ${tags}
 timestamp: ${timestamp}
 ---

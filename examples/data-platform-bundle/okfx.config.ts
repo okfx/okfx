@@ -5,7 +5,7 @@ export default {
   presets: ["recommended", "agent-ready"],
   failOn: "error",
   frontmatter: {
-    keyOrder: ["type", "title", "description", "resource", "tags", "timestamp"]
+    keyOrder: ["type", "title", "description", "owner", "resource", "tags", "timestamp"]
   },
   mcp: {
     readonly: true,

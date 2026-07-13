@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadBundle } from "@okfx/core";
+import { lintBundle, loadBundle, loadConfig } from "@okfx/core";
 
 import { main } from "../src/index.js";
 import type { CliIO } from "../src/program.js";
@@ -100,6 +100,20 @@ describe("okf init", () => {
     ]);
     expect(bundle.stats.brokenLinkCount).toBe(0);
   });
+
+  it.each(["minimal", "data-platform", "api-catalog", "metrics"])(
+    "creates a lint-clean %s template",
+    async (template) => {
+      const root = join(await tempRoot(), "knowledge");
+      const output = capture();
+
+      expect(await main(["init", root, "--template", template], output.io)).toBe(0);
+      const config = await loadConfig(root);
+      const bundle = await loadBundle(root, { config, loadConfigFile: false });
+
+      expect(lintBundle(bundle, { config }).diagnostics).toEqual([]);
+    }
+  );
 
   it("refuses to overwrite generated files unless forced", async () => {
     const root = join(await tempRoot(), "knowledge");
