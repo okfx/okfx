@@ -134,7 +134,7 @@ const builtInLintRules: BuiltInRule[] = [
     defaultSeverity: "warning",
     run: ({ bundle }) => duplicateConceptValues(
       bundle.concepts,
-      (concept) => resourceValues(concept).map((resource) => resource.toLowerCase()),
+      (concept) => resourceValues(concept).map((resource) => resource.trim().toLowerCase()),
       "hygiene/duplicate-resource",
       "warning",
       "Concept resource is duplicated."
@@ -440,7 +440,7 @@ function duplicateConceptValues(
   for (const concept of concepts) {
     const values = getValues(concept);
     const normalizedValues = Array.isArray(values) ? values : values ? [values] : [];
-    for (const value of normalizedValues) {
+    for (const value of new Set(normalizedValues.filter(Boolean))) {
       conceptsByValue.set(value, [...(conceptsByValue.get(value) ?? []), concept]);
     }
   }

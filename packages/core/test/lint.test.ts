@@ -74,6 +74,20 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("reports each concept once for normalized duplicate resources", async () => {
+    await withBundle({
+      "a.md": "---\ntype: Note\ntitle: A\nresource:\n  - ' https://example.com/shared ' \n  - https://example.com/shared\n---\n# A\n",
+      "b.md": "---\ntype: Note\ntitle: B\nresource: https://EXAMPLE.com/shared\n---\n# B\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "hygiene/duplicate-resource")
+        .map((diagnostic) => diagnostic.path))
+        .toEqual(["a.md", "b.md"]);
+    });
+  });
+
   it("reports high-degree graph hubs", async () => {
     const leafFiles = Object.fromEntries(Array.from({ length: 25 }, (_, index) => [
       `leaf-${index}.md`,
