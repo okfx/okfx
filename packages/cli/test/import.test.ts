@@ -155,6 +155,30 @@ describe("okf import", () => {
     }
   });
 
+  it("refuses a symlinked output root", async () => {
+    const root = await tempRoot();
+    const input = join(root, "markdown.json");
+    const external = join(root, "external");
+    const out = join(root, "knowledge");
+    await mkdir(external);
+    await symlink(external, out, process.platform === "win32" ? "junction" : "dir");
+    await writeFile(input, JSON.stringify([{ path: "notes/concept", body: "# Concept\n" }]), "utf8");
+    const output = capture();
+
+    expect(await main([
+      "import",
+      "markdown",
+      "--input",
+      input,
+      "--out",
+      out,
+      "--write",
+      "--force"
+    ], output.io)).toBe(2);
+    expect(output.stderr()).toContain("symbolic link output root");
+    await expect(stat(join(external, "notes", "concept.md"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("refuses to overwrite non-file output targets when forced", async () => {
     const root = await tempRoot();
     const input = join(root, "input.json");

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -72,5 +72,39 @@ describe("okf export", () => {
     expect(output.stdout()).toContain("Exported 3 static-site files");
     expect((await stat(join(out, "index.html"))).isFile()).toBe(true);
     expect(await readFile(join(out, "concepts/concepts/example.html"), "utf8")).toContain("Example");
+  });
+
+  it("requires --force before overwriting exported files", async () => {
+    const root = await tempBundle();
+    const out = join(root, "site");
+
+    expect(await main(["export", "static-site", root, "--out", out, "--write"], capture().io)).toBe(0);
+    const refused = capture();
+    expect(await main(["export", "static-site", root, "--out", out, "--write"], refused.io)).toBe(2);
+    expect(refused.stderr()).toContain("Refusing to overwrite");
+    expect(await main(["export", "static-site", root, "--out", out, "--write", "--force"], capture().io)).toBe(0);
+  });
+
+  it("refuses to write through symlinked export directories", async () => {
+    const root = await tempBundle();
+    const out = join(root, "site");
+    const external = join(root, "external");
+    await mkdir(out);
+    await mkdir(external);
+    await symlink(external, join(out, "concepts"), process.platform === "win32" ? "junction" : "dir");
+    const output = capture();
+
+    expect(await main([
+      "export",
+      "static-site",
+      root,
+      "--out",
+      out,
+      "--write",
+      "--force"
+    ], output.io)).toBe(2);
+    expect(output.stderr()).toContain("symbolic link");
+    await expect(stat(join(external, "concepts", "example.html"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(join(out, "index.html"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

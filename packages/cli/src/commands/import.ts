@@ -1,6 +1,5 @@
-import { constants } from "node:fs";
-import { lstat, mkdir, open, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
@@ -10,14 +9,16 @@ import { produceDbtOkf } from "@okfx/adapter-dbt";
 import { produceMarkdownOkf } from "@okfx/adapter-markdown";
 import { produceOpenApiOkf } from "@okfx/adapter-openapi";
 
+import {
+  ensureSafeGeneratedParent,
+  inspectGeneratedPath,
+  resolveGeneratedFiles,
+  writeGeneratedFile,
+  type GeneratedFile
+} from "../generated-files.js";
 import type { CliContext } from "../program.js";
 
 type ImportAdapter = "markdown" | "openapi" | "dbt" | "datahub" | "bigquery";
-
-interface ProducedFile {
-  path: string;
-  content: string;
-}
 
 export function createImportCommand(context: CliContext): Command {
   return new Command("import")
@@ -34,8 +35,8 @@ export function createImportCommand(context: CliContext): Command {
 
       if (options.write && !options.dryRun) {
         const out = resolve(options.out);
-        const resolvedFiles = resolveProducedFiles(out, files);
-        const existingPaths = await Promise.all(resolvedFiles.map((file) => inspectOutputPath(out, file.relativePath)));
+        const resolvedFiles = resolveGeneratedFiles(out, files);
+        const existingPaths = await Promise.all(resolvedFiles.map((file) => inspectGeneratedPath(out, file.relativePath)));
         if (!options.force) {
           const existing = resolvedFiles
             .filter((_, index) => existingPaths[index])
@@ -46,8 +47,8 @@ export function createImportCommand(context: CliContext): Command {
         }
 
         for (const file of resolvedFiles) {
-          await ensureSafeOutputParent(out, file.relativePath);
-          await inspectOutputPath(out, file.relativePath);
+          await ensureSafeGeneratedParent(out, file.relativePath);
+          await inspectGeneratedPath(out, file.relativePath);
           await writeGeneratedFile(file.path, file.content, options.force);
         }
 
@@ -62,113 +63,6 @@ export function createImportCommand(context: CliContext): Command {
     });
 }
 
-async function inspectOutputPath(root: string, relativePath: string): Promise<boolean> {
-  const segments = relativePath.split(sep);
-  let current = root;
-
-  for (const [index, segment] of segments.entries()) {
-    current = resolve(current, segment);
-    try {
-      const entry = await lstat(current);
-      if (entry.isSymbolicLink()) {
-        throw new Error(`Refusing to write through symbolic link in output path: ${relativePath}`);
-      }
-      if (index < segments.length - 1 && !entry.isDirectory()) {
-        throw new Error(`Refusing to write through non-directory output path: ${relativePath}`);
-      }
-      if (index === segments.length - 1 && !entry.isFile()) {
-        throw new Error(`Refusing to overwrite non-file output path: ${relativePath}`);
-      }
-    } catch (error) {
-      if (isFileSystemError(error, "ENOENT")) {
-        return false;
-      }
-      throw error;
-    }
-  }
-
-  return true;
-}
-
-async function ensureSafeOutputParent(root: string, relativePath: string): Promise<void> {
-  await mkdir(root, { recursive: true });
-  const parent = dirname(relativePath);
-  if (parent === ".") {
-    return;
-  }
-
-  let current = root;
-  for (const segment of parent.split(sep)) {
-    current = resolve(current, segment);
-    try {
-      const entry = await lstat(current);
-      if (entry.isSymbolicLink()) {
-        throw new Error(`Refusing to write through symbolic link in output path: ${relativePath}`);
-      }
-      if (!entry.isDirectory()) {
-        throw new Error(`Refusing to write through non-directory output path: ${relativePath}`);
-      }
-    } catch (error) {
-      if (!isFileSystemError(error, "ENOENT")) {
-        throw error;
-      }
-      await mkdir(current);
-    }
-  }
-}
-
-async function writeGeneratedFile(path: string, content: string, force: boolean): Promise<void> {
-  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
-  const flags = constants.O_WRONLY
-    | constants.O_CREAT
-    | noFollow
-    | (force ? constants.O_TRUNC : constants.O_EXCL);
-  const handle = await open(path, flags, 0o666);
-  try {
-    await handle.writeFile(content, "utf8");
-  } finally {
-    await handle.close();
-  }
-}
-
-function isFileSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error && error.code === code;
-}
-
-function resolveProducedFiles(root: string, files: ProducedFile[]): Array<ProducedFile & { path: string; relativePath: string }> {
-  const seen = new Set<string>();
-
-  return files.map((file) => {
-    if (typeof file.path !== "string" || file.path.length === 0 || file.path.includes("\0") || isAbsolute(file.path)) {
-      throw new Error(`Adapter produced an invalid relative path: ${JSON.stringify(file.path)}`);
-    }
-
-    const path = resolve(root, file.path);
-    const relativePath = relative(root, path);
-    if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(relativePath)) {
-      throw new Error(`Adapter output path escapes the output root: ${JSON.stringify(file.path)}`);
-    }
-    const collisionKey = portablePathKey(relativePath);
-    if (seen.has(collisionKey)) {
-      throw new Error(`Adapter produced duplicate output path: ${JSON.stringify(file.path)}`);
-    }
-    seen.add(collisionKey);
-    return {
-      ...file,
-      path,
-      relativePath
-    };
-  });
-}
-
-function portablePathKey(path: string): string {
-  return path
-    .split(sep)
-    .join("/")
-    .normalize("NFC")
-    .toLowerCase();
-}
-
 function parseAdapter(value: string): ImportAdapter {
   if (value === "markdown" || value === "openapi" || value === "dbt" || value === "datahub" || value === "bigquery") {
     return value;
@@ -177,7 +71,7 @@ function parseAdapter(value: string): ImportAdapter {
   throw new InvalidArgumentError(`unsupported adapter "${value}"`);
 }
 
-function produce(adapter: ImportAdapter, input: unknown): ProducedFile[] {
+function produce(adapter: ImportAdapter, input: unknown): GeneratedFile[] {
   switch (adapter) {
     case "markdown":
       return produceMarkdownOkf(input as Parameters<typeof produceMarkdownOkf>[0]);

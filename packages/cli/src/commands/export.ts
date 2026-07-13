@@ -1,11 +1,16 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
 import { exportStaticSite } from "@okfx/adapter-static-site";
 import { buildGraph, loadBundle } from "@okfx/core";
 
+import {
+  ensureSafeGeneratedParent,
+  inspectGeneratedPath,
+  resolveGeneratedFiles,
+  writeGeneratedFile
+} from "../generated-files.js";
 import type { CliContext } from "../program.js";
 
 type ExportTarget = "static-site";
@@ -18,17 +23,31 @@ export function createExportCommand(context: CliContext): Command {
     .option("--out <path>", "output directory", "site")
     .option("--write", "write generated files to --out", false)
     .option("--dry-run", "print generated files without writing", false)
-    .action(async (target: ExportTarget, bundle: string, options: { out: string; write: boolean; dryRun: boolean }) => {
+    .option("--force", "overwrite generated files that already exist", false)
+    .action(async (target: ExportTarget, bundle: string, options: { out: string; write: boolean; dryRun: boolean; force: boolean }) => {
       const root = resolve(bundle);
       const loaded = await loadBundle(root);
       const files = exportTarget(target, loaded);
 
       if (options.write && !options.dryRun) {
         const out = resolve(options.out);
-        for (const file of files) {
-          const path = join(out, file.path);
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, file.content, "utf8");
+        const resolvedFiles = resolveGeneratedFiles(out, files);
+        const existingPaths = await Promise.all(
+          resolvedFiles.map((file) => inspectGeneratedPath(out, file.relativePath))
+        );
+        if (!options.force) {
+          const existing = resolvedFiles
+            .filter((_, index) => existingPaths[index])
+            .map((file) => file.relativePath);
+          if (existing.length > 0) {
+            throw new Error(`Refusing to overwrite existing exported files: ${existing.join(", ")}. Use --force to overwrite.`);
+          }
+        }
+
+        for (const file of resolvedFiles) {
+          await ensureSafeGeneratedParent(out, file.relativePath);
+          await inspectGeneratedPath(out, file.relativePath);
+          await writeGeneratedFile(file.path, file.content, options.force);
         }
         context.io.stdout.write(`Exported ${files.length} ${target} files to ${out}\n`);
         for (const file of files) {
