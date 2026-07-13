@@ -171,16 +171,98 @@ fn normalize_timestamp_value(value: Value) -> Value {
 }
 
 fn normalize_body(body: &str) -> String {
-    let mut normalized = body
-        .replace("\r\n", "\n")
-        .lines()
-        .map(|line| line.trim_end_matches([' ', '\t']))
-        .collect::<Vec<_>>()
-        .join("\n");
-    while normalized.contains("\n\n\n") {
-        normalized = normalized.replace("\n\n\n", "\n\n");
+    let normalized_body = body.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = normalized_body.split('\n').collect::<Vec<_>>();
+    if normalized_body.ends_with('\n') {
+        lines.pop();
     }
-    format!("{}\n", normalized.trim_end())
+
+    let mut output = Vec::new();
+    let mut code_fence = None;
+    let mut pending_blank_line = false;
+
+    for line in lines {
+        if let Some(fence) = code_fence {
+            if is_closing_code_fence(line, fence) {
+                output.push(trim_trailing_whitespace(line).to_string());
+                code_fence = None;
+            } else {
+                output.push(line.to_string());
+            }
+            continue;
+        }
+
+        let normalized_line = trim_trailing_whitespace(line);
+        if let Some(fence) = opening_code_fence(normalized_line) {
+            if pending_blank_line && !output.is_empty() {
+                output.push(String::new());
+            }
+            pending_blank_line = false;
+            output.push(normalized_line.to_string());
+            code_fence = Some(fence);
+        } else if normalized_line.is_empty() {
+            pending_blank_line = !output.is_empty();
+        } else {
+            if pending_blank_line {
+                output.push(String::new());
+            }
+            pending_blank_line = false;
+            output.push(normalized_line.to_string());
+        }
+    }
+
+    format!("{}\n", output.join("\n"))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CodeFence {
+    marker: u8,
+    length: usize,
+}
+
+fn opening_code_fence(line: &str) -> Option<CodeFence> {
+    let candidate = strip_fence_indent(line)?;
+    let marker = *candidate.as_bytes().first()?;
+    if !matches!(marker, b'`' | b'~') {
+        return None;
+    }
+    let length = candidate
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == marker)
+        .count();
+    if length < 3 || (marker == b'`' && candidate[length..].contains('`')) {
+        return None;
+    }
+    Some(CodeFence { marker, length })
+}
+
+fn is_closing_code_fence(line: &str, fence: CodeFence) -> bool {
+    let Some(candidate) = strip_fence_indent(line) else {
+        return false;
+    };
+    let length = candidate
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == fence.marker)
+        .count();
+    length >= fence.length
+        && candidate[length..]
+            .chars()
+            .all(|character| matches!(character, ' ' | '\t'))
+}
+
+fn strip_fence_indent(line: &str) -> Option<&str> {
+    let spaces = line
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == b' ')
+        .count();
+    (spaces <= 3).then_some(&line[spaces..])
+}
+
+fn trim_trailing_whitespace(line: &str) -> &str {
+    line.trim_end_matches([' ', '\t'])
 }
 
 fn invalid_frontmatter(path: &str, message: &str) -> FormatDiagnostic {
@@ -230,5 +312,18 @@ mod tests {
         let result = format_markdown_document("note.md", "# Note   \n\n");
 
         assert_eq!(result.formatted, "# Note\n");
+    }
+
+    #[test]
+    fn preserves_fenced_code_whitespace_and_normalizes_surrounding_body() {
+        let result = format_markdown_document(
+            "concept.md",
+            "---\ntitle: Example\ntype: Note\n---\n\n# Example   \n\n\n```text  \nkeep   \n\n\n```   \n\n\nTail   ",
+        );
+
+        assert_eq!(
+            result.formatted,
+            "---\ntype: Note\ntitle: Example\n---\n\n# Example\n\n```text\nkeep   \n\n\n```\n\nTail\n"
+        );
     }
 }
