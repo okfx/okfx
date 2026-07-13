@@ -111,7 +111,11 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     let mut offset = opening_len;
 
     for line in rest.split_inclusive('\n') {
-        if line.trim_end_matches(['\r', '\n']) == "---" {
+        if line
+            .trim_end_matches(['\r', '\n'])
+            .trim_end_matches([' ', '\t'])
+            == "---"
+        {
             return Some(FrontmatterSplit {
                 raw: &content[opening_len..offset],
                 body_start_offset: offset + line.len(),
@@ -351,6 +355,17 @@ mod tests {
         assert!(!result.changed);
         assert_eq!(result.formatted, input);
         assert_eq!(result.diagnostics[0].code, "spec/invalid-frontmatter");
+    }
+
+    #[test]
+    fn accepts_trailing_whitespace_on_frontmatter_closers() {
+        let result =
+            format_markdown_document("note.md", "---\ntitle: Note\ntype: Note\n---   \n# Note\n");
+
+        assert_eq!(
+            result.formatted,
+            "---\ntype: Note\ntitle: Note\n---\n\n# Note\n"
+        );
     }
 
     #[test]

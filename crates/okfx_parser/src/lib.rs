@@ -148,7 +148,9 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     let mut offset = opening_len;
 
     for line in rest.split_inclusive('\n') {
-        let trimmed = line.trim_end_matches(['\r', '\n']);
+        let trimmed = line
+            .trim_end_matches(['\r', '\n'])
+            .trim_end_matches([' ', '\t']);
         if trimmed == "---" {
             let body_start_offset = offset + line.len();
             return Some(FrontmatterSplit {
@@ -564,6 +566,15 @@ mod tests {
             parsed.diagnostics[0].message,
             "Frontmatter must be a YAML mapping."
         );
+    }
+
+    #[test]
+    fn accepts_trailing_whitespace_on_frontmatter_closers() {
+        let parsed =
+            parse_markdown_document("note.md", "---\ntype: Note\n---   \n# Note\n", "note");
+
+        assert!(parsed.frontmatter.is_some());
+        assert_eq!(parsed.body.headings[0].title, "Note");
     }
 
     #[test]
