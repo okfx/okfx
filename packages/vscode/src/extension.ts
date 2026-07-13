@@ -12,6 +12,7 @@ import {
   loadBundle,
   loadConfig,
   loadConfiguredPlugins,
+  relativeMarkdownTarget,
   resolveMarkdownTarget,
   validateBundle,
   type BundleIR,
@@ -233,10 +234,11 @@ async function provideCompletions(
   }
 
   const bundle = await loadBundle(root);
+  const sourcePath = relativePosix(root, document.uri.fsPath);
   return bundle.concepts.map((concept) => {
     const item = new vscode.CompletionItem(concept.path, vscode.CompletionItemKind.Reference);
     item.detail = concept.title ?? concept.id;
-    item.insertText = concept.path;
+    item.insertText = relativeMarkdownTarget(sourcePath, concept.path);
     return item;
   });
 }

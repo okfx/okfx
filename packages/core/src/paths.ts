@@ -62,3 +62,8 @@ export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): st
 
   return conceptIdFromPath(normalized);
 }
+
+export function relativeMarkdownTarget(sourcePath: string, targetPath: string): string {
+  const sourceDirectory = posix.dirname(normalizeRelativePath(sourcePath));
+  return posix.relative(sourceDirectory, normalizeRelativePath(targetPath));
+}
