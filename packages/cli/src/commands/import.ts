@@ -148,16 +148,25 @@ function resolveProducedFiles(root: string, files: ProducedFile[]): Array<Produc
     if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(relativePath)) {
       throw new Error(`Adapter output path escapes the output root: ${JSON.stringify(file.path)}`);
     }
-    if (seen.has(path)) {
+    const collisionKey = portablePathKey(relativePath);
+    if (seen.has(collisionKey)) {
       throw new Error(`Adapter produced duplicate output path: ${JSON.stringify(file.path)}`);
     }
-    seen.add(path);
+    seen.add(collisionKey);
     return {
       ...file,
       path,
       relativePath
     };
   });
+}
+
+function portablePathKey(path: string): string {
+  return path
+    .split(sep)
+    .join("/")
+    .normalize("NFC")
+    .toLowerCase();
 }
 
 function parseAdapter(value: string): ImportAdapter {

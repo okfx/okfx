@@ -106,6 +106,28 @@ describe("okf import", () => {
     expect(output.stderr()).toContain("escapes the output root");
   });
 
+  it("rejects output paths that collide on case-insensitive filesystems", async () => {
+    const root = await tempRoot();
+    const input = join(root, "markdown.json");
+    await writeFile(input, JSON.stringify([
+      { path: "notes/Concept", body: "# Upper\n" },
+      { path: "notes/concept", body: "# Lower\n" }
+    ]), "utf8");
+    const output = capture();
+
+    expect(await main([
+      "import",
+      "markdown",
+      "--input",
+      input,
+      "--out",
+      join(root, "knowledge"),
+      "--write",
+      "--force"
+    ], output.io)).toBe(2);
+    expect(output.stderr()).toContain("duplicate output path");
+  });
+
   it("refuses to write through symlinked output directories even when forced", async () => {
     const root = await tempRoot();
     const input = join(root, "markdown.json");
