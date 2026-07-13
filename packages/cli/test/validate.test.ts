@@ -49,6 +49,18 @@ afterEach(async () => {
 });
 
 describe("okf validate", () => {
+  it("fails when the bundle root does not exist", async () => {
+    const root = await tempRoot();
+    const missing = join(root, "missing");
+    const output = capture();
+
+    const code = await main(["validate", "--", missing], output.io);
+
+    expect(code).toBe(2);
+    expect(output.stdout()).toBe("");
+    expect(output.stderr()).toContain("OKF bundle root does not exist");
+  });
+
   it("passes valid bundles", async () => {
     const root = await tempRoot();
     await write(root, "concepts/example.md", "---\ntype: Note\n---\n# Example\n");

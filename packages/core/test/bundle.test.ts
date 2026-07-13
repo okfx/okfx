@@ -25,6 +25,17 @@ afterEach(async () => {
 });
 
 describe("loadBundle", () => {
+  it("rejects missing roots and roots that are not directories", async () => {
+    const root = await tempBundle();
+    const file = join(root, "bundle.md");
+    await writeFile(file, "# Not a directory\n", "utf8");
+
+    await expect(loadBundle(join(root, "missing"), { loadConfigFile: false }))
+      .rejects.toThrow("OKF bundle root does not exist");
+    await expect(loadBundle(file, { loadConfigFile: false }))
+      .rejects.toThrow("OKF bundle root is not a directory");
+  });
+
   it("loads concepts, reserved files, links, and stable stats", async () => {
     const root = await tempBundle();
     await write(root, "index.md", "# Index\n\nSee [WAU](concepts/wau.md).\n");

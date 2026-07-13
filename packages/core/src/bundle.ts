@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 import fg from "fast-glob";
@@ -36,6 +36,7 @@ export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxCo
 
 export async function loadBundle(rootInput: string, options: LoadBundleOptions = {}): Promise<BundleIR> {
   const root = resolveBundleRoot(rootInput);
+  await assertBundleRoot(root);
   const config = options.loadConfigFile === false
     ? resolveConfig(options.config)
     : mergeConfig(await loadConfig(root), options.config);
@@ -124,6 +125,19 @@ export async function loadBundle(rootInput: string, options: LoadBundleOptions =
       diagnosticCount: diagnostics.length
     }
   };
+}
+
+async function assertBundleRoot(root: string): Promise<void> {
+  const rootStat = await stat(root).catch((error: unknown) => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      throw new Error(`OKF bundle root does not exist: ${root}`);
+    }
+    throw error;
+  });
+
+  if (!rootStat.isDirectory()) {
+    throw new Error(`OKF bundle root is not a directory: ${root}`);
+  }
 }
 
 function resolveLinks(
