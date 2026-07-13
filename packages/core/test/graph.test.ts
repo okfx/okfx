@@ -89,6 +89,23 @@ describe("buildGraph", () => {
     });
   });
 
+  it("connects concepts to reserved graph nodes without reporting broken links", async () => {
+    await withBundle({
+      "index.md": "# Index\n",
+      "log.md": "# Log\n",
+      "a.md": "---\ntype: Note\ntitle: A\n---\n[Index](index.md)\n[Log](log.md)\n"
+    }, async (root) => {
+      const graph = buildGraph(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(graph.nodes.map((node) => node.id).sort()).toEqual(["a", "index", "log"]);
+      expect(graph.edges.map((edge) => [edge.target, edge.resolved])).toEqual([
+        ["index", true],
+        ["log", true]
+      ]);
+      expect(graph.stats.brokenLinkCount).toBe(0);
+    });
+  });
+
   it("reports advanced graph analysis", async () => {
     await withBundle({
       "hub.md": "---\ntype: Note\ntitle: Hub\n---\n[A](a.md)\n[B](b.md)\n",

@@ -109,6 +109,19 @@ type: Metric
     });
   });
 
+  it("resolves links to reserved index and log files", async () => {
+    const root = await tempBundle();
+    await write(root, "index.md", "# Index\n\n[Concept](concept.md)\n");
+    await write(root, "log.md", "# Log\n\n[Index](index.md)\n");
+    await write(root, "concept.md", "---\ntype: Note\ntitle: Concept\n---\n[Log](log.md)\n");
+
+    const bundle = await loadBundle(root, { loadConfigFile: false });
+
+    expect(bundle.stats.brokenLinkCount).toBe(0);
+    expect(bundle.links.map((link) => link.targetConceptId).sort()).toEqual(["concept", "index", "log"]);
+    expect(bundle.links.every((link) => link.resolved)).toBe(true);
+  });
+
   it("applies include and exclude globs", async () => {
     const root = await tempBundle();
     await write(root, "knowledge/kept.md", "---\ntype: Note\n---\n# Kept\n");

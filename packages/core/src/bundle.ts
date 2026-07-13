@@ -90,14 +90,18 @@ export async function loadBundle(rootInput: string, options: LoadBundleOptions =
     concepts.push(concept);
   }
 
-  const conceptIds = new Set(concepts.map((concept) => concept.id));
+  const linkTargetIds = new Set([
+    ...concepts.map((concept) => concept.id),
+    ...indexes.map((file) => conceptIdFromPath(file.path)),
+    ...logs.map((file) => conceptIdFromPath(file.path))
+  ]);
   const allLinks = resolveLinks(
     [
       ...concepts.flatMap((concept) => concept.links.map((link) => ({ link, sourcePath: concept.path }))),
       ...indexes.flatMap((file) => file.links.map((link) => ({ link, sourcePath: file.path }))),
       ...logs.flatMap((file) => file.links.map((link) => ({ link, sourcePath: file.path })))
     ],
-    conceptIds
+    linkTargetIds
   );
 
   const brokenLinkCount = allLinks.filter((link) => link.kind === "internal" && !link.resolved).length;
@@ -124,14 +128,14 @@ export async function loadBundle(rootInput: string, options: LoadBundleOptions =
 
 function resolveLinks(
   entries: Array<{ link: LinkIR; sourcePath: string }>,
-  conceptIds: Set<string>
+  linkTargetIds: Set<string>
 ): LinkIR[] {
   const resolved: LinkIR[] = [];
 
   for (const entry of entries) {
     if (entry.link.kind === "internal") {
       const targetConceptId = resolveMarkdownTarget(entry.sourcePath, entry.link.targetRaw);
-      const isResolved = targetConceptId ? conceptIds.has(targetConceptId) : false;
+      const isResolved = targetConceptId ? linkTargetIds.has(targetConceptId) : false;
       entry.link.targetConceptId = isResolved ? targetConceptId : undefined;
       entry.link.resolved = isResolved;
     } else if (entry.link.kind === "external" || entry.link.kind === "anchor") {
