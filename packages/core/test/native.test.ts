@@ -102,6 +102,38 @@ describe("native wrapper", () => {
     expect(formatted.formatted).toBe("wasm");
   });
 
+  it("rejects malformed or inconsistent format results from bindings", () => {
+    expect(() => formatMarkdownFileAccelerated("native.md", "original", {}, {
+      binding: {
+        formatMarkdownDocumentJson: () => JSON.stringify({
+          formatted: 42,
+          changed: true,
+          diagnostics: []
+        })
+      }
+    })).toThrow("format result.formatted");
+
+    expect(() => formatMarkdownFileAccelerated("native.md", "original", {}, {
+      binding: {
+        formatMarkdownDocumentJson: () => JSON.stringify({
+          formatted: "changed",
+          changed: false,
+          diagnostics: []
+        })
+      }
+    })).toThrow("inconsistent format result.changed");
+
+    expect(() => formatMarkdownFileAccelerated("native.md", "original", {}, {
+      binding: {
+        formatMarkdownDocumentJson: () => JSON.stringify({
+          formatted: "original",
+          changed: false,
+          diagnostics: [{ code: "fmt/test", message: "Bad", severity: "fatal" }]
+        })
+      }
+    })).toThrow("Unsupported format diagnostic severity");
+  });
+
   it("reports asynchronously probed backend status", async () => {
     const status = await getNativeBackendStatusAsync();
 

@@ -43,7 +43,7 @@ export interface FormatAcceleratedResult {
   changed: boolean;
   diagnostics: Array<{
     code: string;
-    severity?: string;
+    severity?: DiagnosticIR["severity"];
     message: string;
     path?: string;
   }>;
@@ -220,8 +220,9 @@ export function formatMarkdownFileAccelerated(
   }
 
   const resolved = resolveConfig(config);
-  return parseJson<FormatAcceleratedResult>(
-    formatNative(path, content, JSON.stringify(resolved.frontmatter.keyOrder))
+  return normalizeFormatResult(
+    parseJson(formatNative(path, content, JSON.stringify(resolved.frontmatter.keyOrder))),
+    content
   );
 }
 
@@ -445,6 +446,36 @@ function normalizeParsedDocument(value: unknown, fallbackPath: string, fallbackS
   };
 }
 
+function normalizeFormatResult(value: unknown, originalContent: string): FormatAcceleratedResult {
+  const result = requiredRecord(value, "format result");
+  const formatted = requiredString(result.formatted, "format result.formatted");
+  const changed = requiredBoolean(result.changed, "format result.changed");
+  if (changed !== (formatted !== originalContent)) {
+    throw new TypeError("Binding returned inconsistent format result.changed.");
+  }
+
+  return {
+    formatted,
+    changed,
+    diagnostics: requiredArray(result.diagnostics, "format result diagnostics")
+      .map(normalizeFormatDiagnostic)
+  };
+}
+
+function normalizeFormatDiagnostic(value: unknown): FormatAcceleratedResult["diagnostics"][number] {
+  const diagnostic = requiredRecord(value, "format diagnostic");
+  const severity = optionalStrictString(diagnostic.severity, "format diagnostic severity");
+  if (severity !== undefined && !isDiagnosticSeverity(severity)) {
+    throw new TypeError(`Unsupported format diagnostic severity from binding: ${severity}`);
+  }
+  return {
+    code: requiredString(diagnostic.code, "format diagnostic code"),
+    message: requiredString(diagnostic.message, "format diagnostic message"),
+    path: optionalStrictString(diagnostic.path, "format diagnostic path"),
+    severity
+  };
+}
+
 function normalizeHeading(value: unknown): HeadingIR {
   const heading = requiredRecord(value, "heading");
   return {
@@ -539,12 +570,30 @@ function requiredNumber(value: unknown, label: string): number {
   return value;
 }
 
+function requiredBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`Binding returned invalid ${label}; expected a boolean.`);
+  }
+  return value;
+}
+
+function optionalStrictString(value: unknown, label: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return requiredString(value, label);
+}
+
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
 function isLinkKind(value: string): value is LinkKind {
   return value === "internal" || value === "external" || value === "anchor" || value === "unknown";
+}
+
+function isDiagnosticSeverity(value: string): value is DiagnosticIR["severity"] {
+  return value === "error" || value === "warning" || value === "advice" || value === "info";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
