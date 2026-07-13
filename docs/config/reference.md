@@ -22,6 +22,10 @@ tags:
 - `strict`: CI-oriented warning threshold and stricter severities.
 - `agent-ready`: agent-readiness diagnostics.
 
+Unknown preset names are configuration errors. `agent-ready` enables its rules
+for `okf lint`; `okf doctor` enables the same readiness rules by default while
+still honoring explicit rule levels and `off` overrides.
+
 ## OKF Version
 
 `okfVersion` defaults to `0.1`. Unsupported versions are reported by
@@ -54,6 +58,10 @@ export default {
 ```
 
 Use `okf lint --no-plugins` to disable configured plugins for one run.
+
+MCP and VS Code diagnostics load the same config and configured lint plugins as
+the CLI. `mcp.exposeGraph` and `mcp.exposeDiagnostics` control which MCP
+resources and tools are registered.
 
 ## Verification
 

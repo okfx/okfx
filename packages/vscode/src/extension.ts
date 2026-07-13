@@ -8,8 +8,10 @@ import {
   doctorBundle,
   formatMarkdownFile,
   graphToHtml,
-  lintBundle,
+  lintBundleWithPlugins,
   loadBundle,
+  loadConfig,
+  loadConfiguredPlugins,
   resolveMarkdownTarget,
   validateBundle,
   type BundleIR,
@@ -94,12 +96,21 @@ async function runDiagnostics(mode: DiagnosticMode, silent = false): Promise<voi
   }
 
   status("OKF: checking...");
-  const bundle = await loadBundle(root);
-  const result = mode === "validate"
-    ? validateBundle(bundle)
-    : mode === "lint"
-      ? lintBundle(bundle)
-      : doctorBundle(bundle);
+  const okfxConfig = await loadConfig(root);
+  const bundle = await loadBundle(root, { config: okfxConfig, loadConfigFile: false });
+  let result: { diagnostics: DiagnosticIR[] };
+  if (mode === "validate") {
+    result = validateBundle(bundle);
+  } else if (mode === "lint") {
+    const pluginLoad = await loadConfiguredPlugins(root, okfxConfig);
+    result = await lintBundleWithPlugins(bundle, {
+      config: okfxConfig,
+      plugins: pluginLoad.plugins,
+      pluginDiagnostics: pluginLoad.diagnostics
+    });
+  } else {
+    result = doctorBundle(bundle, { config: okfxConfig });
+  }
   diagnostics.clear();
   publishDiagnostics(root, result.diagnostics);
   status(`OKF: ${result.diagnostics.length} diagnostics`);
@@ -125,7 +136,8 @@ async function showGraphPreview(context: vscode.ExtensionContext): Promise<void>
     return;
   }
 
-  const bundle = await loadBundle(root);
+  const okfxConfig = await loadConfig(root);
+  const bundle = await loadBundle(root, { config: okfxConfig, loadConfigFile: false });
   const graph = buildGraph(bundle);
   const panel = vscode.window.createWebviewPanel(
     "okfxGraph",
@@ -143,8 +155,9 @@ async function showDoctorPanel(context: vscode.ExtensionContext): Promise<void> 
     return;
   }
 
-  const bundle = await loadBundle(root);
-  const result = doctorBundle(bundle);
+  const okfxConfig = await loadConfig(root);
+  const bundle = await loadBundle(root, { config: okfxConfig, loadConfigFile: false });
+  const result = doctorBundle(bundle, { config: okfxConfig });
   publishDiagnostics(root, result.diagnostics);
   const panel = vscode.window.createWebviewPanel(
     "okfxDoctor",
@@ -179,14 +192,15 @@ async function showBacklinksPanel(context: vscode.ExtensionContext): Promise<voi
   context.subscriptions.push(panel);
 }
 
-function formatDocument(document: vscode.TextDocument): vscode.TextEdit[] {
+async function formatDocument(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
   if (!config().get<boolean>("format.enableFormatter", true)) {
     return [];
   }
 
   const root = workspaceRoot();
   const path = root ? relativePosix(root, document.uri.fsPath) : document.fileName;
-  const result = formatMarkdownFile(path, document.getText());
+  const okfxConfig = root ? await loadConfig(root) : undefined;
+  const result = formatMarkdownFile(path, document.getText(), okfxConfig);
   if (!result.changed || result.diagnostics.length > 0) {
     return [];
   }

@@ -1,8 +1,18 @@
+import {
+  defaultConfig,
+  resolveConfig,
+  resolveRuleLevel,
+  type OkfxConfig,
+  type ResolvedOkfxConfig
+} from "./config.js";
 import { countDiagnostics, diagnosticsExceedThreshold, sortDiagnostics, type DiagnosticCounts } from "./diagnostics.js";
+import {
+  deprecatedMissingReplacementDiagnostics,
+  staleTimestampDiagnostics
+} from "./agent-rules.js";
 import { buildGraph } from "./graph.js";
 import { lintBundle } from "./lint.js";
-import { resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
-import type { BundleIR, ConceptIR, DiagnosticIR, DiagnosticSeverity } from "./types.js";
+import type { BundleIR, DiagnosticIR, DiagnosticSeverity } from "./types.js";
 
 export interface DoctorOptions {
   config?: OkfxConfig | ResolvedOkfxConfig;
@@ -26,12 +36,12 @@ export interface DoctorResult {
 }
 
 export function doctorBundle(bundle: BundleIR, options: DoctorOptions = {}): DoctorResult {
-  const config = resolveConfig(options.config ?? {});
+  const config = resolveDoctorConfig(options.config);
   const graph = buildGraph(bundle);
   const lint = lintBundle(bundle, { config });
   const diagnostics = sortDiagnostics([
     ...lint.diagnostics,
-    ...doctorDiagnostics(bundle, options.now ?? new Date())
+    ...doctorDiagnostics(bundle, options.now ?? new Date(), config)
   ]);
   const counts = countDiagnostics(diagnostics);
   const score = readinessScore(counts);
@@ -53,118 +63,41 @@ export function doctorBundle(bundle: BundleIR, options: DoctorOptions = {}): Doc
   };
 }
 
-function doctorDiagnostics(bundle: BundleIR, now: Date): DiagnosticIR[] {
-  const diagnostics: DiagnosticIR[] = [];
+function resolveDoctorConfig(input: OkfxConfig | ResolvedOkfxConfig | undefined): ResolvedOkfxConfig {
+  const base = input ?? {};
+  const presets = [...(base.presets ?? defaultConfig.presets)];
+  if (!presets.some((preset) => preset.replace(/^@okfx\/preset-/, "").replace(/^preset-/, "") === "agent-ready")) {
+    presets.push("agent-ready");
+  }
+  const configPath = "configPath" in base && typeof base.configPath === "string" ? base.configPath : undefined;
+  return resolveConfig({ ...base, presets }, configPath);
+}
 
-  if (bundle.indexes.length === 0) {
-    diagnostics.push({
+function doctorDiagnostics(bundle: BundleIR, now: Date, config: ResolvedOkfxConfig): DiagnosticIR[] {
+  return [
+    ...configuredDoctorRule(config, "agent/missing-index", "warning", bundle.indexes.length === 0 ? [{
       code: "agent/missing-index",
       severity: "warning",
       message: "Bundle should include index.md so humans and agents have a navigable entrypoint."
-    });
-  }
-
-  for (const concept of bundle.concepts) {
-    diagnostics.push(...conceptDoctorDiagnostics(concept, bundle, now));
-  }
-
-  return diagnostics;
+    }] : []),
+    ...configuredDoctorRule(config, "agent/stale-timestamp", "warning", staleTimestampDiagnostics(bundle, now)),
+    ...configuredDoctorRule(
+      config,
+      "agent/deprecated-missing-replacement",
+      "warning",
+      deprecatedMissingReplacementDiagnostics(bundle)
+    )
+  ];
 }
 
-function conceptDoctorDiagnostics(concept: ConceptIR, bundle: BundleIR, now: Date): DiagnosticIR[] {
-  const diagnostics: DiagnosticIR[] = [];
-  const type = concept.type.toLowerCase();
-  const headings = concept.body.headings.map((heading) => heading.title.toLowerCase());
-
-  if (!concept.frontmatter.owner && ["api", "metric", "runbook"].includes(type)) {
-    diagnostics.push(conceptDiagnostic("agent/missing-owner", "advice", concept, "Production-facing concepts should declare an owner."));
-  }
-
-  if (!hasHeading(headings, "summary") && !concept.description) {
-    diagnostics.push(conceptDiagnostic("agent/missing-summary", "advice", concept, "Concept should provide a summary through description or a Summary section."));
-  }
-
-  if (["api", "metric"].includes(type) && !hasHeading(headings, "usage")) {
-    diagnostics.push(conceptDiagnostic("agent/missing-usage", "advice", concept, "Agent-facing API and metric concepts should include a Usage section."));
-  }
-
-  if (type === "metric" && !linksToType(concept, bundle, "table")) {
-    diagnostics.push(conceptDiagnostic("agent/metric-missing-source", "warning", concept, "Metric should link to at least one source table concept."));
-  }
-
-  if (type === "runbook" && !hasHeading(headings, "symptoms")) {
-    diagnostics.push(conceptDiagnostic("agent/runbook-missing-symptoms", "warning", concept, "Runbook should include a Symptoms section."));
-  }
-
-  if (type === "api" && !headings.some((heading) => heading.includes("auth"))) {
-    diagnostics.push(conceptDiagnostic("agent/api-missing-auth-notes", "advice", concept, "API concept should include authentication notes."));
-  }
-
-  if (concept.timestamp && timestampIsStale(concept.timestamp, now)) {
-    diagnostics.push(conceptDiagnostic("agent/stale-timestamp", "warning", concept, "Concept timestamp is older than 180 days."));
-  }
-
-  if (isDeprecatedConcept(concept) && !hasDeprecationPath(concept, headings)) {
-    diagnostics.push(conceptDiagnostic("agent/deprecated-missing-replacement", "warning", concept, "Deprecated concept should identify a replacement, migration path, or deprecation notes."));
-  }
-
-  return diagnostics;
-}
-
-function conceptDiagnostic(
-  code: string,
-  severity: DiagnosticSeverity,
-  concept: ConceptIR,
-  message: string
-): DiagnosticIR {
-  return {
-    code,
-    severity,
-    message,
-    path: concept.path,
-    conceptId: concept.id
-  };
-}
-
-function hasHeading(headings: string[], expected: string): boolean {
-  return headings.some((heading) => heading === expected || heading.endsWith(` ${expected}`));
-}
-
-function linksToType(concept: ConceptIR, bundle: BundleIR, targetType: string): boolean {
-  const conceptsById = new Map(bundle.concepts.map((item) => [item.id, item]));
-  return concept.links.some((link) => {
-    if (link.kind !== "internal" || !link.resolved || !link.targetConceptId) {
-      return false;
-    }
-
-    return conceptsById.get(link.targetConceptId)?.type.toLowerCase() === targetType;
-  });
-}
-
-function timestampIsStale(timestamp: string, now: Date): boolean {
-  const parsed = Date.parse(timestamp);
-  if (Number.isNaN(parsed)) {
-    return false;
-  }
-
-  const maxAgeMs = 180 * 24 * 60 * 60 * 1000;
-  return now.getTime() - parsed > maxAgeMs;
-}
-
-function isDeprecatedConcept(concept: ConceptIR): boolean {
-  return stringFrontmatter(concept, "status").toLowerCase() === "deprecated"
-    || (concept.tags ?? []).some((tag) => tag.toLowerCase() === "deprecated");
-}
-
-function hasDeprecationPath(concept: ConceptIR, headings: string[]): boolean {
-  return ["replacement", "replaced_by", "replacedBy", "superseded_by", "supersededBy"]
-    .some((key) => stringFrontmatter(concept, key).trim().length > 0)
-    || headings.some((heading) => heading.includes("replacement") || heading.includes("migration") || heading.includes("deprecation"));
-}
-
-function stringFrontmatter(concept: ConceptIR, key: string): string {
-  const value = concept.frontmatter[key];
-  return typeof value === "string" ? value : "";
+function configuredDoctorRule(
+  config: ResolvedOkfxConfig,
+  id: string,
+  defaultSeverity: DiagnosticSeverity,
+  diagnostics: DiagnosticIR[]
+): DiagnosticIR[] {
+  const severity = resolveRuleLevel(config.rules[id], defaultSeverity);
+  return severity === "off" ? [] : diagnostics.map((diagnostic) => ({ ...diagnostic, severity }));
 }
 
 function readinessScore(counts: DiagnosticCounts): number {

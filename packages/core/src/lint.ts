@@ -1,6 +1,14 @@
 import { conceptIdFromPath } from "./paths.js";
+import {
+  apiMissingAuthNotesDiagnostics,
+  metricMissingSourceDiagnostics,
+  missingOwnerDiagnostics,
+  missingSummaryDiagnostics,
+  missingUsageDiagnostics,
+  runbookMissingSymptomsDiagnostics
+} from "./agent-rules.js";
 import { countDiagnostics, diagnosticsExceedThreshold, sortDiagnostics, type DiagnosticCounts } from "./diagnostics.js";
-import { resolveConfig, type OkfxConfig, type ResolvedOkfxConfig, type RuleConfig } from "./config.js";
+import { resolveConfig, resolveRuleLevel, type OkfxConfig, type ResolvedOkfxConfig, type RuleLevel } from "./config.js";
 import type { LoadedOkfxPlugin } from "./plugins.js";
 import { validateBundle } from "./validation.js";
 import type { BundleIR, ConceptIR, DiagnosticIR, DiagnosticSeverity, LinkIR } from "./types.js";
@@ -38,7 +46,7 @@ type RuleRunner = (context: RuleContext) => DiagnosticIR[];
 
 interface BuiltInRule {
   id: string;
-  defaultSeverity: DiagnosticSeverity;
+  defaultSeverity: RuleLevel;
   run: RuleRunner;
 }
 
@@ -48,7 +56,7 @@ export function lintBundle(bundle: BundleIR, options: LintOptions = {}): LintRes
   const config = resolveConfig(options.config ?? {});
   const context = createRuleContext(bundle, config);
   return createLintResult(config, [
-    ...validateBundle(bundle).diagnostics,
+    ...configuredValidationDiagnostics(bundle, config),
     ...builtInLintRules.flatMap((rule) => runRule(rule, context)),
     ...(options.pluginDiagnostics ?? [])
   ], []);
@@ -59,7 +67,7 @@ export async function lintBundleWithPlugins(bundle: BundleIR, options: LintOptio
   const context = createRuleContext(bundle, config);
   const pluginDiagnostics = await runPluginRules(options.plugins ?? [], context);
   return createLintResult(config, [
-    ...validateBundle(bundle).diagnostics,
+    ...configuredValidationDiagnostics(bundle, config),
     ...builtInLintRules.flatMap((rule) => runRule(rule, context)),
     ...(options.pluginDiagnostics ?? []),
     ...pluginDiagnostics
@@ -202,6 +210,36 @@ const builtInLintRules: BuiltInRule[] = [
       .map((concept) => conceptDiagnostic("style/file-name-format", "warning", concept, "Concept file path should be lowercase and URL-friendly."))
   },
   {
+    id: "agent/missing-summary",
+    defaultSeverity: "off",
+    run: ({ bundle }) => missingSummaryDiagnostics(bundle)
+  },
+  {
+    id: "agent/missing-usage",
+    defaultSeverity: "off",
+    run: ({ bundle }) => missingUsageDiagnostics(bundle)
+  },
+  {
+    id: "agent/missing-owner",
+    defaultSeverity: "off",
+    run: ({ bundle }) => missingOwnerDiagnostics(bundle)
+  },
+  {
+    id: "agent/metric-missing-source",
+    defaultSeverity: "off",
+    run: ({ bundle }) => metricMissingSourceDiagnostics(bundle)
+  },
+  {
+    id: "agent/runbook-missing-symptoms",
+    defaultSeverity: "off",
+    run: ({ bundle }) => runbookMissingSymptomsDiagnostics(bundle)
+  },
+  {
+    id: "agent/api-missing-auth-notes",
+    defaultSeverity: "off",
+    run: ({ bundle }) => apiMissingAuthNotesDiagnostics(bundle)
+  },
+  {
     id: "security/suspicious-secret",
     defaultSeverity: "error",
     run: ({ bundle }) => bundle.concepts
@@ -272,6 +310,13 @@ function runRule(rule: BuiltInRule, context: RuleContext): DiagnosticIR[] {
   }));
 }
 
+function configuredValidationDiagnostics(bundle: BundleIR, config: ResolvedOkfxConfig): DiagnosticIR[] {
+  return validateBundle(bundle).diagnostics.flatMap((diagnostic) => {
+    const severity = resolveRuleLevel(config.rules[diagnostic.code], diagnostic.severity);
+    return severity === "off" ? [] : [{ ...diagnostic, severity }];
+  });
+}
+
 async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext): Promise<DiagnosticIR[]> {
   const diagnostics: DiagnosticIR[] = [];
 
@@ -308,11 +353,6 @@ async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext)
   }
 
   return diagnostics;
-}
-
-function resolveRuleLevel(config: RuleConfig | undefined, defaultSeverity: DiagnosticSeverity): DiagnosticSeverity | "off" {
-  const value = Array.isArray(config) ? config[0] : config;
-  return value ?? defaultSeverity;
 }
 
 function createRuleContext(bundle: BundleIR, config: ResolvedOkfxConfig): RuleContext {

@@ -85,6 +85,26 @@ description: Weekly active users.
     });
   });
 
+  it("honors configured levels and disabled doctor rules", async () => {
+    await withBundle({
+      "metric.md": "---\ntype: Metric\ntitle: Metric\n---\n# Metric\n"
+    }, async (root) => {
+      const result = doctorBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: {
+          rules: {
+            "agent/missing-index": "off",
+            "agent/missing-owner": "off",
+            "agent/metric-missing-source": "info"
+          }
+        }
+      });
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("agent/missing-index");
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("agent/missing-owner");
+      expect(result.diagnostics.find((diagnostic) => diagnostic.code === "agent/metric-missing-source")?.severity).toBe("info");
+    });
+  });
+
   it("reports deprecated concepts without replacement context", async () => {
     await withBundle({
       "old.md": "---\ntype: Note\ntitle: Old\nstatus: deprecated\n---\n# Old\n",

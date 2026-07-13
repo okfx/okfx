@@ -9,31 +9,48 @@ import {
   buildSearchIndex,
   diffBundles,
   doctorBundle,
-  lintBundle,
+  lintBundleWithPlugins,
   loadBundle,
+  loadConfig,
+  loadConfiguredPlugins,
   okfxVersion,
   validateBundle,
   type BundleIR,
   type BundleDiffIR,
-  type ConceptIR
+  type ConceptIR,
+  type LintResult,
+  type ResolvedOkfxConfig
 } from "@okfx/core";
 
 export interface OkfMcpServerOptions {
   root: string;
   readonly?: boolean;
+  config?: ResolvedOkfxConfig;
 }
 
-export const OKF_MCP_TOOLS = [
+const BASE_MCP_TOOLS = [
   "okf_list_bundles",
   "okf_search_concepts",
   "okf_get_concept",
+  "okf_explain_diff"
+] as const;
+
+const GRAPH_MCP_TOOLS = [
   "okf_get_neighbors",
   "okf_get_backlinks",
-  "okf_get_graph",
+  "okf_get_graph"
+] as const;
+
+const DIAGNOSTIC_MCP_TOOLS = [
   "okf_validate_bundle",
   "okf_lint_bundle",
-  "okf_explain_diff",
   "okf_get_diagnostics"
+] as const;
+
+export const OKF_MCP_TOOLS = [
+  ...BASE_MCP_TOOLS,
+  ...GRAPH_MCP_TOOLS,
+  ...DIAGNOSTIC_MCP_TOOLS
 ] as const;
 
 export const OKF_MCP_PROMPTS = [
@@ -81,16 +98,29 @@ export interface OkfBundleApi {
   explainDiff(comparisonRoot: string, direction?: "baseline-to-current" | "current-to-comparison"): Promise<DiffExplanation>;
   getDiagnostics(): Promise<ReturnType<typeof doctorBundle>>;
   validate(): Promise<ReturnType<typeof validateBundle>>;
-  lint(): Promise<ReturnType<typeof lintBundle>>;
+  lint(): Promise<LintResult>;
 }
 
-export function createOkfBundleApi(root: string): OkfBundleApi {
+export function getOkfMcpTools(config: Pick<ResolvedOkfxConfig, "mcp">): string[] {
+  return [
+    ...BASE_MCP_TOOLS,
+    ...(config.mcp.exposeGraph ? GRAPH_MCP_TOOLS : []),
+    ...(config.mcp.exposeDiagnostics ? DIAGNOSTIC_MCP_TOOLS : [])
+  ];
+}
+
+export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfig): OkfBundleApi {
   const currentRoot = resolve(root);
+  const loadContext = async () => {
+    const config = fixedConfig ?? await loadConfig(currentRoot);
+    const bundle = await loadBundle(currentRoot, { config, loadConfigFile: false });
+    return { bundle, config };
+  };
 
   return {
-    load: () => loadBundle(currentRoot),
+    load: async () => (await loadContext()).bundle,
     async listBundles() {
-      const bundle = await loadBundle(currentRoot);
+      const { bundle } = await loadContext();
       return [{
         id: "current",
         root: currentRoot,
@@ -100,7 +130,7 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
       }];
     },
     async searchConcepts(query, limit = 10) {
-      const bundle = await loadBundle(currentRoot);
+      const { bundle } = await loadContext();
       const index = buildSearchIndex(bundle);
       const terms = tokenize(query);
       const scores = new Map<string, number>();
@@ -133,11 +163,11 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
         .slice(0, limit);
     },
     async getConcept(id) {
-      const bundle = await loadBundle(currentRoot);
+      const { bundle } = await loadContext();
       return bundle.concepts.find((concept) => concept.id === id);
     },
     async getNeighbors(id) {
-      const graph = buildGraph(await loadBundle(currentRoot));
+      const graph = buildGraph((await loadContext()).bundle);
       return {
         outgoing: graph.edges
           .filter((edge) => edge.resolved && edge.source === id)
@@ -147,15 +177,15 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
       };
     },
     async getBacklinks(id) {
-      const graph = buildGraph(await loadBundle(currentRoot));
+      const graph = buildGraph((await loadContext()).bundle);
       return graph.analysis.backlinks[id] ?? [];
     },
     async getGraph() {
-      return buildGraph(await loadBundle(currentRoot));
+      return buildGraph((await loadContext()).bundle);
     },
     async explainDiff(comparisonRoot, direction = "baseline-to-current") {
       const safeComparisonRoot = resolveSafeComparisonRoot(currentRoot, comparisonRoot);
-      const current = await loadBundle(currentRoot);
+      const current = (await loadContext()).bundle;
       const comparison = await loadBundle(safeComparisonRoot);
       const before = direction === "baseline-to-current" ? comparison : current;
       const after = direction === "baseline-to-current" ? current : comparison;
@@ -171,51 +201,64 @@ export function createOkfBundleApi(root: string): OkfBundleApi {
       };
     },
     async getDiagnostics() {
-      return doctorBundle(await loadBundle(currentRoot));
+      const { bundle, config } = await loadContext();
+      return doctorBundle(bundle, { config });
     },
     async validate() {
-      return validateBundle(await loadBundle(currentRoot));
+      return validateBundle((await loadContext()).bundle);
     },
     async lint() {
-      return lintBundle(await loadBundle(currentRoot));
+      const { bundle, config } = await loadContext();
+      const pluginLoad = await loadConfiguredPlugins(currentRoot, config);
+      return lintBundleWithPlugins(bundle, {
+        config,
+        plugins: pluginLoad.plugins,
+        pluginDiagnostics: pluginLoad.diagnostics
+      });
     }
   };
 }
 
-export function createOkfMcpServer(options: OkfMcpServerOptions): McpServer {
-  const api = createOkfBundleApi(options.root);
+export async function createOkfMcpServer(options: OkfMcpServerOptions): Promise<McpServer> {
+  const root = resolve(options.root);
+  const config = options.config ?? await loadConfig(root);
+  const api = createOkfBundleApi(root, config);
   const server = new McpServer({
     name: "okfx",
     version: okfxVersion
   });
 
-  registerResources(server, api);
-  registerTools(server, api);
+  registerResources(server, api, config);
+  registerTools(server, api, config);
   registerPrompts(server);
 
   return server;
 }
 
 export async function startStdioServer(options: OkfMcpServerOptions): Promise<void> {
-  const server = createOkfMcpServer(options);
+  const server = await createOkfMcpServer(options);
   await server.connect(new StdioServerTransport());
 }
 
-function registerResources(server: McpServer, api: OkfBundleApi): void {
+function registerResources(server: McpServer, api: OkfBundleApi, config: ResolvedOkfxConfig): void {
   server.registerResource("current-bundle", "okf://bundle/current", {
     title: "Current OKF bundle",
     mimeType: "application/json"
   }, async (uri) => jsonResource(uri.href, await api.load()));
 
-  server.registerResource("current-graph", "okf://graph/current", {
-    title: "Current OKF graph",
-    mimeType: "application/json"
-  }, async (uri) => jsonResource(uri.href, await api.getGraph()));
+  if (config.mcp.exposeGraph) {
+    server.registerResource("current-graph", "okf://graph/current", {
+      title: "Current OKF graph",
+      mimeType: "application/json"
+    }, async (uri) => jsonResource(uri.href, await api.getGraph()));
+  }
 
-  server.registerResource("current-diagnostics", "okf://diagnostics/current", {
-    title: "Current OKF diagnostics",
-    mimeType: "application/json"
-  }, async (uri) => jsonResource(uri.href, await api.getDiagnostics()));
+  if (config.mcp.exposeDiagnostics) {
+    server.registerResource("current-diagnostics", "okf://diagnostics/current", {
+      title: "Current OKF diagnostics",
+      mimeType: "application/json"
+    }, async (uri) => jsonResource(uri.href, await api.getDiagnostics()));
+  }
 
   server.registerResource("concept", new ResourceTemplate("okf://concept/{id}", {
     list: async () => {
@@ -238,7 +281,7 @@ function registerResources(server: McpServer, api: OkfBundleApi): void {
   });
 }
 
-function registerTools(server: McpServer, api: OkfBundleApi): void {
+function registerTools(server: McpServer, api: OkfBundleApi, config: ResolvedOkfxConfig): void {
   server.registerTool("okf_list_bundles", {
     title: "List OKF bundles",
     description: "List bundles available to this local MCP server."
@@ -261,36 +304,40 @@ function registerTools(server: McpServer, api: OkfBundleApi): void {
     })
   }, async ({ id }) => jsonTool(await api.getConcept(id) ?? { error: "concept not found", id }));
 
-  server.registerTool("okf_get_neighbors", {
-    title: "Get concept neighbors",
-    description: "Return incoming and outgoing graph neighbors for a concept.",
-    inputSchema: z.object({
-      id: z.string()
-    })
-  }, async ({ id }) => jsonTool(await api.getNeighbors(id)));
+  if (config.mcp.exposeGraph) {
+    server.registerTool("okf_get_neighbors", {
+      title: "Get concept neighbors",
+      description: "Return incoming and outgoing graph neighbors for a concept.",
+      inputSchema: z.object({
+        id: z.string()
+      })
+    }, async ({ id }) => jsonTool(await api.getNeighbors(id)));
 
-  server.registerTool("okf_get_backlinks", {
-    title: "Get concept backlinks",
-    description: "Return backlinks for a concept.",
-    inputSchema: z.object({
-      id: z.string()
-    })
-  }, async ({ id }) => jsonTool(await api.getBacklinks(id)));
+    server.registerTool("okf_get_backlinks", {
+      title: "Get concept backlinks",
+      description: "Return backlinks for a concept.",
+      inputSchema: z.object({
+        id: z.string()
+      })
+    }, async ({ id }) => jsonTool(await api.getBacklinks(id)));
 
-  server.registerTool("okf_get_graph", {
-    title: "Get OKF graph",
-    description: "Return the current concept graph."
-  }, async () => jsonTool(await api.getGraph()));
+    server.registerTool("okf_get_graph", {
+      title: "Get OKF graph",
+      description: "Return the current concept graph."
+    }, async () => jsonTool(await api.getGraph()));
+  }
 
-  server.registerTool("okf_validate_bundle", {
-    title: "Validate OKF bundle",
-    description: "Run OKF validation diagnostics."
-  }, async () => jsonTool(await api.validate()));
+  if (config.mcp.exposeDiagnostics) {
+    server.registerTool("okf_validate_bundle", {
+      title: "Validate OKF bundle",
+      description: "Run OKF validation diagnostics."
+    }, async () => jsonTool(await api.validate()));
 
-  server.registerTool("okf_lint_bundle", {
-    title: "Lint OKF bundle",
-    description: "Run OKF lint diagnostics."
-  }, async () => jsonTool(await api.lint()));
+    server.registerTool("okf_lint_bundle", {
+      title: "Lint OKF bundle",
+      description: "Run OKF lint diagnostics."
+    }, async () => jsonTool(await api.lint()));
+  }
 
   server.registerTool("okf_explain_diff", {
     title: "Explain OKF semantic diff",
@@ -301,10 +348,12 @@ function registerTools(server: McpServer, api: OkfBundleApi): void {
     })
   }, async ({ comparisonRoot, direction }) => jsonTool(await api.explainDiff(comparisonRoot, direction)));
 
-  server.registerTool("okf_get_diagnostics", {
-    title: "Get OKF diagnostics",
-    description: "Return doctor diagnostics and agent-readiness score."
-  }, async () => jsonTool(await api.getDiagnostics()));
+  if (config.mcp.exposeDiagnostics) {
+    server.registerTool("okf_get_diagnostics", {
+      title: "Get OKF diagnostics",
+      description: "Return doctor diagnostics and agent-readiness score."
+    }, async () => jsonTool(await api.getDiagnostics()));
+  }
 }
 
 function registerPrompts(server: McpServer): void {

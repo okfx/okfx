@@ -232,4 +232,8 @@ describe("resolveConfig", () => {
       }
     ]);
   });
+
+  it("rejects unknown presets instead of silently ignoring them", () => {
+    expect(() => resolveConfig({ presets: ["recomended"] })).toThrow('Unknown okfx preset "recomended"');
+  });
 });

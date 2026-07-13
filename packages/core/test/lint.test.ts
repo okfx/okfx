@@ -107,6 +107,43 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("runs agent readiness rules only when configured and honors their severity", async () => {
+    await withBundle({
+      "metric.md": "---\ntype: Metric\ntitle: Metric\n---\n# Metric\n"
+    }, async (root) => {
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      const defaultResult = lintBundle(bundle);
+      const agentResult = lintBundle(bundle, {
+        config: {
+          presets: ["agent-ready"],
+          rules: {
+            "agent/missing-owner": "error"
+          }
+        }
+      });
+
+      expect(defaultResult.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("agent/missing-owner");
+      expect(agentResult.diagnostics.find((diagnostic) => diagnostic.code === "agent/missing-owner")?.severity).toBe("error");
+      expect(agentResult.diagnostics.map((diagnostic) => diagnostic.code)).toContain("agent/metric-missing-source");
+    });
+  });
+
+  it("applies rule overrides to validation diagnostics", async () => {
+    await withBundle({
+      "concept.md": "---\ntitle: Concept\n---\n# Concept\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: {
+          rules: {
+            "spec/missing-type": "off"
+          }
+        }
+      });
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("spec/missing-type");
+    });
+  });
+
   it("enforces resource allowlists when configured", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\ndescription: Demo\nresource: https://bad.example.com/doc\n---\n# Concept\n"

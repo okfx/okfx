@@ -157,7 +157,7 @@ export function defineConfig<TConfig extends OkfxConfig>(config: TConfig): TConf
 
 export function resolveConfig(config: OkfxConfig = {}, configPath?: string): ResolvedOkfxConfig {
   const presets = config.presets ?? [...defaultConfig.presets];
-  const presetConfigs = presets.map(resolvePreset).filter((preset): preset is OkfxConfig => preset !== undefined);
+  const presetConfigs = presets.map(resolvePreset);
   const presetRules = Object.assign({}, ...presetConfigs.map((preset) => preset.rules ?? {})) as Record<string, RuleConfig>;
   const presetFailOn = [...presetConfigs].reverse().find((preset) => preset.failOn)?.failOn;
 
@@ -205,14 +205,23 @@ function normalizePluginReferences(plugins: OkfxPluginReference[]): ResolvedOkfx
   });
 }
 
-function resolvePreset(name: string): OkfxConfig | undefined {
-  return builtinPresets[normalizePresetName(name)];
+function resolvePreset(name: string): OkfxConfig {
+  const preset = builtinPresets[normalizePresetName(name)];
+  if (!preset) {
+    throw new Error(`Unknown okfx preset "${name}". Available presets: ${Object.keys(builtinPresets).sort().join(", ")}.`);
+  }
+  return preset;
 }
 
 function normalizePresetName(name: string): string {
   return name
     .replace(/^@okfx\/preset-/, "")
     .replace(/^preset-/, "");
+}
+
+export function resolveRuleLevel(config: RuleConfig | undefined, defaultLevel: RuleLevel): RuleLevel {
+  const value = Array.isArray(config) ? config[0] : config;
+  return value ?? defaultLevel;
 }
 
 export async function findConfigFile(root: string): Promise<string | undefined> {

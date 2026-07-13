@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { createOkfBundleApi, createOkfMcpServer } from "../src/index.js";
+import { resolveConfig } from "@okfx/core";
+
+import { createOkfBundleApi, createOkfMcpServer, getOkfMcpTools } from "../src/index.js";
 
 describe("@okfx/mcp bundle API", () => {
   it("searches concepts and returns graph context", async () => {
@@ -62,8 +64,50 @@ description: Demo metric.
     }
   });
 
-  it("creates an MCP server", () => {
-    const server = createOkfMcpServer({ root: process.cwd() });
+  it("loads configured plugins when linting", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-mcp-config-"));
+    try {
+      await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Concept\n---\n# Concept\n", "utf8");
+      await writeFile(join(root, "okfx.config.mjs"), `export default {
+  plugins: ["./plugin.mjs"],
+  rules: { "custom/mcp-rule": "error" }
+};
+`, "utf8");
+      await writeFile(join(root, "plugin.mjs"), `export default {
+  name: "mcp-test-plugin",
+  rules: {
+    "custom/mcp-rule": {
+      run: () => [{ code: "custom/mcp-rule", severity: "warning", message: "MCP plugin ran." }]
+    }
+  }
+};
+`, "utf8");
+
+      const lint = await createOkfBundleApi(root).lint();
+
+      expect(lint.diagnostics.find((diagnostic) => diagnostic.code === "custom/mcp-rule")?.severity).toBe("error");
+      expect(lint.plugins).toEqual([expect.objectContaining({ name: "mcp-test-plugin" })]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("filters MCP tools using exposure config", () => {
+    const tools = getOkfMcpTools(resolveConfig({
+      mcp: {
+        exposeGraph: false,
+        exposeDiagnostics: false
+      }
+    }));
+
+    expect(tools).toContain("okf_search_concepts");
+    expect(tools).not.toContain("okf_get_graph");
+    expect(tools).not.toContain("okf_get_diagnostics");
+    expect(tools).not.toContain("okf_lint_bundle");
+  });
+
+  it("creates an MCP server", async () => {
+    const server = await createOkfMcpServer({ root: process.cwd() });
     expect(server.isConnected()).toBe(false);
   });
 });
