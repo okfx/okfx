@@ -78,6 +78,21 @@ usage: *summary
 
     expect(result.formatted).toContain("# Example\n\n```text\nfirst  \n\n\nsecond\t\n```\n\nAfter\n");
   });
+
+  it("does not treat a backtick in the info string as a fenced code opener", () => {
+    const content = [
+      "```bad`info",
+      "first  ",
+      "",
+      "",
+      "second\t",
+      ""
+    ].join("\n");
+
+    const result = formatMarkdownFile("concept.md", content);
+
+    expect(result.formatted).toBe("```bad`info\nfirst\n\nsecond\n");
+  });
 });
 
 describe("formatBundle", () => {

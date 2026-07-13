@@ -267,8 +267,8 @@ function trimTrailingWhitespace(line: string): string {
 }
 
 function parseOpeningFence(line: string): { marker: "`" | "~"; length: number } | undefined {
-  const match = /^ {0,3}(`{3,}|~{3,})/.exec(line);
-  if (!match) {
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!match || (match[1].startsWith("`") && match[2].includes("`"))) {
     return undefined;
   }
   return {
