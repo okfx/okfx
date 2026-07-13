@@ -271,7 +271,7 @@ const builtInLintRules: BuiltInRule[] = [
     id: "security/internal-url",
     defaultSeverity: "warning",
     run: ({ bundle }) => bundle.concepts
-      .filter((concept) => containsInternalUrl(conceptSearchableText(concept)))
+      .filter((concept) => containsInternalUrl(conceptTextWithoutResources(concept)))
       .map((concept) => conceptDiagnostic("security/internal-url", "warning", concept, "Concept contains an internal or private URL outside the resource field."))
   },
   {
@@ -460,6 +460,11 @@ function resourceValues(concept: ConceptIR): string[] {
 
 function conceptSearchableText(concept: ConceptIR): string {
   return `${JSON.stringify(concept.frontmatter)}\n${concept.frontmatterRaw ?? ""}\n${concept.body.raw}`;
+}
+
+function conceptTextWithoutResources(concept: ConceptIR): string {
+  const { resource: _resource, ...frontmatter } = concept.frontmatter;
+  return `${JSON.stringify(frontmatter)}\n${concept.body.raw}`;
 }
 
 function frontmatterKeyOrderIsStable(concept: ConceptIR, configuredOrder: string[]): boolean {

@@ -188,6 +188,18 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("does not report a private resource as an internal URL outside resources", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\nresource: http://localhost/runbook\n---\n# Concept\n\nPublic documentation.\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+      const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+
+      expect(codes).toContain("security/private-url");
+      expect(codes).not.toContain("security/internal-url");
+    });
+  });
+
   it("runs configured plugin rules and honors rule overrides", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
