@@ -602,7 +602,7 @@ fn security_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
             );
         }
 
-        if contains_internal_url(&searchable_text) {
+        if contains_internal_url(&concept_text_without_resources(concept)) {
             push_concept_diagnostic(
                 &mut diagnostics,
                 context.options,
@@ -1100,6 +1100,43 @@ fn contains_internal_url(value: &str) -> bool {
         .any(is_private_url)
 }
 
+fn concept_text_without_resources(concept: &ConceptRuleInput) -> String {
+    let mut frontmatter_lines = Vec::new();
+    let mut inside_resource = false;
+
+    for line in concept
+        .frontmatter_raw
+        .as_deref()
+        .unwrap_or_default()
+        .lines()
+    {
+        if let Some(key) = top_level_frontmatter_key(line) {
+            inside_resource = key.eq_ignore_ascii_case("resource");
+        }
+        if !inside_resource {
+            frontmatter_lines.push(line);
+        }
+    }
+
+    format!("{}\n{}", frontmatter_lines.join("\n"), concept.body_text)
+}
+
+fn top_level_frontmatter_key(line: &str) -> Option<&str> {
+    if line.starts_with([' ', '\t']) {
+        return None;
+    }
+    let (key, _) = line.split_once(':')?;
+    let key = key.trim();
+    let mut chars = key.chars();
+    let first = chars.next()?;
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return None;
+    }
+    chars
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+        .then_some(key)
+}
+
 fn is_email_local_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '%' | '+' | '-')
 }
@@ -1367,6 +1404,25 @@ mod tests {
             .filter_map(|diagnostic| diagnostic.path.as_deref())
             .collect::<Vec<_>>();
         assert_eq!(paths, vec!["a.md", "b.md"]);
+    }
+
+    #[test]
+    fn excludes_resource_fields_from_internal_url_checks() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![concept("resource")
+                .with_frontmatter(
+                    "type: Note\nresource:\n  - http://localhost/runbook\ndescription: Public docs",
+                )
+                .with_resource("http://localhost/runbook")],
+            ..RuleInput::default()
+        });
+        let codes = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(codes.contains(&"security/private-url"));
+        assert!(!codes.contains(&"security/internal-url"));
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
