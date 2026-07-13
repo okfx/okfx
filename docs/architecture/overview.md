@@ -23,7 +23,8 @@ agents without requiring network access or LLM calls.
 - `@okfx/cli` owns command UX and exit-code behavior.
 - `@okfx/mcp` owns read-only MCP resources, tools, and prompts.
 - Adapter packages produce reviewable files and MUST NOT silently mutate a bundle.
-- Rust crates are scaffolded for future hot-path migration and do not yet own runtime behavior.
+- Rust crates expose explicit JSON-boundary acceleration helpers and do not own the
+  default Core/CLI runtime behavior.
 
 ## Boundary Diagram
 
@@ -33,10 +34,11 @@ flowchart TD
   MCP["@okfx/mcp"] --> Core
   Adapters["@okfx/adapter-*"] --> Files["Reviewable OKF files"]
   Core --> Bundle["Markdown + YAML bundle"]
-  Rust["crates/okfx_*"] -. future native core .-> Core
+  Rust["crates/okfx_*"] -. opt-in N-API / WASM helpers .-> Core
 ```
 
-What this shows: current runtime behavior flows through TypeScript core; Rust is a future migration boundary.
+What this shows: default runtime behavior flows through TypeScript core. Callers may
+explicitly select accelerated helpers, which fall back without changing the default APIs.
 
 ## Verification
 

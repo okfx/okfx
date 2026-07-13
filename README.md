@@ -419,10 +419,10 @@ intermediate representation (IR). See [`docs/architecture/overview.md`](./docs/a
 - **`@okfx/core`** owns the deterministic TypeScript engines and the JSON IR
   (`BundleIR`, `ConceptIR`, `LinkIR`, `DiagnosticIR`, `GraphIR`, …). It is the default
   runtime today.
-- The **Rust crates** provide an optional **native-acceleration** path (via N-API) for
-  hot paths such as parsing and formatting, plus a standalone `okfx` binary and a WASM
-  fallback. `@okfx/core` automatically falls back to its TypeScript implementation when
-  the native binding is unavailable, so no Rust toolchain is required to use `okfx`.
+- The **Rust crates** provide opt-in accelerated parsing and formatting through N-API
+  or WASM, plus a standalone `okfx` binary. The regular Core/CLI paths remain on the
+  deterministic TypeScript implementation; async `*Accelerated` helpers probe native,
+  then WASM, then TypeScript. No Rust toolchain is required to use `okfx`.
 - Plugins and adapters exchange only the stable JSON IR — never internal Rust structs.
 
 ---

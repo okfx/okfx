@@ -8,9 +8,10 @@ pnpm:
 pnpm add -g @okfx/cli
 ```
 
-The `okf` command works without native artifacts. `@okfx/core` first tries a
-matching N-API package, then a generic native package, then a local development
-artifact, then WASM, and finally the TypeScript implementation.
+The `okf` command and regular `@okfx/core` APIs use TypeScript and work without
+native artifacts. Core's async `*Accelerated` helpers first try a matching N-API
+package, then a generic/local native artifact, then WASM, and finally TypeScript.
+Backend packages are optional and must be installed alongside `@okfx/core`.
 
 ## Native Packages
 
@@ -44,8 +45,8 @@ names. The package templates live under `npm/wasm` and `npm/core-wasm`.
 6. Run `pnpm pack --dry-run` in every package directory.
 7. Publish platform packages before publishing `@okfx/core` and `@okfx/cli`.
 
-Native packages must use the same version as `@okfx/core`. If no native package
-matches the current runtime, okfx keeps running through WASM or TypeScript.
+Native and WASM packages must use the same version as `@okfx/core`. If no optional
+package matches the current runtime, accelerated helpers use TypeScript.
 
 ## Automation
 

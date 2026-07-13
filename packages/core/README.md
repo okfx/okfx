@@ -4,9 +4,9 @@ Core TypeScript APIs and deterministic engines for [okfx](https://github.com/okf
 the developer toolkit for Open Knowledge Format (OKF) bundles.
 
 This package owns the stable JSON intermediate representation (IR) and the engines shared
-by the `okf` CLI, the MCP server, plugins, and adapters. It runs a pure TypeScript
-implementation and transparently uses the optional native (Rust/N-API) binding when
-available, falling back to TypeScript otherwise.
+by the `okf` CLI, the MCP server, plugins, and adapters. Its production APIs use the
+deterministic TypeScript implementation. Optional, explicit accelerated helpers can
+probe a Rust/N-API binding, then WASM, and fall back to TypeScript.
 
 ## Install
 
@@ -55,7 +55,10 @@ export default defineConfig({
   `diffBundles`, `packBundle`, `buildSearchIndex`, `doctorBundle`.
 - **Config & plugins:** `defineConfig`, `loadConfig`, `resolveConfig`,
   `loadConfiguredPlugins`, built-in presets.
-- **Native backend:** `getNativeBackendStatus` and `*Accelerated` helpers.
+- **Optional backends:** `getNativeBackendStatusAsync`,
+  `parseMarkdownDocumentAcceleratedAsync`, and
+  `formatMarkdownFileAcceleratedAsync`. The synchronous helpers probe N-API only;
+  the async helpers can initialize ESM WASM packages.
 
 ## Documentation
 
