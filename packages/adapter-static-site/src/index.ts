@@ -1,3 +1,5 @@
+import { posix } from "node:path";
+
 import { definePlugin } from "@okfx/plugin-api";
 import type { BundleIR, ConceptIR, OkfxGraphIR } from "@okfx/core";
 
@@ -13,14 +15,15 @@ export interface StaticSiteOptions {
 
 export function exportStaticSite(bundle: BundleIR, options: StaticSiteOptions = {}): StaticSiteFile[] {
   const title = options.title ?? "OKF Bundle";
+  const conceptPages = new Map(bundle.concepts.map((concept) => [concept.id, conceptPagePath(concept.id)]));
   return [
     {
       path: "index.html",
       content: indexPage(bundle, title)
     },
     ...bundle.concepts.map((concept) => ({
-      path: conceptPagePath(concept.id),
-      content: conceptPage(concept, options.graph, title)
+      path: conceptPages.get(concept.id)!,
+      content: conceptPage(concept, options.graph, title, conceptPages)
     })),
     ...(options.graph ? [{
       path: "graph.json",
@@ -58,16 +61,21 @@ function indexPage(bundle: BundleIR, title: string): string {
   `);
 }
 
-function conceptPage(concept: ConceptIR, graph: OkfxGraphIR | undefined, title: string): string {
-  const neighbors = graph?.edges
+function conceptPage(
+  concept: ConceptIR,
+  graph: OkfxGraphIR | undefined,
+  title: string,
+  conceptPages: Map<string, string>
+): string {
+  const currentPage = conceptPages.get(concept.id)!;
+  const neighbors = uniqueSorted(graph?.edges
     .filter((edge) => edge.resolved && edge.source === concept.id)
-    .map((edge) => edge.target)
-    .sort() ?? [];
-  const backlinks = graph?.analysis.backlinks[concept.id] ?? [];
+    .map((edge) => edge.target) ?? []);
+  const backlinks = uniqueSorted(graph?.analysis.backlinks[concept.id] ?? []);
 
   return html(`${concept.title ?? concept.id} - ${title}`, `
     <main>
-      <p><a href="../index.html">Index</a></p>
+      <p><a href="${escapeAttribute(relativeHref(currentPage, "index.html"))}">Index</a></p>
       <h1>${escapeHtml(concept.title ?? concept.id)}</h1>
       <dl>
         <dt>ID</dt><dd><code>${escapeHtml(concept.id)}</code></dd>
@@ -77,23 +85,36 @@ function conceptPage(concept: ConceptIR, graph: OkfxGraphIR | undefined, title: 
       <h2>Body</h2>
       <pre>${escapeHtml(concept.body.raw.trim())}</pre>
       <h2>Outgoing</h2>
-      ${linkList(neighbors)}
+      ${linkList(neighbors, currentPage, conceptPages)}
       <h2>Backlinks</h2>
-      ${linkList(backlinks)}
+      ${linkList(backlinks, currentPage, conceptPages)}
     </main>
   `);
 }
 
-function linkList(ids: string[]): string {
+function linkList(ids: string[], currentPage: string, conceptPages: Map<string, string>): string {
   if (ids.length === 0) {
     return "<p>None.</p>";
   }
 
-  return `<ul>${ids.map((id) => `<li><a href="../${escapeAttribute(conceptPagePath(id))}">${escapeHtml(id)}</a></li>`).join("")}</ul>`;
+  return `<ul>${ids.map((id) => {
+    const targetPage = conceptPages.get(id);
+    return targetPage
+      ? `<li><a href="${escapeAttribute(relativeHref(currentPage, targetPage))}">${escapeHtml(id)}</a></li>`
+      : `<li><code>${escapeHtml(id)}</code></li>`;
+  }).join("")}</ul>`;
 }
 
 function conceptPagePath(id: string): string {
   return `concepts/${id.split("/").map(encodeURIComponent).join("/")}.html`;
+}
+
+function relativeHref(fromPage: string, toPage: string): string {
+  return posix.relative(posix.dirname(fromPage), toPage) || posix.basename(toPage);
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
 function html(title: string, body: string): string {
