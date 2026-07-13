@@ -43,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("okfx.graphPreview", () => runWithErrors("graph preview", () => showGraphPreview(context))),
     vscode.commands.registerCommand("okfx.doctorPanel", () => runWithErrors("doctor panel", () => showDoctorPanel(context))),
     vscode.commands.registerCommand("okfx.backlinksPanel", () => runWithErrors("backlinks panel", () => showBacklinksPanel(context))),
+    vscode.workspace.onWillSaveTextDocument((event) => onWillSave(event)),
     vscode.workspace.onDidSaveTextDocument((document) => onDidSave(document)),
     vscode.languages.registerDocumentFormattingEditProvider({ language: "markdown" }, {
       provideDocumentFormattingEdits: (document) => formatDocument(document)
@@ -86,8 +87,15 @@ async function onDidSave(document: vscode.TextDocument): Promise<void> {
   if (config(document.uri).get<boolean>("diagnostics.onSave", true)) {
     await runWithErrors("diagnostics", () => runDiagnostics("lint", true, document.uri));
   }
-  if (config(document.uri).get<boolean>("format.onSave", false)) {
-    await vscode.commands.executeCommand("editor.action.formatDocument");
+}
+
+function onWillSave(event: vscode.TextDocumentWillSaveEvent): void {
+  const { document } = event;
+  if (
+    document.languageId === "markdown"
+    && config(document.uri).get<boolean>("format.onSave", false)
+  ) {
+    event.waitUntil(formatDocument(document));
   }
 }
 
