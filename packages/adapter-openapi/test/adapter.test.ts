@@ -35,4 +35,16 @@ describe("@okfx/adapter-openapi", () => {
       paths: { "/orders": { get: {} } }
     })).toThrow("OpenAPI info field description must be a string");
   });
+
+  it("disambiguates operations that reuse an operation id", () => {
+    const files = produceOpenApiOkf({
+      paths: {
+        "/orders": { get: { operationId: "list" } },
+        "/customers": { get: { operationId: "list" } }
+      }
+    });
+
+    expect(new Set(files.map((file) => file.path))).toHaveLength(2);
+    expect(files.every((file) => file.path.startsWith("apis/list-"))).toBe(true);
+  });
 });

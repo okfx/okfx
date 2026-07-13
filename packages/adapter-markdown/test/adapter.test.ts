@@ -59,4 +59,14 @@ describe("@okfx/adapter-markdown", () => {
     expect(() => produceMarkdownOkf({ path: "note", body: "# Note" } as never))
       .toThrow("must be an array");
   });
+
+  it("disambiguates source paths that normalize to the same output", () => {
+    const files = produceMarkdownOkf([
+      { path: "notes/archive/../demo", body: "# Archived\n" },
+      { path: "notes/demo", body: "# Current\n" }
+    ]);
+
+    expect(new Set(files.map((file) => file.path))).toHaveLength(2);
+    expect(files.every((file) => file.path.startsWith("notes/demo-"))).toBe(true);
+  });
 });

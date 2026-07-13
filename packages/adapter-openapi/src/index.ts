@@ -1,4 +1,9 @@
-import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
+import {
+  definePlugin,
+  disambiguateGeneratedPaths,
+  generationTimestamp,
+  type OkfxGenerationOptions
+} from "@okfx/plugin-api";
 
 export interface OpenApiDocument {
   info?: { title?: string; description?: string };
@@ -13,7 +18,7 @@ export function produceOpenApiOkf(
 ): Array<{ path: string; content: string }> {
   assertOpenApiDocument(document);
   const timestamp = generationTimestamp(options.now);
-  const files: Array<{ path: string; content: string }> = [];
+  const files: Array<{ path: string; content: string; identity: string }> = [];
   for (const [route, methods] of Object.entries(document.paths ?? {})) {
     for (const [method, operation] of Object.entries(methods)) {
       if (!HTTP_METHODS.has(method.toLowerCase())) {
@@ -23,6 +28,7 @@ export function produceOpenApiOkf(
       const title = operation.summary ?? `${method.toUpperCase()} ${route}`;
       files.push({
         path: `apis/${slug(id)}.md`,
+        identity: `${method.toLowerCase()} ${route}`,
         content: concept("API", title, operation.description ?? document.info?.description ?? "Imported from OpenAPI.", [
           `# ${title}`,
           "",
@@ -38,7 +44,7 @@ export function produceOpenApiOkf(
       });
     }
   }
-  return files.sort((a, b) => a.path.localeCompare(b.path));
+  return disambiguateGeneratedPaths(files).sort((a, b) => a.path.localeCompare(b.path));
 }
 
 export default definePlugin({

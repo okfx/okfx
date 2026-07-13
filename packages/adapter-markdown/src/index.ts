@@ -1,4 +1,9 @@
-import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
+import {
+  definePlugin,
+  disambiguateGeneratedPaths,
+  generationTimestamp,
+  type OkfxGenerationOptions
+} from "@okfx/plugin-api";
 
 export interface MarkdownSource {
   path: string;
@@ -18,8 +23,9 @@ export function produceMarkdownOkf(
 ): ProducedOkfFile[] {
   assertMarkdownSources(sources);
   const timestamp = generationTimestamp(options.now);
-  return sources.map((source) => ({
+  return disambiguateGeneratedPaths(sources.map((source) => ({
     path: normalizeConceptPath(source.path),
+    identity: source.path,
     content: concept({
       type: "Note",
       title: source.title ?? titleFromPath(source.path),
@@ -28,7 +34,7 @@ export function produceMarkdownOkf(
       body: source.body,
       timestamp
     })
-  }));
+  })));
 }
 
 export default definePlugin({

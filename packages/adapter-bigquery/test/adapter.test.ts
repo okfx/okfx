@@ -21,4 +21,14 @@ describe("@okfx/adapter-bigquery", () => {
       columns: [{ name: "id", [field]: { injected: true } }] as never
     }])).toThrow(`BigQuery column ${field} at table index 0, column index 0 must be a string`);
   });
+
+  it("disambiguates same-named tables from different projects", () => {
+    const files = produceBigQueryOkf([
+      { project: "a", dataset: "sales", table: "orders" },
+      { project: "b", dataset: "sales", table: "orders" }
+    ]);
+
+    expect(new Set(files.map((file) => file.path))).toHaveLength(2);
+    expect(files.every((file) => file.path.startsWith("tables/sales-orders-"))).toBe(true);
+  });
 });

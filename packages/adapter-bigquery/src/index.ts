@@ -1,4 +1,9 @@
-import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
+import {
+  definePlugin,
+  disambiguateGeneratedPaths,
+  generationTimestamp,
+  type OkfxGenerationOptions
+} from "@okfx/plugin-api";
 
 export interface BigQueryTable {
   project: string;
@@ -14,8 +19,9 @@ export function produceBigQueryOkf(
 ): Array<{ path: string; content: string }> {
   assertBigQueryTables(tables);
   const timestamp = generationTimestamp(options.now);
-  return tables.map((table) => ({
+  return disambiguateGeneratedPaths(tables.map((table) => ({
     path: `tables/${slug(`${table.dataset}-${table.table}`)}.md`,
+    identity: `bigquery://${table.project}/${table.dataset}/${table.table}`,
     content: `---
 type: Table
 title: ${yamlScalar(`${table.dataset}.${table.table}`)}
@@ -33,7 +39,7 @@ timestamp: ${timestamp}
 
 ${(table.columns ?? []).length === 0 ? "No columns provided." : table.columns!.map((column) => `- \`${column.name}\`${column.type ? ` (${column.type})` : ""}${column.description ? `: ${column.description}` : ""}`).join("\n")}
 `
-  })).sort((a, b) => a.path.localeCompare(b.path));
+  }))).sort((a, b) => a.path.localeCompare(b.path));
 }
 
 export default definePlugin({

@@ -71,7 +71,7 @@ describe("okf import", () => {
     expect(await readFile(join(out, "tables/d-orders.md"), "utf8")).toContain("bigquery://p/d/orders");
   });
 
-  it("refuses duplicate and existing output paths unless forced", async () => {
+  it("refuses duplicate identities and existing output paths unless forced", async () => {
     const root = await tempRoot();
     const input = join(root, "bq.json");
     const out = join(root, "knowledge");
@@ -82,7 +82,7 @@ describe("okf import", () => {
 
     const duplicateOutput = capture();
     expect(await main(["import", "bigquery", "--input", input, "--out", out, "--write"], duplicateOutput.io)).toBe(2);
-    expect(duplicateOutput.stderr()).toContain("duplicate output path");
+    expect(duplicateOutput.stderr()).toContain("duplicate identity");
 
     await writeFile(input, JSON.stringify([{ project: "p", dataset: "d", table: "orders" }]), "utf8");
     const firstOutput = capture();

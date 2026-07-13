@@ -1,4 +1,9 @@
-import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
+import {
+  definePlugin,
+  disambiguateGeneratedPaths,
+  generationTimestamp,
+  type OkfxGenerationOptions
+} from "@okfx/plugin-api";
 
 export interface DbtManifest {
   nodes?: Record<string, { resource_type?: string; name?: string; description?: string; depends_on?: { nodes?: string[] } }>;
@@ -10,17 +15,18 @@ export function produceDbtOkf(
 ): Array<{ path: string; content: string }> {
   assertDbtManifest(manifest);
   const timestamp = generationTimestamp(options.now);
-  return Object.values(manifest.nodes ?? {})
-    .filter((node) => node.resource_type === "model")
-    .map((node) => ({
+  return disambiguateGeneratedPaths(Object.entries(manifest.nodes ?? {})
+    .filter(([, node]) => node.resource_type === "model")
+    .map(([id, node]) => ({
       path: `tables/${slug(node.name ?? "model")}.md`,
+      identity: id,
       content: concept(
         node.name ?? "dbt model",
         node.description ?? "Imported from dbt manifest.",
         node.depends_on?.nodes ?? [],
         timestamp
       )
-    }))
+    })))
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
