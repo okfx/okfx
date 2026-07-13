@@ -11,13 +11,14 @@ export function extractMarkdown(
   bodyStartOffset: number,
   bodyStartLine = 1
 ): ExtractedMarkdown {
+  const searchableBody = maskFencedCode(bodyRaw);
   return {
     body: {
       raw: bodyRaw,
       text: plainText(bodyRaw),
-      headings: extractHeadings(bodyRaw, bodyStartOffset, bodyStartLine)
+      headings: extractHeadings(searchableBody, bodyStartOffset, bodyStartLine)
     },
-    links: extractLinks(bodyRaw, sourceConceptId, bodyStartOffset, bodyStartLine)
+    links: extractLinks(searchableBody, sourceConceptId, bodyStartOffset, bodyStartLine)
   };
 }
 
@@ -93,8 +94,7 @@ export function slugifyHeading(title: string): string {
 }
 
 function plainText(markdown: string): string {
-  return markdown
-    .replace(/```[\s\S]*?```/g, " ")
+  return maskFencedCode(markdown)
     .replace(/`([^`]+)`/g, "$1")
     .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
     .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
@@ -102,6 +102,46 @@ function plainText(markdown: string): string {
     .replace(/[*_~>#-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function maskFencedCode(markdown: string): string {
+  const segments = markdown.split(/(\r\n|\n|\r)/);
+  let fence: { marker: "`" | "~"; length: number } | undefined;
+
+  return segments.map((segment, index) => {
+    if (index % 2 === 1) {
+      return segment;
+    }
+    if (fence) {
+      if (isClosingFence(segment, fence)) {
+        fence = undefined;
+      }
+      return " ".repeat(segment.length);
+    }
+
+    const openingFence = parseOpeningFence(segment);
+    if (!openingFence) {
+      return segment;
+    }
+    fence = openingFence;
+    return " ".repeat(segment.length);
+  }).join("");
+}
+
+function parseOpeningFence(line: string): { marker: "`" | "~"; length: number } | undefined {
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!match || (match[1].startsWith("`") && match[2].includes("`"))) {
+    return undefined;
+  }
+  return {
+    marker: match[1][0] as "`" | "~",
+    length: match[1].length
+  };
+}
+
+function isClosingFence(line: string, fence: { marker: "`" | "~"; length: number }): boolean {
+  const match = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+  return Boolean(match && match[1][0] === fence.marker && match[1].length >= fence.length);
 }
 
 function locationFromOffset(

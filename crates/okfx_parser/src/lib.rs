@@ -112,7 +112,12 @@ pub fn parse_markdown_document(
         }
     }
 
-    let (body, links) = parse_markdown_body(body_raw, &source_concept_id, body_start_offset, body_start_line);
+    let (body, links) = parse_markdown_body(
+        body_raw,
+        &source_concept_id,
+        body_start_offset,
+        body_start_line,
+    );
 
     ParsedMarkdownDocument {
         path,
@@ -158,7 +163,8 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
 }
 
 fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, String> {
-    let value = serde_yaml::from_str::<serde_yaml::Value>(raw).map_err(|error| error.to_string())?;
+    let value =
+        serde_yaml::from_str::<serde_yaml::Value>(raw).map_err(|error| error.to_string())?;
     let mapping = match value {
         serde_yaml::Value::Mapping(mapping) => mapping,
         serde_yaml::Value::Null => serde_yaml::Mapping::new(),
@@ -189,11 +195,28 @@ fn parse_markdown_body(
     let mut headings = Vec::new();
     let mut links = Vec::new();
     let mut line_offset = 0;
+    let mut code_fence = None;
 
     for (line_index, line) in raw.split_inclusive('\n').enumerate() {
         let line_number = body_start_line + line_index;
         let without_newline = line.trim_end_matches(['\r', '\n']);
-        if let Some(heading) = parse_heading(without_newline, body_start_offset + line_offset, line_number) {
+        if let Some(fence) = code_fence {
+            if is_closing_code_fence(without_newline, fence) {
+                code_fence = None;
+            }
+            line_offset += line.len();
+            continue;
+        }
+        if let Some(fence) = opening_code_fence(without_newline) {
+            code_fence = Some(fence);
+            line_offset += line.len();
+            continue;
+        }
+        if let Some(heading) = parse_heading(
+            without_newline,
+            body_start_offset + line_offset,
+            line_number,
+        ) {
             headings.push(heading);
         }
         links.extend(parse_links(
@@ -216,15 +239,26 @@ fn parse_markdown_body(
 }
 
 fn parse_heading(line: &str, absolute_line_offset: usize, line_number: usize) -> Option<Heading> {
-    let hashes = line.chars().take_while(|character| *character == '#').count();
+    let hashes = line
+        .chars()
+        .take_while(|character| *character == '#')
+        .count();
     if !(1..=6).contains(&hashes) {
         return None;
     }
-    if !line.chars().nth(hashes).is_some_and(|character| character == ' ' || character == '\t') {
+    if !line
+        .chars()
+        .nth(hashes)
+        .is_some_and(|character| character == ' ' || character == '\t')
+    {
         return None;
     }
 
-    let title = line[hashes..].trim().trim_end_matches('#').trim().to_string();
+    let title = line[hashes..]
+        .trim()
+        .trim_end_matches('#')
+        .trim()
+        .to_string();
     let end_column = line.len() + 1;
     Some(Heading {
         level: hashes,
@@ -327,9 +361,9 @@ fn looks_like_scheme(target: &str) -> bool {
     };
     let scheme = &target[..colon];
     !scheme.is_empty()
-        && scheme
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '+' | '.' | '-'))
+        && scheme.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '+' | '.' | '-')
+        })
         && scheme
             .chars()
             .next()
@@ -338,14 +372,18 @@ fn looks_like_scheme(target: &str) -> bool {
 
 fn plain_text(markdown: &str) -> String {
     let mut text = String::new();
-    let mut in_code_fence = false;
+    let mut code_fence = None;
 
     for line in markdown.lines() {
-        if line.trim_start().starts_with("```") {
-            in_code_fence = !in_code_fence;
+        let line = line.trim_end_matches('\r');
+        if let Some(fence) = code_fence {
+            if is_closing_code_fence(line, fence) {
+                code_fence = None;
+            }
             continue;
         }
-        if in_code_fence {
+        if let Some(fence) = opening_code_fence(line) {
+            code_fence = Some(fence);
             continue;
         }
         let stripped = line
@@ -356,6 +394,53 @@ fn plain_text(markdown: &str) -> String {
     }
 
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CodeFence {
+    marker: u8,
+    length: usize,
+}
+
+fn opening_code_fence(line: &str) -> Option<CodeFence> {
+    let candidate = strip_fence_indent(line)?;
+    let marker = *candidate.as_bytes().first()?;
+    if !matches!(marker, b'`' | b'~') {
+        return None;
+    }
+    let length = candidate
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == marker)
+        .count();
+    if length < 3 || (marker == b'`' && candidate[length..].contains('`')) {
+        return None;
+    }
+    Some(CodeFence { marker, length })
+}
+
+fn is_closing_code_fence(line: &str, fence: CodeFence) -> bool {
+    let Some(candidate) = strip_fence_indent(line) else {
+        return false;
+    };
+    let length = candidate
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == fence.marker)
+        .count();
+    length >= fence.length
+        && candidate[length..]
+            .chars()
+            .all(|character| matches!(character, ' ' | '\t'))
+}
+
+fn strip_fence_indent(line: &str) -> Option<&str> {
+    let spaces = line
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == b' ')
+        .count();
+    (spaces <= 3).then_some(&line[spaces..])
 }
 
 fn slugify_heading(title: &str) -> String {
@@ -395,7 +480,11 @@ fn invalid_frontmatter(path: &str, message: String) -> Diagnostic {
 }
 
 fn line_number_at(content: &str, offset: usize) -> usize {
-    content[..offset].bytes().filter(|byte| *byte == b'\n').count() + 1
+    content[..offset]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+        + 1
 }
 
 fn sha256_hex(input: &[u8]) -> String {
@@ -474,5 +563,33 @@ mod tests {
             parsed.diagnostics[0].message,
             "Frontmatter must be a YAML mapping."
         );
+    }
+
+    #[test]
+    fn ignores_headings_and_links_inside_code_fences() {
+        let parsed = parse_markdown_document(
+            "note.md",
+            "# Visible\n[Visible](visible.md)\n```markdown\n# Hidden\n[Hidden](hidden.md)\n```\n~~~text\n## Also hidden\n[Also hidden](also-hidden.md)\n~~~\n## Also visible\n",
+            "note",
+        );
+
+        assert_eq!(
+            parsed
+                .body
+                .headings
+                .iter()
+                .map(|heading| heading.title.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Visible", "Also visible"]
+        );
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["visible.md"]
+        );
+        assert!(!parsed.body.text.contains("Hidden"));
     }
 }

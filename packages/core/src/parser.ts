@@ -73,7 +73,7 @@ function splitFrontmatter(content: string): FrontmatterBlock | undefined {
 
   const lineEnding = content.startsWith("---\r\n") ? "\r\n" : "\n";
   const openingLength = 3 + lineEnding.length;
-  const closingPattern = new RegExp(`^---\\s*$`, "m");
+  const closingPattern = /^---[ \t]*\r?$/m;
   const rest = content.slice(openingLength);
   const closing = closingPattern.exec(rest);
   if (!closing || closing.index === undefined) {
@@ -81,7 +81,9 @@ function splitFrontmatter(content: string): FrontmatterBlock | undefined {
   }
 
   const raw = rest.slice(0, closing.index);
-  const bodyStartOffset = openingLength + closing.index + closing[0].length + lineEnding.length;
+  const closingEndOffset = openingLength + closing.index + closing[0].length;
+  const closingLineEnding = /^(?:\r\n|\n|\r)/.exec(content.slice(closingEndOffset))?.[0] ?? "";
+  const bodyStartOffset = closingEndOffset + closingLineEnding.length;
   return {
     raw,
     body: content.slice(bodyStartOffset),
