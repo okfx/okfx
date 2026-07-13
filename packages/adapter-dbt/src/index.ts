@@ -5,6 +5,7 @@ export interface DbtManifest {
 }
 
 export function produceDbtOkf(manifest: DbtManifest): Array<{ path: string; content: string }> {
+  assertDbtManifest(manifest);
   return Object.values(manifest.nodes ?? {})
     .filter((node) => node.resource_type === "model")
     .map((node) => ({
@@ -28,8 +29,8 @@ export default definePlugin({
 function concept(title: string, description: string, dependsOn: string[]): string {
   return `---
 type: Table
-title: ${title}
-description: ${description}
+title: ${yamlScalar(title)}
+description: ${yamlScalar(description)}
 tags:
   - imported
   - dbt
@@ -45,5 +46,42 @@ ${dependsOn.length === 0 ? "No upstream dbt dependencies declared." : dependsOn.
 }
 
 function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (!result) {
+    throw new TypeError(`Could not derive a safe dbt model slug from ${JSON.stringify(value)}.`);
+  }
+  return result;
+}
+
+function assertDbtManifest(value: unknown): asserts value is DbtManifest {
+  if (!isRecord(value)) {
+    throw new TypeError("dbt adapter input must be an object.");
+  }
+  if (value.nodes !== undefined && !isRecord(value.nodes)) {
+    throw new TypeError("dbt manifest nodes must be an object.");
+  }
+
+  for (const [id, node] of Object.entries(value.nodes ?? {})) {
+    if (!isRecord(node)) {
+      throw new TypeError(`dbt node ${JSON.stringify(id)} must be an object.`);
+    }
+    for (const field of ["resource_type", "name", "description"] as const) {
+      if (node[field] !== undefined && typeof node[field] !== "string") {
+        throw new TypeError(`dbt node ${JSON.stringify(id)} field ${field} must be a string.`);
+      }
+    }
+    if (node.depends_on !== undefined) {
+      if (!isRecord(node.depends_on) || (node.depends_on.nodes !== undefined && (!Array.isArray(node.depends_on.nodes) || node.depends_on.nodes.some((entry) => typeof entry !== "string")))) {
+        throw new TypeError(`dbt node ${JSON.stringify(id)} depends_on.nodes must be an array of strings.`);
+      }
+    }
+  }
+}
+
+function yamlScalar(value: string): string {
+  return JSON.stringify(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

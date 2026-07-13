@@ -8,17 +8,18 @@ export interface DataHubEntity {
 }
 
 export function produceDataHubOkf(entities: DataHubEntity[]): Array<{ path: string; content: string }> {
+  assertDataHubEntities(entities);
   return entities.map((entity) => ({
     path: `catalog/${slug(entity.name ?? entity.urn)}.md`,
     content: `---
 type: Dataset
-title: ${entity.name ?? entity.urn}
-description: ${entity.description ?? "Imported from DataHub metadata."}
-resource: ${entity.urn}
+title: ${yamlScalar(entity.name ?? entity.urn)}
+description: ${yamlScalar(entity.description ?? "Imported from DataHub metadata.")}
+resource: ${yamlScalar(entity.urn)}
 tags:
   - imported
   - datahub
-  - ${slug(entity.platform ?? "dataset")}
+  - ${yamlScalar(slug(entity.platform ?? "dataset"))}
 timestamp: 2026-07-07T00:00:00Z
 ---
 
@@ -41,5 +42,38 @@ export default definePlugin({
 });
 
 function slug(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  if (!result) {
+    throw new TypeError(`Could not derive a safe DataHub slug from ${JSON.stringify(value)}.`);
+  }
+  return result;
+}
+
+function assertDataHubEntities(value: unknown): asserts value is DataHubEntity[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError("DataHub adapter input must be an array.");
+  }
+
+  for (const [index, entity] of value.entries()) {
+    if (!isRecord(entity) || !nonEmptyString(entity.urn)) {
+      throw new TypeError(`DataHub entity at index ${index} must include a non-empty string urn.`);
+    }
+    for (const field of ["name", "description", "platform"] as const) {
+      if (entity[field] !== undefined && typeof entity[field] !== "string") {
+        throw new TypeError(`DataHub entity ${field} at index ${index} must be a string.`);
+      }
+    }
+  }
+}
+
+function yamlScalar(value: string): string {
+  return JSON.stringify(value);
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

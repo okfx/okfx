@@ -70,4 +70,39 @@ describe("okf import", () => {
     expect((await stat(join(out, "tables/d-orders.md"))).isFile()).toBe(true);
     expect(await readFile(join(out, "tables/d-orders.md"), "utf8")).toContain("bigquery://p/d/orders");
   });
+
+  it("refuses duplicate and existing output paths unless forced", async () => {
+    const root = await tempRoot();
+    const input = join(root, "bq.json");
+    const out = join(root, "knowledge");
+    await writeFile(input, JSON.stringify([
+      { project: "p", dataset: "d", table: "orders" },
+      { project: "p", dataset: "d", table: "orders" }
+    ]), "utf8");
+
+    const duplicateOutput = capture();
+    expect(await main(["import", "bigquery", "--input", input, "--out", out, "--write"], duplicateOutput.io)).toBe(2);
+    expect(duplicateOutput.stderr()).toContain("duplicate output path");
+
+    await writeFile(input, JSON.stringify([{ project: "p", dataset: "d", table: "orders" }]), "utf8");
+    const firstOutput = capture();
+    expect(await main(["import", "bigquery", "--input", input, "--out", out, "--write"], firstOutput.io)).toBe(0);
+
+    const existingOutput = capture();
+    expect(await main(["import", "bigquery", "--input", input, "--out", out, "--write"], existingOutput.io)).toBe(2);
+    expect(existingOutput.stderr()).toContain("Refusing to overwrite");
+
+    const forcedOutput = capture();
+    expect(await main(["import", "bigquery", "--input", input, "--out", out, "--write", "--force"], forcedOutput.io)).toBe(0);
+  });
+
+  it("rejects traversal paths from adapter input", async () => {
+    const root = await tempRoot();
+    const input = join(root, "markdown.json");
+    await writeFile(input, JSON.stringify([{ path: "../../escaped", body: "# Escaped\n" }]), "utf8");
+    const output = capture();
+
+    expect(await main(["import", "markdown", "--input", input, "--out", join(root, "knowledge"), "--write"], output.io)).toBe(2);
+    expect(output.stderr()).toContain("escapes the output root");
+  });
 });
