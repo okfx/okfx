@@ -74,6 +74,42 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("attributes circular references to concepts in the cycle", async () => {
+    await withBundle({
+      "a.md": "---\ntype: Note\ntitle: A\n---\n[B](b.md)\n",
+      "b.md": "---\ntype: Note\ntitle: B\n---\n[C](c.md)\n",
+      "c.md": "---\ntype: Note\ntitle: C\n---\n[B](b.md)\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "graph/circular-reference")
+        .map((diagnostic) => diagnostic.path))
+        .toEqual(["b.md"]);
+    });
+  });
+
+  it("checks dense acyclic graphs without enumerating paths", async () => {
+    const nodeCount = 32;
+    const files = Object.fromEntries(Array.from({ length: nodeCount }, (_, source) => {
+      const links = Array.from({ length: nodeCount - source - 1 }, (_, offset) => {
+        const target = source + offset + 1;
+        return `[Node ${target}](node-${target}.md)`;
+      });
+      return [
+        `node-${source}.md`,
+        `---\ntype: Note\ntitle: Node ${source}\n---\n${links.join("\n")}\n`
+      ];
+    }));
+
+    await withBundle(files, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics.some((diagnostic) => diagnostic.code === "graph/circular-reference"))
+        .toBe(false);
+    });
+  });
+
   it("reports each concept once for normalized duplicate resources", async () => {
     await withBundle({
       "a.md": "---\ntype: Note\ntitle: A\nresource:\n  - ' https://example.com/shared ' \n  - https://example.com/shared\n---\n# A\n",

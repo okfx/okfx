@@ -9,6 +9,7 @@ import {
 } from "./agent-rules.js";
 import { countDiagnostics, diagnosticsExceedThreshold, sortDiagnostics, type DiagnosticCounts } from "./diagnostics.js";
 import { resolveConfig, resolveRuleLevel, type OkfxConfig, type ResolvedOkfxConfig, type RuleLevel } from "./config.js";
+import { buildGraph } from "./graph.js";
 import type { LoadedOkfxPlugin } from "./plugins.js";
 import { validateBundle } from "./validation.js";
 import type { BundleIR, ConceptIR, DiagnosticIR, DiagnosticSeverity, LinkIR } from "./types.js";
@@ -538,62 +539,15 @@ function resourceHost(value: string): string | undefined {
 
 function findCircularReferences(bundle: BundleIR): DiagnosticIR[] {
   const conceptsById = new Map(bundle.concepts.map((concept) => [concept.id, concept]));
-  const adjacency = new Map<string, string[]>();
-  for (const link of bundle.links) {
-    if (link.kind === "internal" && link.resolved && link.targetConceptId && conceptsById.has(link.sourceConceptId)) {
-      adjacency.set(link.sourceConceptId, [...(adjacency.get(link.sourceConceptId) ?? []), link.targetConceptId]);
-    }
-  }
-
-  const reported = new Set<string>();
-  const diagnostics: DiagnosticIR[] = [];
-  for (const concept of bundle.concepts) {
-    const cycle = findCycleFrom(concept.id, adjacency);
-    if (!cycle) {
-      continue;
-    }
-
-    const key = [...new Set(cycle)].sort().join(">");
-    if (reported.has(key)) {
-      continue;
-    }
-
-    reported.add(key);
-    diagnostics.push(conceptDiagnostic(
-      "graph/circular-reference",
-      "warning",
-      concept,
-      `Circular concept reference detected: ${cycle.join(" -> ")}.`
-    ));
-  }
-
-  return diagnostics;
-}
-
-function findCycleFrom(start: string, adjacency: Map<string, string[]>): string[] | undefined {
-  const stack: string[] = [];
-  const visited = new Set<string>();
-
-  function visit(id: string): string[] | undefined {
-    if (stack.includes(id)) {
-      return [...stack.slice(stack.indexOf(id)), id];
-    }
-
-    if (visited.has(id)) {
-      return undefined;
-    }
-
-    visited.add(id);
-    stack.push(id);
-    for (const next of adjacency.get(id) ?? []) {
-      const cycle = visit(next);
-      if (cycle) {
-        return cycle;
-      }
-    }
-    stack.pop();
-    return undefined;
-  }
-
-  return visit(start);
+  return buildGraph(bundle).analysis.cycles.flatMap((cycle) => {
+    const concept = conceptsById.get(cycle[0]);
+    return concept
+      ? [conceptDiagnostic(
+        "graph/circular-reference",
+        "warning",
+        concept,
+        `Circular concept reference detected: ${cycle.join(" -> ")}.`
+      )]
+      : [];
+  });
 }
