@@ -338,12 +338,21 @@ export async function findConfigFile(root: string): Promise<string | undefined> 
     try {
       await access(candidate);
       return candidate;
-    } catch {
-      // Keep searching known config file names.
+    } catch (error) {
+      if (isMissingPathError(error)) {
+        continue;
+      }
+      throw error;
     }
   }
 
   return undefined;
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return error instanceof Error
+    && "code" in error
+    && (error.code === "ENOENT" || error.code === "ENOTDIR");
 }
 
 export async function loadConfig(root: string): Promise<ResolvedOkfxConfig> {

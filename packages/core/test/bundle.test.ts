@@ -1,10 +1,10 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadBundle, parseMarkdownDocument, resolveConfig } from "../src/index.js";
+import { findConfigFile, loadBundle, parseMarkdownDocument, resolveConfig } from "../src/index.js";
 
 const roots: string[] = [];
 
@@ -278,5 +278,12 @@ describe("resolveConfig", () => {
     await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
 
     await expect(loadBundle(root)).rejects.toThrow("Invalid okfx config: failOn");
+  });
+
+  it("does not hide unexpected config lookup failures", async () => {
+    const root = await tempBundle();
+    await symlink("okfx.config.ts", join(root, "okfx.config.ts"));
+
+    await expect(findConfigFile(root)).rejects.toMatchObject({ code: "ELOOP" });
   });
 });
