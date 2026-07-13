@@ -18,6 +18,16 @@ describe("@okfx/adapter-markdown", () => {
       .toThrow("escapes the output root");
   });
 
+  it.each([".", "foo/..", "foo/"])("rejects non-file path %j", (path) => {
+    expect(() => produceMarkdownOkf([{ path, body: "# Invalid\n" }]))
+      .toThrow("must identify a file");
+  });
+
+  it("rejects whitespace-only paths", () => {
+    expect(() => produceMarkdownOkf([{ path: "   ", body: "# Invalid\n" }]))
+      .toThrow("must be a non-empty relative path");
+  });
+
   it("quotes frontmatter values from imported metadata", () => {
     const [file] = produceMarkdownOkf([{
       path: "notes/safe",

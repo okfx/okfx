@@ -44,14 +44,19 @@ export default definePlugin({
 
 function normalizeConceptPath(path: string): string {
   const normalized = path.replace(/\\/g, "/").replace(/^\.\//, "");
-  const withExtension = normalized.endsWith(".md") ? normalized : `${normalized}.md`;
   const segments: string[] = [];
 
-  if (!normalized || normalized.startsWith("/") || normalized.includes("\0") || /^[A-Za-z]:\//.test(normalized)) {
+  if (!normalized.trim() || normalized.startsWith("/") || normalized.includes("\0") || /^[A-Za-z]:\//.test(normalized)) {
     throw new TypeError(`Markdown source path must be a non-empty relative path: ${JSON.stringify(path)}`);
   }
 
-  for (const segment of withExtension.split("/")) {
+  const inputSegments = normalized.split("/");
+  const finalSegment = inputSegments.at(-1);
+  if (!finalSegment || finalSegment === "." || finalSegment === ".." || !finalSegment.trim()) {
+    throw new TypeError(`Markdown source path must identify a file: ${JSON.stringify(path)}`);
+  }
+
+  for (const segment of inputSegments) {
     if (!segment || segment === ".") {
       continue;
     }
@@ -65,11 +70,8 @@ function normalizeConceptPath(path: string): string {
     segments.push(segment);
   }
 
-  if (segments.length === 0) {
-    throw new TypeError(`Markdown source path must identify a file: ${JSON.stringify(path)}`);
-  }
-
-  return segments.join("/");
+  const relativePath = segments.join("/");
+  return relativePath.endsWith(".md") ? relativePath : `${relativePath}.md`;
 }
 
 function titleFromPath(path: string): string {
