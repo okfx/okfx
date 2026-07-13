@@ -41,6 +41,15 @@ describe("@okfx/adapter-markdown", () => {
     expect(file?.content).not.toContain("\nresource: https://attacker.invalid\n");
   });
 
+  it.each([
+    ["notes/my-concept.md", "My Concept"],
+    ["notes\\my.concept.md", "My Concept"]
+  ])("derives a title from the source filename %j", (path, title) => {
+    const [file] = produceMarkdownOkf([{ path, body: "# Imported\n" }]);
+
+    expect(file?.content).toContain(`title: ${JSON.stringify(title)}`);
+  });
+
   it("validates adapter input at runtime", () => {
     expect(() => produceMarkdownOkf({ path: "note", body: "# Note" } as never))
       .toThrow("must be an array");

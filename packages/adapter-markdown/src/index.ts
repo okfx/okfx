@@ -75,11 +75,10 @@ function normalizeConceptPath(path: string): string {
 }
 
 function titleFromPath(path: string): string {
-  return path
-    .split(/[/.]/)
-    .filter(Boolean)
-    .at(-1)!
-    .replace(/[-_]+/g, " ")
+  const filename = path.replace(/\\/g, "/").split("/").filter(Boolean).at(-1)!;
+  return filename
+    .replace(/\.md$/i, "")
+    .replace(/[-_.]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
