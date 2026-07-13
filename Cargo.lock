@@ -252,6 +252,7 @@ dependencies = [
 name = "okfx_graph"
 version = "0.1.0"
 dependencies = [
+ "okfx_core",
  "okfx_parser",
  "okfx_resolver",
  "serde",
@@ -313,6 +314,7 @@ dependencies = [
 name = "okfx_rules"
 version = "0.1.0"
 dependencies = [
+ "okfx_core",
  "serde",
 ]
 

@@ -1,3 +1,4 @@
+use okfx_core::find_representative_cycles;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -711,18 +712,29 @@ fn duplicate_resources(context: &RuleContext<'_>) -> Vec<Diagnostic> {
 
 fn circular_reference_diagnostics(context: &RuleContext<'_>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    let mut reported = BTreeSet::new();
+    let concept_ids = context
+        .concepts
+        .iter()
+        .map(|concept| concept.id.clone())
+        .collect::<BTreeSet<_>>();
+    let outgoing = context
+        .adjacency
+        .iter()
+        .map(|(source, targets)| {
+            (
+                (*source).to_string(),
+                targets
+                    .iter()
+                    .map(|target| (*target).to_string())
+                    .collect::<BTreeSet<_>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
 
-    for concept in context.concepts {
-        let Some(cycle) = find_cycle_from(concept.id.as_str(), &context.adjacency) else {
+    for cycle in find_representative_cycles(&concept_ids, &outgoing) {
+        let Some(concept) = context.concepts_by_id.get(cycle[0].as_str()) else {
             continue;
         };
-        let mut key_parts = cycle.clone();
-        key_parts.sort_unstable();
-        key_parts.dedup();
-        if !reported.insert(key_parts.join(">")) {
-            continue;
-        }
         push_concept_diagnostic(
             &mut diagnostics,
             context.options,
@@ -737,46 +749,6 @@ fn circular_reference_diagnostics(context: &RuleContext<'_>) -> Vec<Diagnostic> 
     }
 
     diagnostics
-}
-
-fn find_cycle_from<'a>(
-    start: &'a str,
-    adjacency: &BTreeMap<&'a str, Vec<&'a str>>,
-) -> Option<Vec<String>> {
-    let mut stack = Vec::new();
-    let mut visited = BTreeSet::new();
-    visit_cycle(start, adjacency, &mut stack, &mut visited)
-}
-
-fn visit_cycle<'a>(
-    id: &'a str,
-    adjacency: &BTreeMap<&'a str, Vec<&'a str>>,
-    stack: &mut Vec<&'a str>,
-    visited: &mut BTreeSet<&'a str>,
-) -> Option<Vec<String>> {
-    if let Some(position) = stack.iter().position(|entry| *entry == id) {
-        return Some(
-            stack[position..]
-                .iter()
-                .copied()
-                .chain(std::iter::once(id))
-                .map(str::to_string)
-                .collect(),
-        );
-    }
-
-    if !visited.insert(id) {
-        return None;
-    }
-
-    stack.push(id);
-    for next in adjacency.get(id).into_iter().flatten() {
-        if let Some(cycle) = visit_cycle(next, adjacency, stack, visited) {
-            return Some(cycle);
-        }
-    }
-    stack.pop();
-    None
 }
 
 fn links_to_type(concept: &ConceptRuleInput, context: &RuleContext<'_>, target_type: &str) -> bool {
@@ -1423,6 +1395,47 @@ mod tests {
 
         assert!(codes.contains(&"security/private-url"));
         assert!(!codes.contains(&"security/internal-url"));
+    }
+
+    #[test]
+    fn attributes_circular_references_to_concepts_in_the_cycle() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![concept("a"), concept("b"), concept("c")],
+            links: vec![link("a", "b"), link("b", "c"), link("c", "b")],
+            ..RuleInput::default()
+        });
+
+        let paths = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "graph/circular-reference")
+            .filter_map(|diagnostic| diagnostic.path.as_deref())
+            .collect::<Vec<_>>();
+        assert_eq!(paths, vec!["b.md"]);
+    }
+
+    #[test]
+    fn checks_dense_acyclic_graphs_without_enumerating_paths() {
+        let node_count = 32;
+        let concepts = (0..node_count)
+            .map(|index| concept(&format!("node-{index}")))
+            .collect();
+        let links = (0..node_count)
+            .flat_map(|source| {
+                (source + 1..node_count)
+                    .map(move |target| link(&format!("node-{source}"), &format!("node-{target}")))
+            })
+            .collect();
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts,
+            links,
+            ..RuleInput::default()
+        });
+
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "graph/circular-reference")
+        );
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
