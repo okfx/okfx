@@ -21,6 +21,7 @@ export interface LoadBundleOptions {
 }
 
 export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxConfig): Promise<string[]> {
+  await assertBundleRoot(root);
   const entries = await fg(config.include, {
     cwd: root,
     absolute: true,
@@ -36,7 +37,6 @@ export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxCo
 
 export async function loadBundle(rootInput: string, options: LoadBundleOptions = {}): Promise<BundleIR> {
   const root = resolveBundleRoot(rootInput);
-  await assertBundleRoot(root);
   const config = options.loadConfigFile === false
     ? resolveConfig(options.config)
     : mergeConfig(await loadConfig(root), options.config);

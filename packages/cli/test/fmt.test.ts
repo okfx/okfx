@@ -49,6 +49,17 @@ afterEach(async () => {
 });
 
 describe("okf fmt", () => {
+  it("fails when the bundle root does not exist", async () => {
+    const root = await tempRoot();
+    const output = capture();
+
+    const code = await main(["fmt", join(root, "missing"), "--check"], output.io);
+
+    expect(code).toBe(2);
+    expect(output.stdout()).toBe("");
+    expect(output.stderr()).toContain("OKF bundle root does not exist");
+  });
+
   it("checks formatting without writing", async () => {
     const root = await tempRoot();
     await write(root, "concept.md", "---\ntitle: Example\ntype: Note\n---\n# Example   ");
