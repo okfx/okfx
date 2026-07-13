@@ -132,4 +132,18 @@ describe("okf import", () => {
       await expect(stat(join(external, "escaped.md"))).rejects.toMatchObject({ code: "ENOENT" });
     }
   });
+
+  it("refuses to overwrite non-file output targets when forced", async () => {
+    const root = await tempRoot();
+    const input = join(root, "input.json");
+    const out = join(root, "out");
+    await mkdir(join(out, "tables", "d-orders.md"), { recursive: true });
+    await writeFile(input, JSON.stringify([{ project: "p", dataset: "d", table: "orders" }]), "utf8");
+    const output = capture();
+
+    const code = await main(["import", "bigquery", "--input", input, "--out", out, "--write", "--force"], output.io);
+
+    expect(code).toBe(2);
+    expect(output.stderr()).toContain("non-file output path");
+  });
 });

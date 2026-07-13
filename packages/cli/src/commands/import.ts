@@ -76,6 +76,9 @@ async function inspectOutputPath(root: string, relativePath: string): Promise<bo
       if (index < segments.length - 1 && !entry.isDirectory()) {
         throw new Error(`Refusing to write through non-directory output path: ${relativePath}`);
       }
+      if (index === segments.length - 1 && !entry.isFile()) {
+        throw new Error(`Refusing to overwrite non-file output path: ${relativePath}`);
+      }
     } catch (error) {
       if (isFileSystemError(error, "ENOENT")) {
         return false;
