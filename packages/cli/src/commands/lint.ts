@@ -1,5 +1,6 @@
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
+import { pathToFileURL } from "node:url";
 
 import { Command, InvalidArgumentError } from "commander";
 
@@ -128,7 +129,7 @@ function toSarif(result: LintResult, bundle: BundleIR): unknown {
       },
       originalUriBaseIds: {
         BUNDLE_ROOT: {
-          uri: `file://${bundle.root.replace(/\/?$/, "/")}`
+          uri: pathToFileURL(bundle.root.endsWith(sep) ? bundle.root : `${bundle.root}${sep}`).href
         }
       },
       results: result.diagnostics.map((diagnostic) => ({

@@ -1,6 +1,7 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -89,15 +90,25 @@ describe("okf lint", () => {
   });
 
   it("prints SARIF output", async () => {
-    const root = await tempRoot();
+    const parent = await tempRoot();
+    const root = join(parent, "bundle with spaces");
+    await mkdir(root);
     await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
     const output = capture();
 
     const code = await main(["lint", root, "--format", "sarif"], output.io);
-    const parsed = JSON.parse(output.stdout()) as { version: string; runs: Array<{ results: Array<{ ruleId: string }> }> };
+    const parsed = JSON.parse(output.stdout()) as {
+      version: string;
+      runs: Array<{
+        originalUriBaseIds: { BUNDLE_ROOT: { uri: string } };
+        results: Array<{ ruleId: string }>;
+      }>;
+    };
 
     expect(code).toBe(0);
     expect(parsed.version).toBe("2.1.0");
+    expect(parsed.runs[0]?.originalUriBaseIds.BUNDLE_ROOT.uri)
+      .toBe(pathToFileURL(`${root}${sep}`).href);
     expect(parsed.runs[0]?.results.map((result) => result.ruleId)).toContain("hygiene/missing-title");
   });
 
