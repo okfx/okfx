@@ -22,6 +22,7 @@ import {
 
 let diagnostics: vscode.DiagnosticCollection | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
+const diagnosticPathsByRoot = new Map<string, Set<string>>();
 
 type DiagnosticMode = "validate" | "lint" | "doctor";
 
@@ -82,16 +83,20 @@ async function onDidSave(document: vscode.TextDocument): Promise<void> {
   if (document.languageId !== "markdown") {
     return;
   }
-  if (config().get<boolean>("diagnostics.onSave", true)) {
-    await runWithErrors("diagnostics", () => runDiagnostics("lint", true));
+  if (config(document.uri).get<boolean>("diagnostics.onSave", true)) {
+    await runWithErrors("diagnostics", () => runDiagnostics("lint", true, document.uri));
   }
-  if (config().get<boolean>("format.onSave", false)) {
+  if (config(document.uri).get<boolean>("format.onSave", false)) {
     await vscode.commands.executeCommand("editor.action.formatDocument");
   }
 }
 
-async function runDiagnostics(mode: DiagnosticMode, silent = false): Promise<void> {
-  const root = workspaceRoot();
+async function runDiagnostics(
+  mode: DiagnosticMode,
+  silent = false,
+  resource?: vscode.Uri
+): Promise<void> {
+  const root = workspaceRoot(resource);
   if (!root || !diagnostics) {
     return;
   }
@@ -112,7 +117,6 @@ async function runDiagnostics(mode: DiagnosticMode, silent = false): Promise<voi
   } else {
     result = doctorBundle(bundle, { config: okfxConfig });
   }
-  diagnostics.clear();
   publishDiagnostics(root, result.diagnostics);
   status(`OKF: ${result.diagnostics.length} diagnostics`);
 
@@ -171,8 +175,8 @@ async function showDoctorPanel(context: vscode.ExtensionContext): Promise<void> 
 }
 
 async function showBacklinksPanel(context: vscode.ExtensionContext): Promise<void> {
-  const root = workspaceRoot();
   const editor = vscode.window.activeTextEditor;
+  const root = editor ? workspaceRoot(editor.document.uri) : undefined;
   if (!root || !editor || editor.document.languageId !== "markdown") {
     await vscode.window.showInformationMessage("Open an OKF Markdown concept to inspect backlinks.");
     return;
@@ -194,11 +198,11 @@ async function showBacklinksPanel(context: vscode.ExtensionContext): Promise<voi
 }
 
 async function formatDocument(document: vscode.TextDocument): Promise<vscode.TextEdit[]> {
-  if (!config().get<boolean>("format.enableFormatter", true)) {
+  if (!config(document.uri).get<boolean>("format.enableFormatter", true)) {
     return [];
   }
 
-  const root = workspaceRoot();
+  const root = workspaceRoot(document.uri);
   const path = root ? relativePosix(root, document.uri.fsPath) : document.fileName;
   const okfxConfig = root ? await loadConfig(root) : undefined;
   const result = formatMarkdownFile(path, document.getText(), okfxConfig);
@@ -228,7 +232,7 @@ async function provideCompletions(
     return [];
   }
 
-  const root = workspaceRoot();
+  const root = workspaceRoot(document.uri);
   if (!root) {
     return [];
   }
@@ -247,7 +251,7 @@ async function provideDefinition(
   document: vscode.TextDocument,
   position: vscode.Position
 ): Promise<vscode.Definition | undefined> {
-  const root = workspaceRoot();
+  const root = workspaceRoot(document.uri);
   if (!root) {
     return undefined;
   }
@@ -346,13 +350,26 @@ function publishDiagnostics(root: string, entries: DiagnosticIR[]): void {
     byPath.set(diagnostic.path, [...(byPath.get(diagnostic.path) ?? []), diagnostic]);
   }
 
-  diagnostics.clear();
-  for (const [path, pathDiagnostics] of byPath) {
-    diagnostics.set(vscode.Uri.file(`${root}/${path}`), pathDiagnostics.map(toVsCodeDiagnostic));
+  for (const path of diagnosticPathsByRoot.get(root) ?? []) {
+    diagnostics.delete(vscode.Uri.file(path));
   }
+
+  const currentPaths = new Set<string>();
+  for (const [path, pathDiagnostics] of byPath) {
+    const absolutePath = `${root}/${path}`;
+    currentPaths.add(absolutePath);
+    diagnostics.set(vscode.Uri.file(absolutePath), pathDiagnostics.map(toVsCodeDiagnostic));
+  }
+  diagnosticPathsByRoot.set(root, currentPaths);
 }
 
-function workspaceRoot(): string | undefined {
+function workspaceRoot(resource = vscode.window.activeTextEditor?.document.uri): string | undefined {
+  if (resource) {
+    const folder = vscode.workspace.getWorkspaceFolder(resource);
+    if (folder) {
+      return folder.uri.fsPath;
+    }
+  }
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
@@ -457,8 +474,8 @@ function status(text: string): void {
   }
 }
 
-function config(): vscode.WorkspaceConfiguration {
-  return vscode.workspace.getConfiguration("okfx");
+function config(resource?: vscode.Uri): vscode.WorkspaceConfiguration {
+  return vscode.workspace.getConfiguration("okfx", resource);
 }
 
 async function runWithErrors(label: string, run: () => Promise<void>): Promise<void> {
