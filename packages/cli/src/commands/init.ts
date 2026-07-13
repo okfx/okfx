@@ -3,13 +3,15 @@ import { dirname, join, resolve } from "node:path";
 
 import { InvalidArgumentError, Command } from "commander";
 
-import type { CliContext } from "../program.js";
+import { generationTimestamp } from "@okfx/plugin-api";
+
+import type { CliContext, CliRuntime } from "../program.js";
 
 type InitTemplate = "minimal" | "data-platform" | "api-catalog" | "metrics";
 
 const templates = new Set<InitTemplate>(["minimal", "data-platform", "api-catalog", "metrics"]);
 
-export function createInitCommand(context: CliContext): Command {
+export function createInitCommand(context: CliContext, runtime: CliRuntime): Command {
   return new Command("init")
     .description("create a starter OKF bundle")
     .argument("[bundle]", "OKF bundle root", ".")
@@ -17,7 +19,8 @@ export function createInitCommand(context: CliContext): Command {
     .option("--force", "overwrite generated files if they already exist", false)
     .action(async (bundle: string, options: { template: InitTemplate; force: boolean }) => {
       const root = resolve(bundle);
-      const files = filesForTemplate(options.template);
+      const timestamp = generationTimestamp(runtime.now());
+      const files = filesForTemplate(options.template, timestamp);
       const existing = options.force ? [] : await existingGeneratedFiles(root, files);
       if (existing.length > 0) {
         context.io.stderr.write(
@@ -71,12 +74,12 @@ async function listExistingFiles(root: string, prefix = ""): Promise<string[]> {
   }
 }
 
-function filesForTemplate(template: InitTemplate): TemplateFile[] {
-  const common = commonFiles("Example Concept", "concepts/example.md");
+function filesForTemplate(template: InitTemplate, timestamp: string): TemplateFile[] {
+  const common = commonFiles("Example Concept", "concepts/example.md", timestamp);
 
   if (template === "data-platform") {
     return [
-      ...commonFiles("Weekly Active Users", "metrics/weekly_active_users.md"),
+      ...commonFiles("Weekly Active Users", "metrics/weekly_active_users.md", timestamp),
       {
         path: "tables/user_events.md",
         content: concept({
@@ -88,15 +91,15 @@ function filesForTemplate(template: InitTemplate): TemplateFile[] {
 
 User Events records product activity at event granularity.
 `
-        })
+        }, timestamp)
       },
-      metricConcept("metrics/weekly_active_users.md")
+      metricConcept("metrics/weekly_active_users.md", timestamp)
     ];
   }
 
   if (template === "api-catalog") {
     return [
-      ...commonFiles("Orders API", "apis/orders-api.md"),
+      ...commonFiles("Orders API", "apis/orders-api.md", timestamp),
       {
         path: "apis/orders-api.md",
         content: concept({
@@ -112,7 +115,7 @@ Use this API for order lookup and order lifecycle operations.
 
 - [Orders Runbook](../runbooks/orders-api.md)
 `
-        })
+        }, timestamp)
       },
       {
         path: "runbooks/orders-api.md",
@@ -128,13 +131,13 @@ Use this API for order lookup and order lifecycle operations.
 - Elevated error rate
 - Slow response time
 `
-        })
+        }, timestamp)
       }
     ];
   }
 
   if (template === "metrics") {
-    return [...common, metricConcept("concepts/example.md")];
+    return [...common, metricConcept("concepts/example.md", timestamp)];
   }
 
   return [
@@ -154,12 +157,12 @@ Use this document as a small, human-readable OKF concept.
 
 Link related concepts with Markdown links.
 `
-      })
+      }, timestamp)
     }
   ];
 }
 
-function commonFiles(indexTitle: string, indexTarget: string): TemplateFile[] {
+function commonFiles(indexTitle: string, indexTarget: string, timestamp: string): TemplateFile[] {
   return [
     {
       path: "index.md",
@@ -172,7 +175,7 @@ function commonFiles(indexTitle: string, indexTarget: string): TemplateFile[] {
       path: "log.md",
       content: `# Knowledge Log
 
-## 2026-07-07
+## ${timestamp.slice(0, 10)}
 
 - Created initial OKF bundle.
 `
@@ -199,7 +202,7 @@ function commonFiles(indexTitle: string, indexTarget: string): TemplateFile[] {
   ];
 }
 
-function metricConcept(path: string): TemplateFile {
+function metricConcept(path: string, timestamp: string): TemplateFile {
   return {
     path,
     content: concept({
@@ -224,7 +227,7 @@ Count distinct \`user_id\` where \`event_timestamp\` is within the last 7 days.
 
 This metric excludes internal test users.
 `
-    })
+    }, timestamp)
   };
 }
 
@@ -235,7 +238,7 @@ function concept(input: {
   resource?: string;
   tags: string[];
   body: string;
-}): string {
+}, timestamp: string): string {
   const resource = input.resource ? `resource: ${input.resource}\n` : "";
   const tags = input.tags.map((tag) => `  - ${tag}`).join("\n");
   return `---
@@ -244,7 +247,7 @@ title: ${input.title}
 description: ${input.description}
 ${resource}tags:
 ${tags}
-timestamp: 2026-07-07T00:00:00Z
+timestamp: ${timestamp}
 ---
 
 ${input.body}`;

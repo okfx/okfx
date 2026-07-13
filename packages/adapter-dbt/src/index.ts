@@ -1,16 +1,25 @@
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
 
 export interface DbtManifest {
   nodes?: Record<string, { resource_type?: string; name?: string; description?: string; depends_on?: { nodes?: string[] } }>;
 }
 
-export function produceDbtOkf(manifest: DbtManifest): Array<{ path: string; content: string }> {
+export function produceDbtOkf(
+  manifest: DbtManifest,
+  options: OkfxGenerationOptions = {}
+): Array<{ path: string; content: string }> {
   assertDbtManifest(manifest);
+  const timestamp = generationTimestamp(options.now);
   return Object.values(manifest.nodes ?? {})
     .filter((node) => node.resource_type === "model")
     .map((node) => ({
       path: `tables/${slug(node.name ?? "model")}.md`,
-      content: concept(node.name ?? "dbt model", node.description ?? "Imported from dbt manifest.", node.depends_on?.nodes ?? [])
+      content: concept(
+        node.name ?? "dbt model",
+        node.description ?? "Imported from dbt manifest.",
+        node.depends_on?.nodes ?? [],
+        timestamp
+      )
     }))
     .sort((a, b) => a.path.localeCompare(b.path));
 }
@@ -26,7 +35,7 @@ export default definePlugin({
   }
 });
 
-function concept(title: string, description: string, dependsOn: string[]): string {
+function concept(title: string, description: string, dependsOn: string[], timestamp: string): string {
   return `---
 type: Table
 title: ${yamlScalar(title)}
@@ -34,7 +43,7 @@ description: ${yamlScalar(description)}
 tags:
   - imported
   - dbt
-timestamp: 2026-07-07T00:00:00Z
+timestamp: ${timestamp}
 ---
 
 # ${title}

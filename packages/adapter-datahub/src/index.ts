@@ -1,4 +1,4 @@
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
 
 export interface DataHubEntity {
   urn: string;
@@ -7,8 +7,12 @@ export interface DataHubEntity {
   platform?: string;
 }
 
-export function produceDataHubOkf(entities: DataHubEntity[]): Array<{ path: string; content: string }> {
+export function produceDataHubOkf(
+  entities: DataHubEntity[],
+  options: OkfxGenerationOptions = {}
+): Array<{ path: string; content: string }> {
   assertDataHubEntities(entities);
+  const timestamp = generationTimestamp(options.now);
   return entities.map((entity) => ({
     path: `catalog/${slug(entity.name ?? entity.urn)}.md`,
     content: `---
@@ -20,7 +24,7 @@ tags:
   - imported
   - datahub
   - ${yamlScalar(slug(entity.platform ?? "dataset"))}
-timestamp: 2026-07-07T00:00:00Z
+timestamp: ${timestamp}
 ---
 
 # ${entity.name ?? entity.urn}

@@ -29,6 +29,7 @@
     "@okfx/adapter-static-site": "workspace:*",
     "@okfx/core": "workspace:*",
     "@okfx/mcp": "workspace:*",
+    "@okfx/plugin-api": "workspace:*",
     "commander": "^15.0.0"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
 
 export interface BigQueryTable {
   project: string;
@@ -8,8 +8,12 @@ export interface BigQueryTable {
   columns?: Array<{ name: string; type?: string; description?: string }>;
 }
 
-export function produceBigQueryOkf(tables: BigQueryTable[]): Array<{ path: string; content: string }> {
+export function produceBigQueryOkf(
+  tables: BigQueryTable[],
+  options: OkfxGenerationOptions = {}
+): Array<{ path: string; content: string }> {
   assertBigQueryTables(tables);
+  const timestamp = generationTimestamp(options.now);
   return tables.map((table) => ({
     path: `tables/${slug(`${table.dataset}-${table.table}`)}.md`,
     content: `---
@@ -20,7 +24,7 @@ resource: ${yamlScalar(`bigquery://${table.project}/${table.dataset}/${table.tab
 tags:
   - imported
   - bigquery
-timestamp: 2026-07-07T00:00:00Z
+timestamp: ${timestamp}
 ---
 
 # ${table.dataset}.${table.table}

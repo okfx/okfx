@@ -125,6 +125,9 @@ importers:
       '@okfx/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@okfx/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       commander:
         specifier: ^15.0.0
         version: 15.0.0

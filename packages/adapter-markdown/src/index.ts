@@ -1,4 +1,4 @@
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
 
 export interface MarkdownSource {
   path: string;
@@ -12,8 +12,12 @@ export interface ProducedOkfFile {
   content: string;
 }
 
-export function produceMarkdownOkf(sources: MarkdownSource[]): ProducedOkfFile[] {
+export function produceMarkdownOkf(
+  sources: MarkdownSource[],
+  options: OkfxGenerationOptions = {}
+): ProducedOkfFile[] {
   assertMarkdownSources(sources);
+  const timestamp = generationTimestamp(options.now);
   return sources.map((source) => ({
     path: normalizeConceptPath(source.path),
     content: concept({
@@ -21,7 +25,8 @@ export function produceMarkdownOkf(sources: MarkdownSource[]): ProducedOkfFile[]
       title: source.title ?? titleFromPath(source.path),
       description: `Imported from ${source.path}.`,
       tags: source.tags ?? ["imported"],
-      body: source.body
+      body: source.body,
+      timestamp
     })
   }));
 }
@@ -76,14 +81,21 @@ function titleFromPath(path: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function concept(input: { type: string; title: string; description: string; tags: string[]; body: string }): string {
+function concept(input: {
+  type: string;
+  title: string;
+  description: string;
+  tags: string[];
+  body: string;
+  timestamp: string;
+}): string {
   return `---
 type: ${input.type}
 title: ${yamlScalar(input.title)}
 description: ${yamlScalar(input.description)}
 tags:
 ${input.tags.map((tag) => `  - ${yamlScalar(tag)}`).join("\n")}
-timestamp: 2026-07-07T00:00:00Z
+timestamp: ${input.timestamp}
 ---
 
 ${input.body.replace(/\s*$/g, "")}

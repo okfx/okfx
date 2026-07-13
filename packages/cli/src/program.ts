@@ -29,6 +29,14 @@ export interface CliContext {
   setExitCode(code: number): void;
 }
 
+export interface CliRuntime {
+  now(): Date;
+}
+
+const defaultRuntime: CliRuntime = {
+  now: () => new Date()
+};
+
 export const plannedCommands = [
   ["init", "create a starter OKF bundle"],
   ["validate", "check OKF conformance"],
@@ -44,7 +52,7 @@ export const plannedCommands = [
   ["mcp", "run a read-only MCP server for a bundle"]
 ] as const;
 
-export function createProgram(context: CliContext): Command {
+export function createProgram(context: CliContext, runtime: CliRuntime = defaultRuntime): Command {
   const program = new Command();
 
   program
@@ -59,7 +67,7 @@ export function createProgram(context: CliContext): Command {
     });
 
   for (const [name, description] of plannedCommands) {
-    program.addCommand(createPlannedCommand(name, description, context));
+    program.addCommand(createPlannedCommand(name, description, context, runtime));
   }
 
   return program;
@@ -68,11 +76,12 @@ export function createProgram(context: CliContext): Command {
 function createPlannedCommand(
   name: typeof plannedCommands[number][0],
   description: string,
-  context: CliContext
+  context: CliContext,
+  runtime: CliRuntime
 ): Command {
   switch (name) {
     case "init":
-      return createInitCommand(context);
+      return createInitCommand(context, runtime);
     case "validate":
       return createValidateCommand(context);
     case "lint":
@@ -100,14 +109,18 @@ function createPlannedCommand(
   throw new Error(`No command implementation registered for ${description}.`);
 }
 
-export async function runProgram(argv: string[], io: CliIO): Promise<number> {
+export async function runProgram(
+  argv: string[],
+  io: CliIO,
+  runtime: CliRuntime = defaultRuntime
+): Promise<number> {
   let exitCode = 0;
   const program = createProgram({
     io,
     setExitCode(code) {
       exitCode = code;
     }
-  });
+  }, runtime);
 
   try {
     await program.parseAsync(["node", "okf", ...argv], { from: "node" });

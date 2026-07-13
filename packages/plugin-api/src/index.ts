@@ -25,6 +25,10 @@ export interface OkfxAdapterContext {
   config: ResolvedOkfxConfig;
 }
 
+export interface OkfxGenerationOptions {
+  now?: Date;
+}
+
 export interface OkfxProducerAdapter {
   produce(context: OkfxAdapterContext): Promise<Array<{ path: string; content: string }>>;
 }
@@ -43,4 +47,11 @@ export interface OkfxPlugin {
 
 export function definePlugin<TPlugin extends OkfxPlugin>(plugin: TPlugin): TPlugin {
   return plugin;
+}
+
+export function generationTimestamp(now: Date = new Date()): string {
+  if (!Number.isFinite(now.getTime())) {
+    throw new TypeError("Generation time must be a valid Date.");
+  }
+  return now.toISOString();
 }

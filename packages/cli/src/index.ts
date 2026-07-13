@@ -3,13 +3,14 @@
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { runProgram, type CliIO } from "./program.js";
+import { runProgram, type CliIO, type CliRuntime } from "./program.js";
 
 export async function main(
   argv = process.argv.slice(2),
-  io: CliIO = { stdout: process.stdout, stderr: process.stderr }
+  io: CliIO = { stdout: process.stdout, stderr: process.stderr },
+  runtime?: CliRuntime
 ): Promise<number> {
-  return runProgram(argv, io);
+  return runProgram(argv, io, runtime);
 }
 
 if (isDirectExecution()) {

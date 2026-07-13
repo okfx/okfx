@@ -1,4 +1,4 @@
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin, generationTimestamp, type OkfxGenerationOptions } from "@okfx/plugin-api";
 
 export interface OpenApiDocument {
   info?: { title?: string; description?: string };
@@ -7,8 +7,12 @@ export interface OpenApiDocument {
 
 const HTTP_METHODS = new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
 
-export function produceOpenApiOkf(document: OpenApiDocument): Array<{ path: string; content: string }> {
+export function produceOpenApiOkf(
+  document: OpenApiDocument,
+  options: OkfxGenerationOptions = {}
+): Array<{ path: string; content: string }> {
   assertOpenApiDocument(document);
+  const timestamp = generationTimestamp(options.now);
   const files: Array<{ path: string; content: string }> = [];
   for (const [route, methods] of Object.entries(document.paths ?? {})) {
     for (const [method, operation] of Object.entries(methods)) {
@@ -30,7 +34,7 @@ export function produceOpenApiOkf(document: OpenApiDocument): Array<{ path: stri
           "## Auth Notes",
           "",
           "Document authentication requirements before publishing."
-        ].join("\n"))
+        ].join("\n"), timestamp)
       });
     }
   }
@@ -48,7 +52,7 @@ export default definePlugin({
   }
 });
 
-function concept(type: string, title: string, description: string, body: string): string {
+function concept(type: string, title: string, description: string, body: string, timestamp: string): string {
   return `---
 type: ${type}
 title: ${yamlScalar(title)}
@@ -56,7 +60,7 @@ description: ${yamlScalar(description)}
 tags:
   - imported
   - openapi
-timestamp: 2026-07-07T00:00:00Z
+timestamp: ${timestamp}
 ---
 
 ${body}

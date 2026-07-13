@@ -49,8 +49,9 @@ describe("okf init", () => {
   it("creates a minimal bundle", async () => {
     const root = join(await tempRoot(), "knowledge");
     const output = capture();
+    const now = new Date("2024-03-02T01:02:03Z");
 
-    const code = await main(["init", root], output.io);
+    const code = await main(["init", root], output.io, { now: () => now });
 
     expect(code).toBe(0);
     expect(output.stdout()).toContain("Created OKF bundle");
@@ -65,8 +66,10 @@ describe("okf init", () => {
     expect(bundle.concepts[0]).toMatchObject({
       id: "concepts/example",
       type: "Note",
-      title: "Example Concept"
+      title: "Example Concept",
+      timestamp: "2024-03-02T01:02:03.000Z"
     });
+    expect(await readFile(join(root, "log.md"), "utf8")).toContain("## 2024-03-02");
   });
 
   it("creates the data-platform template", async () => {
