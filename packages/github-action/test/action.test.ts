@@ -16,11 +16,15 @@ describe("@okfx/github-action", () => {
     expect(action).toContain("GITHUB_STEP_SUMMARY");
     expect(action).toContain("actions/github-script@v7");
     expect(action).toContain("OKF quality gate");
+    expect(action).toContain('default: "0.1.0"');
+    expect(action).not.toContain('@okfx/cli":"latest"');
+    expect(runBlockLines(action).some((line) => line.includes("${{ inputs."))).toBe(false);
   });
 
   it("exports an example workflow", () => {
     expect(exampleWorkflow).toContain("actions/checkout@v4");
-    expect(exampleWorkflow).toContain("okfx/github-action@v0");
+    expect(exampleWorkflow).toContain("okfx/okfx/packages/github-action@v0");
+    expect(exampleWorkflow).toContain('cli-version: "0.1.0"');
     expect(exampleWorkflow).toContain("pr-comment");
   });
 
@@ -54,3 +58,24 @@ describe("@okfx/github-action", () => {
     expect(summary).toContain("okf-graph.json");
   });
 });
+
+function runBlockLines(action: string): string[] {
+  const result: string[] = [];
+  let runIndent: number | undefined;
+
+  for (const line of action.split("\n")) {
+    const indentation = /^\s*/.exec(line)?.[0].length ?? 0;
+    if (/^\s+run: \|$/.test(line)) {
+      runIndent = indentation;
+      continue;
+    }
+    if (runIndent !== undefined && line.trim() && indentation <= runIndent) {
+      runIndent = undefined;
+    }
+    if (runIndent !== undefined) {
+      result.push(line);
+    }
+  }
+
+  return result;
+}

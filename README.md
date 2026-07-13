@@ -340,8 +340,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: okfx/github-action@v0
+      - uses: okfx/okfx/packages/github-action@v0
         with:
+          cli-version: "0.1.0"
           bundle: ./knowledge
           lint-format: json
           graph-out: okf-graph.json

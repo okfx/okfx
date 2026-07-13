@@ -1,6 +1,10 @@
 name: OKF
 description: Validate, lint, graph, and doctor an Open Knowledge Format bundle.
 inputs:
+  cli-version:
+    description: Exact @okfx/cli version to install.
+    required: false
+    default: "0.1.0"
   bundle:
     description: OKF bundle root.
     required: false
@@ -42,6 +46,8 @@ runs:
   steps:
     - name: Setup okfx
       shell: bash
+      env:
+        OKFX_CLI_VERSION: ${{ inputs.cli-version }}
       run: |
         set -euo pipefail
         corepack enable
@@ -50,34 +56,53 @@ runs:
         rm -rf "$install_dir"
         mkdir -p "$install_dir"
         cd "$install_dir"
-        printf '{"private":true,"dependencies":{"@okfx/cli":"latest"}}\n' > package.json
-        pnpm install --prod
+        node <<'NODE'
+        const fs = require("node:fs");
+        const version = process.env.OKFX_CLI_VERSION;
+        if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+          throw new Error("cli-version must be an exact semantic version");
+        }
+        fs.writeFileSync("package.json", `${JSON.stringify({
+          private: true,
+          dependencies: { "@okfx/cli": version }
+        })}\n`);
+        NODE
+        pnpm install --prod --ignore-scripts
         echo "$install_dir/node_modules/.bin" >> "$GITHUB_PATH"
     - name: Validate OKF
       id: validate
       shell: bash
+      env:
+        OKF_BUNDLE: ${{ inputs.bundle }}
       run: |
         set +e
-        okf validate "${{ inputs.bundle }}"
+        okf validate "$OKF_BUNDLE"
         status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
     - name: Lint OKF
       id: lint
       shell: bash
+      env:
+        OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_LINT_FORMAT: ${{ inputs.lint-format }}
+        OKF_LINT_JSON: ${{ inputs.lint-json-out }}
       run: |
         set +e
-        okf lint "${{ inputs.bundle }}" --format "${{ inputs.lint-format }}"
+        okf lint "$OKF_BUNDLE" --format "$OKF_LINT_FORMAT"
         status=$?
-        okf lint "${{ inputs.bundle }}" --format json --out "${{ inputs.lint-json-out }}" >/dev/null 2>&1 || true
+        okf lint "$OKF_BUNDLE" --format json --out "$OKF_LINT_JSON" >/dev/null 2>&1 || true
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
     - name: Build graph
       id: graph
       shell: bash
+      env:
+        OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_GRAPH_JSON: ${{ inputs.graph-out }}
       run: |
         set +e
-        okf graph "${{ inputs.bundle }}" --out "${{ inputs.graph-out }}"
+        okf graph "$OKF_BUNDLE" --out "$OKF_GRAPH_JSON"
         status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
@@ -85,9 +110,12 @@ runs:
       id: doctor
       if: ${{ inputs.doctor == 'true' }}
       shell: bash
+      env:
+        OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_DOCTOR_JSON: ${{ inputs.doctor-json-out }}
       run: |
         set +e
-        okf doctor "${{ inputs.bundle }}" --json --out "${{ inputs.doctor-json-out }}"
+        okf doctor "$OKF_BUNDLE" --json --out "$OKF_DOCTOR_JSON"
         status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
@@ -184,10 +212,16 @@ runs:
           });
     - name: OKF quality gate
       shell: bash
+      env:
+        OKF_RUN_DOCTOR: ${{ inputs.doctor }}
+        OKF_VALIDATE_STATUS: ${{ steps.validate.outputs.status }}
+        OKF_LINT_STATUS: ${{ steps.lint.outputs.status }}
+        OKF_GRAPH_STATUS: ${{ steps.graph.outputs.status }}
+        OKF_DOCTOR_STATUS: ${{ steps.doctor.outputs.status }}
       run: |
         status=0
-        if [ "${{ steps.validate.outputs.status }}" != "0" ]; then status=${{ steps.validate.outputs.status }}; fi
-        if [ "${{ steps.lint.outputs.status }}" != "0" ]; then status=${{ steps.lint.outputs.status }}; fi
-        if [ "${{ steps.graph.outputs.status }}" != "0" ]; then status=${{ steps.graph.outputs.status }}; fi
-        if [ "${{ inputs.doctor }}" = "true" ] && [ "${{ steps.doctor.outputs.status }}" != "0" ]; then status=${{ steps.doctor.outputs.status }}; fi
+        if [ "$OKF_VALIDATE_STATUS" != "0" ]; then status="$OKF_VALIDATE_STATUS"; fi
+        if [ "$OKF_LINT_STATUS" != "0" ]; then status="$OKF_LINT_STATUS"; fi
+        if [ "$OKF_GRAPH_STATUS" != "0" ]; then status="$OKF_GRAPH_STATUS"; fi
+        if [ "$OKF_RUN_DOCTOR" = "true" ] && [ "$OKF_DOCTOR_STATUS" != "0" ]; then status="$OKF_DOCTOR_STATUS"; fi
         exit "$status"
