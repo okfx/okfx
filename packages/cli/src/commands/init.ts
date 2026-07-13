@@ -80,19 +80,7 @@ function filesForTemplate(template: InitTemplate, timestamp: string): TemplateFi
   if (template === "data-platform") {
     return [
       ...commonFiles("Weekly Active Users", "metrics/weekly_active_users.md", timestamp),
-      {
-        path: "tables/user_events.md",
-        content: concept({
-          type: "Table",
-          title: "User Events",
-          description: "Event-level activity emitted by users.",
-          tags: ["analytics", "source-table"],
-          body: `# User Events
-
-User Events records product activity at event granularity.
-`
-        }, timestamp)
-      },
+      userEventsConcept(timestamp),
       metricConcept("metrics/weekly_active_users.md", timestamp)
     ];
   }
@@ -137,7 +125,11 @@ Use this API for order lookup and order lifecycle operations.
   }
 
   if (template === "metrics") {
-    return [...common, metricConcept("concepts/example.md", timestamp)];
+    return [
+      ...common,
+      userEventsConcept(timestamp),
+      metricConcept("concepts/example.md", timestamp)
+    ];
   }
 
   return [
@@ -226,6 +218,22 @@ Count distinct \`user_id\` where \`event_timestamp\` is within the last 7 days.
 ## Notes
 
 This metric excludes internal test users.
+`
+    }, timestamp)
+  };
+}
+
+function userEventsConcept(timestamp: string): TemplateFile {
+  return {
+    path: "tables/user_events.md",
+    content: concept({
+      type: "Table",
+      title: "User Events",
+      description: "Event-level activity emitted by users.",
+      tags: ["analytics", "source-table"],
+      body: `# User Events
+
+User Events records product activity at event granularity.
 `
     }, timestamp)
   };

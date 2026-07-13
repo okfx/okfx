@@ -86,6 +86,21 @@ describe("okf init", () => {
     ]);
   });
 
+  it("creates a self-contained metrics template", async () => {
+    const root = join(await tempRoot(), "knowledge");
+    const output = capture();
+
+    const code = await main(["init", root, "--template", "metrics"], output.io);
+
+    expect(code).toBe(0);
+    const bundle = await loadBundle(root);
+    expect(bundle.concepts.map((concept) => concept.id).sort()).toEqual([
+      "concepts/example",
+      "tables/user_events"
+    ]);
+    expect(bundle.stats.brokenLinkCount).toBe(0);
+  });
+
   it("refuses to overwrite generated files unless forced", async () => {
     const root = join(await tempRoot(), "knowledge");
     const first = capture();
