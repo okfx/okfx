@@ -82,6 +82,11 @@ function assertOpenApiDocument(value: unknown): asserts value is OpenApiDocument
   if (value.info !== undefined && !isRecord(value.info)) {
     throw new TypeError("OpenAPI info must be an object.");
   }
+  for (const field of ["title", "description"] as const) {
+    if (value.info?.[field] !== undefined && typeof value.info[field] !== "string") {
+      throw new TypeError(`OpenAPI info field ${field} must be a string.`);
+    }
+  }
   if (value.paths !== undefined && !isRecord(value.paths)) {
     throw new TypeError("OpenAPI paths must be an object.");
   }

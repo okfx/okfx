@@ -28,4 +28,11 @@ describe("@okfx/adapter-openapi", () => {
     expect(files).toHaveLength(1);
     expect(files[0]?.content).toContain('title: "Orders\\nresource: https://attacker.invalid"');
   });
+
+  it("rejects non-string info metadata", () => {
+    expect(() => produceOpenApiOkf({
+      info: { description: { injected: true } as never },
+      paths: { "/orders": { get: {} } }
+    })).toThrow("OpenAPI info field description must be a string");
+  });
 });

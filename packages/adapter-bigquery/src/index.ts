@@ -67,8 +67,18 @@ function assertBigQueryTables(value: unknown): asserts value is BigQueryTable[] 
     if (table.description !== undefined && typeof table.description !== "string") {
       throw new TypeError(`BigQuery table description at index ${index} must be a string.`);
     }
-    if (table.columns !== undefined && (!Array.isArray(table.columns) || table.columns.some((column) => !isRecord(column) || !nonEmptyString(column.name)))) {
-      throw new TypeError(`BigQuery table columns at index ${index} must include non-empty string names.`);
+    if (table.columns !== undefined && !Array.isArray(table.columns)) {
+      throw new TypeError(`BigQuery table columns at index ${index} must be an array.`);
+    }
+    for (const [columnIndex, column] of (table.columns ?? []).entries()) {
+      if (!isRecord(column) || !nonEmptyString(column.name)) {
+        throw new TypeError(`BigQuery column at table index ${index}, column index ${columnIndex} must include a non-empty string name.`);
+      }
+      for (const field of ["type", "description"] as const) {
+        if (column[field] !== undefined && typeof column[field] !== "string") {
+          throw new TypeError(`BigQuery column ${field} at table index ${index}, column index ${columnIndex} must be a string.`);
+        }
+      }
     }
   }
 }
