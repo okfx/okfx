@@ -315,20 +315,14 @@ function fieldFixForCode(document: vscode.TextDocument, code: string | undefined
     ? "type"
     : code === "hygiene/missing-title"
       ? "title"
-      : code === "hygiene/missing-description"
-        ? "description"
-        : code === "agent/missing-owner"
-          ? "owner"
-          : undefined;
+      : undefined;
   if (!field) {
     return undefined;
   }
 
   const value = field === "type"
     ? "Note"
-    : field === "title"
-      ? titleFromDocument(document)
-      : "TODO";
+    : titleFromDocument(document);
   const insert = frontmatterInsertionPoint(document);
   if (insert) {
     return {
