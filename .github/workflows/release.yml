@@ -6,23 +6,11 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create release if needed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
-            || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes "okfx ${GITHUB_REF_NAME}"
-
-  package-dry-run:
-    name: Package dry run
+  verify:
+    name: Verify release source and packages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,27 +27,38 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
       - name: Install pnpm dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build TypeScript packages
         run: pnpm build
 
-      - name: Pack workspace packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          for pkg in packages/*; do
-            if [[ -f "$pkg/package.json" ]]; then
-              echo "::group::pnpm pack --dry-run $pkg"
-              (cd "$pkg" && pnpm pack --dry-run)
-              echo "::endgroup::"
-            fi
-          done
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test TypeScript packages
+        run: pnpm test
+
+      - name: Audit pnpm dependencies
+        run: pnpm audit --audit-level moderate
+
+      - name: Test Rust workspace
+        run: cargo test --workspace
+
+      - name: Build WASM fallback
+        run: cargo build -p okfx_wasm --target wasm32-unknown-unknown
+
+      - name: Dry-run all workspace packages
+        run: pnpm --filter './packages/*' pack --dry-run
 
   binaries:
-    name: Standalone binary ${{ matrix.target }}
-    needs: create-release
+    name: Build standalone binary ${{ matrix.target }}
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -84,9 +83,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Test CLI crate
-        run: cargo test -p okfx_cli
-
       - name: Build CLI binary
         run: cargo build -p okfx_cli --release
 
@@ -102,10 +98,49 @@ jobs:
             tar -czf "dist/${asset}" -C target/release "okfx${{ matrix.exe }}"
           fi
 
-      - name: Upload release asset
+      - name: Stage binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: okfx-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs:
+      - verify
+      - binaries
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release if needed
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes "okfx ${GITHUB_REF_NAME}"
+
+  upload-assets:
+    name: Upload release assets
+    needs: create-release
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download staged binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: okfx-*
+          path: dist
+          merge-multiple: true
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" dist/* --clobber

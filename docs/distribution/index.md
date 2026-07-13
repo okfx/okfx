@@ -51,6 +51,7 @@ matches the current runtime, okfx keeps running through WASM or TypeScript.
 
 - `.github/workflows/ci.yml` runs pnpm build, typecheck, tests, audit, Rust tests,
   WASM build, and standalone CLI build on pushes and pull requests.
-- `.github/workflows/release.yml` runs on `v*` tags, dry-runs pnpm package
-  archives, builds standalone `okfx` binaries for Linux, macOS arm64, and
-  Windows x64, then uploads them to the GitHub Release.
+- `.github/workflows/release.yml` runs on `v*` tags, repeats the full source
+  verification, dry-runs every pnpm package archive, and stages standalone
+  `okfx` binaries for Linux, macOS arm64, and Windows x64. It creates the
+  GitHub Release only after every gate and binary build succeeds.
