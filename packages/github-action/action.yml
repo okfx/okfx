@@ -76,7 +76,7 @@ runs:
         OKF_BUNDLE: ${{ inputs.bundle }}
       run: |
         set +e
-        okf validate "$OKF_BUNDLE"
+        okf validate -- "$OKF_BUNDLE"
         status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
@@ -89,9 +89,9 @@ runs:
         OKF_LINT_JSON: ${{ inputs.lint-json-out }}
       run: |
         set +e
-        okf lint "$OKF_BUNDLE" --format "$OKF_LINT_FORMAT"
+        okf lint --format "$OKF_LINT_FORMAT" -- "$OKF_BUNDLE"
         status=$?
-        okf lint "$OKF_BUNDLE" --format json --out "$OKF_LINT_JSON" >/dev/null 2>&1 || true
+        okf lint --format json --out "$OKF_LINT_JSON" -- "$OKF_BUNDLE" >/dev/null 2>&1 || true
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
     - name: Build graph
@@ -102,7 +102,7 @@ runs:
         OKF_GRAPH_JSON: ${{ inputs.graph-out }}
       run: |
         set +e
-        okf graph "$OKF_BUNDLE" --out "$OKF_GRAPH_JSON"
+        okf graph --out "$OKF_GRAPH_JSON" -- "$OKF_BUNDLE"
         status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0
@@ -115,7 +115,7 @@ runs:
         OKF_DOCTOR_JSON: ${{ inputs.doctor-json-out }}
       run: |
         set +e
-        okf doctor "$OKF_BUNDLE" --json --out "$OKF_DOCTOR_JSON"
+        okf doctor --json --out "$OKF_DOCTOR_JSON" -- "$OKF_BUNDLE"
         status=$?
         echo "status=$status" >> "$GITHUB_OUTPUT"
         exit 0

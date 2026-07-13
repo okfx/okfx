@@ -19,6 +19,16 @@ describe("@okfx/github-action", () => {
     expect(action).toContain('default: "0.1.0"');
     expect(action).not.toContain('@okfx/cli":"latest"');
     expect(runBlockLines(action).some((line) => line.includes("${{ inputs."))).toBe(false);
+    expect(runBlockLines(action)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("okf ")))
+      .toEqual([
+        'okf validate -- "$OKF_BUNDLE"',
+        'okf lint --format "$OKF_LINT_FORMAT" -- "$OKF_BUNDLE"',
+        'okf lint --format json --out "$OKF_LINT_JSON" -- "$OKF_BUNDLE" >/dev/null 2>&1 || true',
+        'okf graph --out "$OKF_GRAPH_JSON" -- "$OKF_BUNDLE"',
+        'okf doctor --json --out "$OKF_DOCTOR_JSON" -- "$OKF_BUNDLE"'
+      ]);
   });
 
   it("exports an example workflow", () => {
