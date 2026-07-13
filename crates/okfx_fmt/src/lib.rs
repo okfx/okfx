@@ -1,4 +1,5 @@
 use serde_yaml::{Mapping, Value};
+use std::collections::BTreeSet;
 
 pub const CRATE_NAME: &str = "okfx_fmt";
 
@@ -74,7 +75,11 @@ pub fn format_markdown_document_with_key_order(
         }
     };
 
-    let formatted_frontmatter = stringify_ordered_frontmatter(frontmatter, key_order);
+    let formatted_frontmatter = if requires_lossless_frontmatter(split.raw) {
+        preserve_frontmatter(split.raw)
+    } else {
+        stringify_ordered_frontmatter(frontmatter, key_order)
+    };
     let formatted = format!(
         "---\n{}---\n\n{}",
         formatted_frontmatter,
@@ -116,6 +121,47 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     }
 
     None
+}
+
+fn requires_lossless_frontmatter(raw: &str) -> bool {
+    if raw.chars().any(|character| {
+        matches!(
+            character,
+            '#' | '&' | '*' | '!' | '|' | '>' | '{' | '}' | '[' | ']' | '"' | '\''
+        )
+    }) {
+        return true;
+    }
+
+    let mut keys = BTreeSet::new();
+    for line in raw.lines() {
+        if line.trim().is_empty()
+            || line.starts_with([' ', '\t'])
+            || line.starts_with("- ")
+            || line == "-"
+        {
+            continue;
+        }
+        let Some((key, _)) = line.split_once(':') else {
+            return true;
+        };
+        let key = key.trim();
+        if key.is_empty()
+            || !key.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '_' | '-')
+            })
+            || !keys.insert(key)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn preserve_frontmatter(raw: &str) -> String {
+    let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
+    format!("{}\n", normalized.trim_end_matches('\n'))
 }
 
 fn stringify_ordered_frontmatter(frontmatter: Mapping, key_order: &[&str]) -> String {
@@ -324,6 +370,19 @@ mod tests {
         assert_eq!(
             result.formatted,
             "---\ntype: Note\ntitle: Example\n---\n\n# Example\n\n```text\nkeep   \n\n\n```\n\nTail\n"
+        );
+    }
+
+    #[test]
+    fn preserves_comments_anchors_aliases_and_scalar_styles() {
+        let result = format_markdown_document(
+            "concept.md",
+            "---\n# keep this comment\ndefaults: &defaults\n  owner: data-team\ncopy: *defaults\ntitle: \"Yes\"\ntype: Note\n---\n# Example\n",
+        );
+
+        assert_eq!(
+            result.formatted,
+            "---\n# keep this comment\ndefaults: &defaults\n  owner: data-team\ncopy: *defaults\ntitle: \"Yes\"\ntype: Note\n---\n\n# Example\n"
         );
     }
 }
