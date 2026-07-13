@@ -91,6 +91,18 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("counts repeated links as one graph neighbor", async () => {
+    const repeatedLinks = Array.from({ length: 25 }, () => "[Target](target.md)").join("\n");
+    await withBundle({
+      "source.md": `---\ntype: Note\ntitle: Source\n---\n${repeatedLinks}\n`,
+      "target.md": "---\ntype: Note\ntitle: Target\n---\n# Target\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain("graph/high-degree-hub");
+    });
+  });
+
   it("honors rule overrides and fail thresholds", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\n---\n# Concept\n"

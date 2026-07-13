@@ -367,15 +367,20 @@ function createRuleContext(bundle: BundleIR, config: ResolvedOkfxConfig): RuleCo
     pathsBySourceId.set(conceptIdFromPath(log.path), log.path);
   }
 
-  const incomingByConceptId = new Map<string, number>();
-  const outgoingByConceptId = new Map<string, number>();
+  const conceptIds = new Set(bundle.concepts.map((concept) => concept.id));
+  const incomingSources = new Map<string, Set<string>>();
+  const outgoingTargets = new Map<string, Set<string>>();
   for (const link of bundle.links) {
-    if (link.kind !== "internal" || !link.resolved || !link.targetConceptId) {
+    if (link.kind !== "internal" || !link.resolved || !link.targetConceptId || !conceptIds.has(link.targetConceptId)) {
       continue;
     }
-    incomingByConceptId.set(link.targetConceptId, (incomingByConceptId.get(link.targetConceptId) ?? 0) + 1);
-    outgoingByConceptId.set(link.sourceConceptId, (outgoingByConceptId.get(link.sourceConceptId) ?? 0) + 1);
+    incomingSources.set(link.targetConceptId, setAdd(incomingSources.get(link.targetConceptId), link.sourceConceptId));
+    if (conceptIds.has(link.sourceConceptId)) {
+      outgoingTargets.set(link.sourceConceptId, setAdd(outgoingTargets.get(link.sourceConceptId), link.targetConceptId));
+    }
   }
+  const incomingByConceptId = new Map([...incomingSources].map(([id, sources]) => [id, sources.size]));
+  const outgoingByConceptId = new Map([...outgoingTargets].map(([id, targets]) => [id, targets.size]));
 
   return {
     bundle,
@@ -384,6 +389,12 @@ function createRuleContext(bundle: BundleIR, config: ResolvedOkfxConfig): RuleCo
     incomingByConceptId,
     outgoingByConceptId
   };
+}
+
+function setAdd<T>(set: Set<T> | undefined, value: T): Set<T> {
+  const next = set ?? new Set<T>();
+  next.add(value);
+  return next;
 }
 
 function conceptDiagnostic(
