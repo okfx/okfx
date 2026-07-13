@@ -211,12 +211,31 @@ async function gitSource(root: string): Promise<PackManifestIR["source"]> {
 
     return {
       git_commit: commit,
-      git_remote: remote,
+      git_remote: sanitizeGitRemote(remote),
       dirty: status !== ""
     };
   } catch {
     return {};
   }
+}
+
+function sanitizeGitRemote(remote: string | undefined): string | undefined {
+  if (!remote) {
+    return remote;
+  }
+
+  try {
+    const parsed = new URL(remote);
+    if (parsed.username || parsed.password) {
+      parsed.username = "";
+      parsed.password = "";
+      return parsed.toString();
+    }
+  } catch {
+    // SCP-style Git remotes do not contain URL password fields and are safe to retain.
+  }
+
+  return remote;
 }
 
 async function git(root: string, args: string[]): Promise<string> {

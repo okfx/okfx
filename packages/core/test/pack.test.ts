@@ -1,11 +1,15 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { promisify } from "node:util";
 
 import * as tar from "tar";
 import { describe, expect, it } from "vitest";
 
 import { packBundle } from "../src/index.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("packBundle", () => {
   it("writes metadata and archive", async () => {
@@ -105,6 +109,28 @@ describe("packBundle", () => {
       await rm(extracted, { recursive: true, force: true });
     }
   });
+
+  it("redacts credentials embedded in provenance Git remotes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-remote-"));
+    const out = join(root, "..", "remote.okf.tar.gz");
+    try {
+      await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Example\n---\n# Example\n", "utf8");
+      await git(root, ["init"]);
+      await git(root, ["config", "user.name", "okfx test"]);
+      await git(root, ["config", "user.email", "okfx@example.com"]);
+      await git(root, ["add", "concept.md"]);
+      await git(root, ["commit", "-m", "initial"]);
+      await git(root, ["remote", "add", "origin", "https://user:secret@example.com/org/repo.git"]);
+
+      const result = await packBundle(root, { out, writeMetadata: false });
+
+      expect(result.manifest.source.git_remote).toBe("https://example.com/org/repo.git");
+      expect(JSON.stringify(result.provenance)).not.toContain("secret");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(out, { force: true });
+    }
+  });
 });
 
 async function archiveEntries(path: string): Promise<string[]> {
@@ -116,4 +142,8 @@ async function archiveEntries(path: string): Promise<string[]> {
     }
   });
   return entries;
+}
+
+async function git(root: string, args: string[]): Promise<void> {
+  await execFileAsync("git", args, { cwd: root });
 }
