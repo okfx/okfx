@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { buildGraph, graphToCytoscape, graphToDot, graphToHtml, loadBundle } from "../src/index.js";
+import {
+  buildGraph,
+  graphToCytoscape,
+  graphToDot,
+  graphToHtml,
+  loadBundle,
+  type OkfxGraphIR
+} from "../src/index.js";
 
 async function withBundle(files: Record<string, string>, fn: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "okfx-graph-"));
@@ -158,5 +165,33 @@ describe("graph formatters", () => {
         ]
       });
     });
+  });
+
+  it("escapes control characters in DOT identifiers", () => {
+    const id = "line\n\"\\identifier";
+    const graph = {
+      nodes: [{ id, path: "concept.md", type: "Note" }],
+      edges: [],
+      stats: {
+        nodeCount: 1,
+        edgeCount: 0,
+        orphanCount: 1,
+        brokenLinkCount: 0,
+        cycleCount: 0
+      },
+      analysis: {
+        backlinks: {},
+        brokenLinks: [],
+        orphanConceptIds: [id],
+        isolatedClusterCount: 1,
+        cycles: [],
+        highDegreeHubs: [],
+        missingIndexSuggestions: [],
+        staleSubgraphs: [],
+        topReferencedConcepts: []
+      }
+    } satisfies OkfxGraphIR;
+
+    expect(graphToDot(graph)).toContain(`  ${JSON.stringify(id)} [label=`);
   });
 });

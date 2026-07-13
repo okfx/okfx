@@ -576,7 +576,7 @@ function connectedConceptClusters(
 }
 
 function dotId(id: string): string {
-  return `"${id.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+  return JSON.stringify(id);
 }
 
 function escapeHtml(value: string): string {
