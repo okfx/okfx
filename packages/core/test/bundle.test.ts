@@ -260,4 +260,23 @@ describe("resolveConfig", () => {
   it("rejects unknown presets instead of silently ignoring them", () => {
     expect(() => resolveConfig({ presets: ["recomended"] })).toThrow('Unknown okfx preset "recomended"');
   });
+
+  it.each([
+    [{ failOn: "never" }, "failOn"],
+    [{ include: "**/*.md" }, "include"],
+    [{ rules: { "security/private-key": "disabled" } }, "rules.security/private-key"],
+    [{ rules: { "custom/rule": ["warning", []] } }, "rules.custom/rule"],
+    [{ plugins: [{ package: "" }] }, "plugins[0].package"],
+    [{ mcp: { exposeGraph: "yes" } }, "mcp.exposeGraph"]
+  ])("rejects invalid runtime config at %s", (config, path) => {
+    expect(() => resolveConfig(config as never)).toThrow(`Invalid okfx config: ${path}`);
+  });
+
+  it("rejects invalid JSON config before it can weaken lint thresholds", async () => {
+    const root = await tempBundle();
+    await write(root, "okfx.config.json", JSON.stringify({ failOn: "never" }));
+    await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
+
+    await expect(loadBundle(root)).rejects.toThrow("Invalid okfx config: failOn");
+  });
 });

@@ -156,6 +156,7 @@ export function defineConfig<TConfig extends OkfxConfig>(config: TConfig): TConf
 }
 
 export function resolveConfig(config: OkfxConfig = {}, configPath?: string): ResolvedOkfxConfig {
+  assertConfig(config);
   const presets = config.presets ?? [...defaultConfig.presets];
   const presetConfigs = presets.map(resolvePreset);
   const presetRules = Object.assign({}, ...presetConfigs.map((preset) => preset.rules ?? {})) as Record<string, RuleConfig>;
@@ -185,6 +186,113 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
     },
     configPath
   };
+}
+
+function assertConfig(value: unknown): asserts value is OkfxConfig {
+  if (!isRecord(value)) {
+    invalidConfig("config", "an object");
+  }
+
+  optionalString(value, "okfVersion");
+  optionalStringArray(value, "include");
+  optionalStringArray(value, "exclude");
+  optionalStringArray(value, "presets");
+
+  if (value.failOn !== undefined && !isDiagnosticSeverity(value.failOn)) {
+    invalidConfig("failOn", "one of error, warning, advice, or info");
+  }
+
+  if (value.plugins !== undefined) {
+    if (!Array.isArray(value.plugins)) {
+      invalidConfig("plugins", "an array");
+    }
+    for (const [index, plugin] of value.plugins.entries()) {
+      if (typeof plugin === "string") {
+        if (!plugin.trim()) {
+          invalidConfig(`plugins[${index}]`, "a non-empty package string or plugin object");
+        }
+        continue;
+      }
+      if (!isRecord(plugin) || typeof plugin.package !== "string" || !plugin.package.trim()) {
+        invalidConfig(`plugins[${index}].package`, "a non-empty string");
+      }
+      if (plugin.enabled !== undefined && typeof plugin.enabled !== "boolean") {
+        invalidConfig(`plugins[${index}].enabled`, "a boolean");
+      }
+      if (plugin.options !== undefined && !isRecord(plugin.options)) {
+        invalidConfig(`plugins[${index}].options`, "an object");
+      }
+    }
+  }
+
+  if (value.rules !== undefined) {
+    if (!isRecord(value.rules)) {
+      invalidConfig("rules", "an object");
+    }
+    for (const [id, rule] of Object.entries(value.rules)) {
+      if (Array.isArray(rule)) {
+        if (rule.length !== 2 || !isRuleLevel(rule[0]) || !isRecord(rule[1])) {
+          invalidConfig(`rules.${id}`, "a rule level or [rule level, options] tuple");
+        }
+      } else if (!isRuleLevel(rule)) {
+        invalidConfig(`rules.${id}`, "one of error, warning, advice, info, or off");
+      }
+    }
+  }
+
+  if (value.frontmatter !== undefined) {
+    if (!isRecord(value.frontmatter)) {
+      invalidConfig("frontmatter", "an object");
+    }
+    optionalStringArray(value.frontmatter, "keyOrder", "frontmatter.keyOrder");
+  }
+
+  if (value.resourcePolicy !== undefined) {
+    if (!isRecord(value.resourcePolicy)) {
+      invalidConfig("resourcePolicy", "an object");
+    }
+    optionalStringArray(value.resourcePolicy, "allowHosts", "resourcePolicy.allowHosts");
+  }
+
+  if (value.mcp !== undefined) {
+    if (!isRecord(value.mcp)) {
+      invalidConfig("mcp", "an object");
+    }
+    for (const key of ["readonly", "exposeDiagnostics", "exposeGraph"] as const) {
+      if (value.mcp[key] !== undefined && typeof value.mcp[key] !== "boolean") {
+        invalidConfig(`mcp.${key}`, "a boolean");
+      }
+    }
+  }
+}
+
+function optionalString(record: Record<string, unknown>, key: string): void {
+  if (record[key] !== undefined && typeof record[key] !== "string") {
+    invalidConfig(key, "a string");
+  }
+}
+
+function optionalStringArray(record: Record<string, unknown>, key: string, path = key): void {
+  const value = record[key];
+  if (value !== undefined && (!Array.isArray(value) || value.some((entry) => typeof entry !== "string"))) {
+    invalidConfig(path, "an array of strings");
+  }
+}
+
+function isDiagnosticSeverity(value: unknown): value is DiagnosticSeverity {
+  return value === "error" || value === "warning" || value === "advice" || value === "info";
+}
+
+function isRuleLevel(value: unknown): value is RuleLevel {
+  return value === "off" || isDiagnosticSeverity(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function invalidConfig(path: string, expected: string): never {
+  throw new TypeError(`Invalid okfx config: ${path} must be ${expected}.`);
 }
 
 function normalizePluginReferences(plugins: OkfxPluginReference[]): ResolvedOkfxPluginReference[] {
