@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -61,6 +61,24 @@ description: Demo metric.
       await expect(api.explainDiff(tmpdir())).rejects.toThrow("comparisonRoot must stay under");
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects comparison roots that escape through symlinks", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-mcp-symlink-"));
+    const outside = await mkdtemp(join(tmpdir(), "okfx-mcp-outside-"));
+    try {
+      const current = join(root, "current");
+      await mkdir(current);
+      await writeFile(join(current, "concept.md"), "---\ntype: Note\ntitle: Current\n---\n# Current\n", "utf8");
+      await writeFile(join(outside, "concept.md"), "---\ntype: Note\ntitle: Outside\n---\n# Outside\n", "utf8");
+      await symlink(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+
+      await expect(createOkfBundleApi(current).explainDiff("../escape"))
+        .rejects.toThrow("comparisonRoot must stay under");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
     }
   });
 

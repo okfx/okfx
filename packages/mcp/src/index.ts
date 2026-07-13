@@ -1,4 +1,5 @@
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { realpath } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -184,7 +185,7 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
       return buildGraph((await loadContext()).bundle);
     },
     async explainDiff(comparisonRoot, direction = "baseline-to-current") {
-      const safeComparisonRoot = resolveSafeComparisonRoot(currentRoot, comparisonRoot);
+      const safeComparisonRoot = await resolveSafeComparisonRoot(currentRoot, comparisonRoot);
       const current = (await loadContext()).bundle;
       const comparison = await loadBundle(safeComparisonRoot);
       const before = direction === "baseline-to-current" ? comparison : current;
@@ -450,18 +451,22 @@ function tokenize(value: string): string[] {
     .filter((term) => term.length >= 2))];
 }
 
-function resolveSafeComparisonRoot(currentRoot: string, comparisonRoot: string): string {
+async function resolveSafeComparisonRoot(currentRoot: string, comparisonRoot: string): Promise<string> {
   const allowedBase = dirname(currentRoot);
   const resolved = isAbsolute(comparisonRoot)
     ? resolve(comparisonRoot)
     : resolve(currentRoot, comparisonRoot);
-  const relativePath = relative(allowedBase, resolved);
+  const [canonicalBase, canonicalRoot] = await Promise.all([
+    realpath(allowedBase),
+    realpath(resolved)
+  ]);
+  const relativePath = relative(canonicalBase, canonicalRoot);
 
-  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+  if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
     throw new Error(`comparisonRoot must stay under ${allowedBase}`);
   }
 
-  return resolved;
+  return canonicalRoot;
 }
 
 function hasDiffChanges(diff: BundleDiffIR): boolean {
