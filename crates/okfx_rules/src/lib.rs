@@ -513,7 +513,7 @@ fn agent_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
             );
         }
 
-        if concept_type == "api" && !headings.iter().any(|heading| heading.contains("auth")) {
+        if concept_type == "api" && !headings.iter().any(|heading| is_auth_heading(heading)) {
             push_concept_diagnostic(
                 &mut diagnostics,
                 context.options,
@@ -893,7 +893,26 @@ fn concept_headings(concept: &ConceptRuleInput) -> Vec<String> {
 }
 
 fn has_heading(headings: &[String], expected: &str) -> bool {
-    headings.iter().any(|heading| heading == expected)
+    headings
+        .iter()
+        .any(|heading| heading == expected || heading.ends_with(&format!(" {expected}")))
+}
+
+fn is_auth_heading(heading: &str) -> bool {
+    heading
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|word| {
+            matches!(
+                word,
+                "auth"
+                    | "authentication"
+                    | "authorization"
+                    | "authn"
+                    | "authz"
+                    | "oauth"
+                    | "oauth2"
+            )
+        })
 }
 
 fn is_valid_concept_path(path: &str) -> bool {
@@ -1244,6 +1263,39 @@ mod tests {
                 .iter()
                 .any(|(code, _)| *code == "hygiene/missing-title")
         );
+    }
+
+    #[test]
+    fn requires_meaningful_readiness_metadata_and_recognized_auth_headings() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                ConceptRuleInput {
+                    description: Some("   ".to_string()),
+                    owner: Some("   ".to_string()),
+                    headings: vec!["Author".to_string(), "API Usage".to_string()],
+                    ..concept("author").with_type("API")
+                },
+                ConceptRuleInput {
+                    description: Some("OAuth-protected endpoint.".to_string()),
+                    owner: Some("api-team".to_string()),
+                    headings: vec!["Usage".to_string(), "OAuth 2.0".to_string()],
+                    ..concept("oauth").with_type("API")
+                },
+            ],
+            ..RuleInput::default()
+        });
+        let paths_for = |code: &str| {
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == code)
+                .filter_map(|diagnostic| diagnostic.path.as_deref())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(paths_for("agent/missing-owner"), vec!["author.md"]);
+        assert_eq!(paths_for("agent/missing-summary"), vec!["author.md"]);
+        assert_eq!(paths_for("agent/api-missing-auth-notes"), vec!["author.md"]);
+        assert!(paths_for("agent/missing-usage").is_empty());
     }
 
     fn concept(id: &str) -> ConceptRuleInput {

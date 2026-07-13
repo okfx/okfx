@@ -105,6 +105,55 @@ description: Weekly active users.
     });
   });
 
+  it("requires meaningful readiness metadata and recognized auth headings", async () => {
+    await withBundle({
+      "author.md": `---
+type: API
+title: Author API
+description: "   "
+owner: "   "
+---
+
+# Author API
+
+## Author
+
+Documentation team.
+
+## API Usage
+
+Call the endpoint.
+`,
+      "oauth.md": `---
+type: API
+title: OAuth API
+description: OAuth-protected endpoint.
+owner: api-team
+---
+
+# OAuth API
+
+## Usage
+
+Call the endpoint.
+
+## OAuth 2.0
+
+Use a bearer token.
+`
+    }, async (root) => {
+      const result = doctorBundle(await loadBundle(root, { loadConfigFile: false }));
+      const diagnosticsFor = (code: string) => result.diagnostics
+        .filter((diagnostic) => diagnostic.code === code)
+        .map((diagnostic) => diagnostic.path);
+
+      expect(diagnosticsFor("agent/missing-owner")).toEqual(["author.md"]);
+      expect(diagnosticsFor("agent/missing-summary")).toEqual(["author.md"]);
+      expect(diagnosticsFor("agent/api-missing-auth-notes")).toEqual(["author.md"]);
+      expect(diagnosticsFor("agent/missing-usage")).toEqual([]);
+    });
+  });
+
   it("reports deprecated concepts without replacement context", async () => {
     await withBundle({
       "old.md": "---\ntype: Note\ntitle: Old\nstatus: deprecated\n---\n# Old\n",

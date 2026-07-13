@@ -3,13 +3,13 @@ import type { BundleIR, ConceptIR, DiagnosticIR, DiagnosticSeverity } from "./ty
 export function missingOwnerDiagnostics(bundle: BundleIR): DiagnosticIR[] {
   return bundle.concepts
     .filter((concept) => ["api", "metric", "runbook"].includes(concept.type.toLowerCase()))
-    .filter((concept) => !concept.frontmatter.owner)
+    .filter((concept) => stringFrontmatter(concept, "owner").trim().length === 0)
     .map((concept) => conceptDiagnostic("agent/missing-owner", "advice", concept, "Production-facing concepts should declare an owner."));
 }
 
 export function missingSummaryDiagnostics(bundle: BundleIR): DiagnosticIR[] {
   return bundle.concepts
-    .filter((concept) => !hasHeading(concept, "summary") && !concept.description)
+    .filter((concept) => !hasHeading(concept, "summary") && !concept.description?.trim())
     .map((concept) => conceptDiagnostic("agent/missing-summary", "advice", concept, "Concept should provide a summary through description or a Summary section."));
 }
 
@@ -37,7 +37,7 @@ export function runbookMissingSymptomsDiagnostics(bundle: BundleIR): DiagnosticI
 export function apiMissingAuthNotesDiagnostics(bundle: BundleIR): DiagnosticIR[] {
   return bundle.concepts
     .filter((concept) => concept.type.toLowerCase() === "api")
-    .filter((concept) => !headings(concept).some((heading) => heading.includes("auth")))
+    .filter((concept) => !headings(concept).some(isAuthHeading))
     .map((concept) => conceptDiagnostic("agent/api-missing-auth-notes", "advice", concept, "API concept should include authentication notes."));
 }
 
@@ -75,6 +75,10 @@ function headings(concept: ConceptIR): string[] {
 
 function hasHeading(concept: ConceptIR, expected: string): boolean {
   return headings(concept).some((heading) => heading === expected || heading.endsWith(` ${expected}`));
+}
+
+function isAuthHeading(heading: string): boolean {
+  return /\b(?:auth(?:entication|orization|n|z)?|oauth2?)\b/.test(heading);
 }
 
 function linksToType(concept: ConceptIR, bundle: BundleIR, targetType: string): boolean {
