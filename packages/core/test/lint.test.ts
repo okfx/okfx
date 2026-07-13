@@ -236,6 +236,35 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("classifies private IP ranges without treating numeric-looking domains as private", async () => {
+    await withBundle({
+      "concept.md": `---
+type: Note
+title: Concept
+resource:
+  - http://10.example.com/public
+  - http://127.0.0.2/loopback
+  - http://169.254.1.2/link-local
+  - http://100.64.0.1/shared
+  - http://[::1]/loopback
+  - http://[fc00::1]/private
+  - http://[fe80::1]/link-local
+---
+# Concept
+`
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+      const messages = result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "security/private-url")
+        .map((diagnostic) => diagnostic.message);
+
+      expect(messages).toHaveLength(6);
+      expect(messages.some((message) => message.includes("10.example.com"))).toBe(false);
+      expect(messages.some((message) => message.includes("127.0.0.2"))).toBe(true);
+      expect(messages.some((message) => message.includes("[fc00::1]"))).toBe(true);
+    });
+  });
+
   it("runs configured plugin rules and honors rule overrides", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"

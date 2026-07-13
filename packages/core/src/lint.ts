@@ -1,3 +1,5 @@
+import { BlockList, isIP } from "node:net";
+
 import { conceptIdFromPath } from "./paths.js";
 import {
   apiMissingAuthNotesDiagnostics,
@@ -52,6 +54,7 @@ interface BuiltInRule {
 }
 
 const DEFAULT_HIGH_DEGREE_THRESHOLD = 25;
+const PRIVATE_IP_RANGES = createPrivateIpRanges();
 
 export function lintBundle(bundle: BundleIR, options: LintOptions = {}): LintResult {
   const config = resolveConfig(options.config ?? {});
@@ -522,19 +525,47 @@ function isPrivateUrl(value: string): boolean {
     return false;
   }
 
-  return host === "localhost"
-    || host === "127.0.0.1"
-    || host.startsWith("10.")
-    || host.startsWith("192.168.")
-    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+  if (host === "localhost" || host.endsWith(".localhost")) {
+    return true;
+  }
+
+  const family = isIP(host);
+  return family !== 0 && PRIVATE_IP_RANGES.check(host, family === 4 ? "ipv4" : "ipv6");
 }
 
 function resourceHost(value: string): string | undefined {
   try {
-    return new URL(value).hostname.toLowerCase();
+    return new URL(value).hostname
+      .replace(/^\[|\]$/g, "")
+      .replace(/\.$/, "")
+      .toLowerCase();
   } catch {
     return undefined;
   }
+}
+
+function createPrivateIpRanges(): BlockList {
+  const ranges = new BlockList();
+  for (const [network, prefix] of [
+    ["0.0.0.0", 8],
+    ["10.0.0.0", 8],
+    ["100.64.0.0", 10],
+    ["127.0.0.0", 8],
+    ["169.254.0.0", 16],
+    ["172.16.0.0", 12],
+    ["192.168.0.0", 16]
+  ] as const) {
+    ranges.addSubnet(network, prefix, "ipv4");
+  }
+  for (const [network, prefix] of [
+    ["::", 128],
+    ["::1", 128],
+    ["fc00::", 7],
+    ["fe80::", 10]
+  ] as const) {
+    ranges.addSubnet(network, prefix, "ipv6");
+  }
+  return ranges;
 }
 
 function findCircularReferences(bundle: BundleIR): DiagnosticIR[] {

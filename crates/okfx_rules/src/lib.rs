@@ -1,6 +1,7 @@
 use okfx_core::find_representative_cycles;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::net::{IpAddr, Ipv4Addr};
 
 pub const CRATE_NAME: &str = "okfx_rules";
 
@@ -1117,29 +1118,40 @@ fn is_private_url(value: &str) -> bool {
     let Some(host) = resource_host(value) else {
         return false;
     };
-    host == "localhost"
-        || host == "127.0.0.1"
-        || host.starts_with("10.")
-        || host.starts_with("192.168.")
-        || private_172_host(&host)
+    if host == "localhost" || host.ends_with(".localhost") {
+        return true;
+    }
+
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(address)) => is_private_ipv4(address),
+        Ok(IpAddr::V6(address)) => {
+            if let Some(mapped) = address.to_ipv4_mapped() {
+                return is_private_ipv4(mapped);
+            }
+            let first = address.segments()[0];
+            address.is_unspecified()
+                || address.is_loopback()
+                || first & 0xfe00 == 0xfc00
+                || first & 0xffc0 == 0xfe80
+        }
+        Err(_) => false,
+    }
 }
 
-fn private_172_host(host: &str) -> bool {
-    let Some(rest) = host.strip_prefix("172.") else {
-        return false;
-    };
-    let Some((second, _)) = rest.split_once('.') else {
-        return false;
-    };
-    second
-        .parse::<u8>()
-        .is_ok_and(|octet| (16..=31).contains(&octet))
+fn is_private_ipv4(address: Ipv4Addr) -> bool {
+    let octets = address.octets();
+    address.is_private()
+        || address.is_loopback()
+        || address.is_link_local()
+        || address.is_unspecified()
+        || (octets[0] == 100 && (64..=127).contains(&octets[1]))
 }
 
 fn resource_host(value: &str) -> Option<String> {
-    let rest = value
-        .strip_prefix("https://")
-        .or_else(|| value.strip_prefix("http://"))?;
+    let (scheme, rest) = value.split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
     let authority = rest
         .split(['/', '?', '#'])
         .next()
@@ -1152,6 +1164,7 @@ fn resource_host(value: &str) -> Option<String> {
         .and_then(|host| host.split_once(']').map(|(host, _)| host))
         .unwrap_or_else(|| authority.split(':').next().unwrap_or_default())
         .trim()
+        .trim_end_matches('.')
         .to_lowercase();
     (!host.is_empty()).then_some(host)
 }
@@ -1436,6 +1449,29 @@ mod tests {
                 .iter()
                 .all(|diagnostic| diagnostic.code != "graph/circular-reference")
         );
+    }
+
+    #[test]
+    fn classifies_private_ip_ranges_without_numeric_domain_false_positives() {
+        for url in [
+            "http://127.0.0.2/loopback",
+            "http://169.254.1.2/link-local",
+            "http://100.64.0.1/shared",
+            "http://[::1]/loopback",
+            "http://[fc00::1]/private",
+            "http://[fe80::1]/link-local",
+            "http://[::ffff:127.0.0.1]/mapped",
+            "HTTP://127.0.0.2/uppercase-scheme",
+        ] {
+            assert!(is_private_url(url), "expected private URL: {url}");
+        }
+        for url in [
+            "http://10.example.com/public",
+            "http://100.128.0.1/public",
+            "http://[2001:db8::1]/documentation",
+        ] {
+            assert!(!is_private_url(url), "unexpected private URL: {url}");
+        }
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
