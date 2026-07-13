@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -78,5 +78,27 @@ describe("okf index", () => {
 
     expect(code).toBe(2);
     expect(output.stderr()).toContain("vector index mode requires explicit --vector-provider configuration");
+  });
+
+  it("rejects index output outside the bundle", async () => {
+    const root = await tempRoot();
+    await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Concept\n---\n# Concept\n", "utf8");
+    const output = capture();
+
+    expect(await main(["index", root, "--out", "../outside"], output.io)).toBe(2);
+    expect(output.stderr()).toContain("non-portable path");
+  });
+
+  it("refuses to write through a symlinked index directory", async () => {
+    const root = await tempRoot();
+    const external = join(root, "external");
+    await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Concept\n---\n# Concept\n", "utf8");
+    await mkdir(external);
+    await symlink(external, join(root, ".okfx"), process.platform === "win32" ? "junction" : "dir");
+    const output = capture();
+
+    expect(await main(["index", root], output.io)).toBe(2);
+    expect(output.stderr()).toContain("symbolic link");
+    await expect(stat(join(external, "index", "index.json"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

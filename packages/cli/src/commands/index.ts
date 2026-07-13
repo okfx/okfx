@@ -1,10 +1,15 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
 import { buildSearchIndex, loadBundle, type SearchIndexIR } from "@okfx/core";
 
+import {
+  ensureSafeGeneratedParent,
+  inspectGeneratedPath,
+  resolveGeneratedFiles,
+  writeGeneratedFile
+} from "../generated-files.js";
 import { parseOutputFormat, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";
 
@@ -22,11 +27,21 @@ export function createIndexCommand(context: CliContext): Command {
     .action(async (bundle: string, options: { out: string; mode: IndexMode; vectorProvider?: string; format: CliOutputFormat; json: boolean }) => {
       assertIndexModeSupported(options.mode, options.vectorProvider);
       const root = resolve(bundle);
-      const outDir = resolve(root, options.out);
       const loaded = await loadBundle(root);
       const index = buildSearchIndex(loaded);
-      await mkdir(outDir, { recursive: true });
-      await writeFile(join(outDir, "index.json"), `${JSON.stringify(index, null, 2)}\n`, "utf8");
+      const requestedPath = join(resolve(root, options.out), "index.json");
+      const relativePath = relative(root, requestedPath).split(sep).join("/");
+      const [file] = resolveGeneratedFiles(root, [{
+        path: relativePath,
+        content: `${JSON.stringify(index, null, 2)}\n`
+      }]);
+      if (!file) {
+        throw new Error("Could not resolve search index output path.");
+      }
+      await ensureSafeGeneratedParent(root, file.relativePath);
+      await inspectGeneratedPath(root, file.relativePath);
+      await writeGeneratedFile(file.path, file.content, true);
+      const outDir = dirname(file.path);
       const format = options.json ? "json" : options.format;
       await writeOutput(formatIndex(index, outDir, format), undefined, context.io);
       context.setExitCode(0);
