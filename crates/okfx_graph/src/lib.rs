@@ -1,6 +1,6 @@
 use okfx_resolver::ResolvedLink;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub const CRATE_NAME: &str = "okfx_graph";
 
@@ -224,38 +224,143 @@ fn find_cycles(
     concept_ids: &BTreeSet<String>,
     outgoing: &BTreeMap<String, BTreeSet<String>>,
 ) -> Vec<Vec<String>> {
-    let mut cycles: BTreeMap<String, Vec<String>> = BTreeMap::new();
-
-    for id in concept_ids {
-        visit_cycle(id, outgoing, &mut Vec::new(), &mut cycles);
-    }
-
-    cycles.into_values().collect()
-}
-
-fn visit_cycle(
-    id: &str,
-    outgoing: &BTreeMap<String, BTreeSet<String>>,
-    stack: &mut Vec<String>,
-    cycles: &mut BTreeMap<String, Vec<String>>,
-) {
-    if let Some(position) = stack.iter().position(|entry| entry == id) {
-        let mut cycle = stack[position..].to_vec();
-        cycle.push(id.to_string());
-        let mut key_parts = cycle.clone();
-        key_parts.sort();
-        key_parts.dedup();
-        cycles.entry(key_parts.join(">")).or_insert(cycle);
-        return;
-    }
-
-    stack.push(id.to_string());
-    if let Some(next_ids) = outgoing.get(id) {
-        for next in next_ids {
-            visit_cycle(next, outgoing, stack, cycles);
+    let mut reverse = concept_ids
+        .iter()
+        .map(|id| (id.clone(), BTreeSet::new()))
+        .collect::<BTreeMap<_, _>>();
+    for (source, targets) in outgoing {
+        if !concept_ids.contains(source) {
+            continue;
+        }
+        for target in targets
+            .iter()
+            .filter(|target| concept_ids.contains(*target))
+        {
+            reverse
+                .entry(target.clone())
+                .or_default()
+                .insert(source.clone());
         }
     }
-    stack.pop();
+
+    let mut finish_order = Vec::new();
+    let mut visited = BTreeSet::new();
+    for start in concept_ids {
+        if visited.contains(start) {
+            continue;
+        }
+        let mut stack = vec![(start.clone(), false)];
+        while let Some((current, expanded)) = stack.pop() {
+            if expanded {
+                finish_order.push(current);
+                continue;
+            }
+            if !visited.insert(current.clone()) {
+                continue;
+            }
+            stack.push((current.clone(), true));
+            if let Some(neighbors) = outgoing.get(&current) {
+                for neighbor in neighbors.iter().rev() {
+                    if concept_ids.contains(neighbor) && !visited.contains(neighbor) {
+                        stack.push((neighbor.clone(), false));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut assigned = BTreeSet::new();
+    let mut components = Vec::new();
+    for start in finish_order.into_iter().rev() {
+        if !assigned.insert(start.clone()) {
+            continue;
+        }
+        let mut component = Vec::new();
+        let mut stack = vec![start];
+        while let Some(current) = stack.pop() {
+            component.push(current.clone());
+            if let Some(neighbors) = reverse.get(&current) {
+                for neighbor in neighbors.iter().rev() {
+                    if assigned.insert(neighbor.clone()) {
+                        stack.push(neighbor.clone());
+                    }
+                }
+            }
+        }
+        component.sort();
+        components.push(component);
+    }
+
+    let mut cycles = components
+        .into_iter()
+        .filter(|component| {
+            component.len() > 1
+                || outgoing
+                    .get(&component[0])
+                    .is_some_and(|targets| targets.contains(&component[0]))
+        })
+        .map(|component| representative_cycle(&component, outgoing))
+        .collect::<Vec<_>>();
+    cycles.sort();
+    cycles
+}
+
+fn representative_cycle(
+    component: &[String],
+    outgoing: &BTreeMap<String, BTreeSet<String>>,
+) -> Vec<String> {
+    let start = &component[0];
+    if component.len() == 1 {
+        return vec![start.clone(), start.clone()];
+    }
+
+    let members = component.iter().collect::<BTreeSet<_>>();
+    if let Some(first_steps) = outgoing.get(start) {
+        for first_step in first_steps
+            .iter()
+            .filter(|next| *next != start && members.contains(next))
+        {
+            if let Some(path) = find_path(first_step, start, &members, outgoing) {
+                return std::iter::once(start.clone()).chain(path).collect();
+            }
+        }
+    }
+
+    unreachable!("strongly connected component must contain a representative cycle")
+}
+
+fn find_path(
+    from: &str,
+    to: &str,
+    members: &BTreeSet<&String>,
+    outgoing: &BTreeMap<String, BTreeSet<String>>,
+) -> Option<Vec<String>> {
+    let mut parents = BTreeMap::from([(from.to_string(), None::<String>)]);
+    let mut queue = VecDeque::from([from.to_string()]);
+
+    while let Some(current) = queue.pop_front() {
+        if current == to {
+            let mut path = Vec::new();
+            let mut cursor = Some(current);
+            while let Some(id) = cursor {
+                cursor = parents.get(&id).cloned().flatten();
+                path.push(id);
+            }
+            path.reverse();
+            return Some(path);
+        }
+
+        if let Some(neighbors) = outgoing.get(&current) {
+            for neighbor in neighbors {
+                if members.contains(neighbor) && !parents.contains_key(neighbor) {
+                    parents.insert(neighbor.clone(), Some(current.clone()));
+                    queue.push_back(neighbor.clone());
+                }
+            }
+        }
+    }
+
+    None
 }
 
 fn count_isolated_clusters(
@@ -391,6 +496,24 @@ mod tests {
             ]
         );
         assert!(graph.analysis.backlinks["a"].is_empty());
+    }
+
+    #[test]
+    fn analyzes_dense_acyclic_graphs_without_enumerating_paths() {
+        let node_count = 40;
+        let concept_ids = (0..node_count)
+            .map(|index| format!("node-{index}"))
+            .collect::<BTreeSet<_>>();
+        let outgoing = (0..node_count)
+            .map(|source| {
+                let targets = (source + 1..node_count)
+                    .map(|target| format!("node-{target}"))
+                    .collect::<BTreeSet<_>>();
+                (format!("node-{source}"), targets)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        assert!(find_cycles(&concept_ids, &outgoing).is_empty());
     }
 
     fn concept(id: &str) -> ConceptNodeInput {
