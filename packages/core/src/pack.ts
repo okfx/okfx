@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -75,67 +76,102 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
   const out = resolve(options.out ?? `${options.bundleName ?? basename(root)}.okf.tar.gz`);
   const files = await discoverPackFiles(root, config, out);
   const conceptIdsByPath = new Map(bundle.concepts.map((concept) => [concept.path, concept.id]));
-  const manifestFiles = await Promise.all(files.map(async (path) => {
-    const content = await readFile(join(root, path));
-    return {
-      path,
-      sha256: sha256Hex(content),
-      concept_id: conceptIdsByPath.get(path)
-    };
-  }));
-  const createdAt = (options.createdAt ?? new Date()).toISOString();
-  const source = await gitSource(root);
-  const checksums: ChecksumsIR = {
-    algorithm: "sha256",
-    files: Object.fromEntries(manifestFiles.map((file) => [file.path, file.sha256]))
-  };
-  const manifest: PackManifestIR = {
-    manifest_schema_version: 1,
-    okfx_version: okfxVersion,
-    okf_version: config.okfVersion,
-    bundle_name: options.bundleName ?? basename(root),
-    created_at: createdAt,
-    concept_count: bundle.stats.conceptCount,
-    file_count: manifestFiles.length,
-    content_hash: sha256Hex(JSON.stringify(manifestFiles.map((file) => [file.path, file.sha256]))),
-    source,
-    files: manifestFiles
-  };
-  const provenance: ProvenanceIR = {
-    created_at: createdAt,
-    created_by: "okfx",
-    okfx_version: okfxVersion,
-    source
-  };
   const metadataDir = join(root, ".okfx");
+  const stagingRoot = await mkdtemp(join(tmpdir(), "okfx-pack-"));
 
-  const writeMetadata = options.writeMetadata ?? true;
-  if (writeMetadata) {
-    await mkdir(metadataDir, { recursive: true });
-    await writeJson(join(metadataDir, "manifest.json"), manifest);
-    await writeJson(join(metadataDir, "checksums.json"), checksums);
-    await writeJson(join(metadataDir, "provenance.json"), provenance);
+  try {
+    const manifestFiles = await Promise.all(files.map((path) => stagePackFile(
+      root,
+      stagingRoot,
+      path,
+      conceptIdsByPath.get(path)
+    )));
+    const createdAt = (options.createdAt ?? new Date()).toISOString();
+    const source = await gitSource(root);
+    const checksums: ChecksumsIR = {
+      algorithm: "sha256",
+      files: Object.fromEntries(manifestFiles.map((file) => [file.path, file.sha256]))
+    };
+    const manifest: PackManifestIR = {
+      manifest_schema_version: 1,
+      okfx_version: okfxVersion,
+      okf_version: config.okfVersion,
+      bundle_name: options.bundleName ?? basename(root),
+      created_at: createdAt,
+      concept_count: bundle.stats.conceptCount,
+      file_count: manifestFiles.length,
+      content_hash: sha256Hex(JSON.stringify(manifestFiles.map((file) => [file.path, file.sha256]))),
+      source,
+      files: manifestFiles
+    };
+    const provenance: ProvenanceIR = {
+      created_at: createdAt,
+      created_by: "okfx",
+      okfx_version: okfxVersion,
+      source
+    };
+    const metadataFiles = [".okfx/manifest.json", ".okfx/checksums.json", ".okfx/provenance.json"];
+    const stagingMetadataDir = join(stagingRoot, ".okfx");
+    await mkdir(stagingMetadataDir, { recursive: true });
+    await writePackMetadata(stagingMetadataDir, manifest, checksums, provenance);
+
+    if (options.writeMetadata ?? true) {
+      await mkdir(metadataDir, { recursive: true });
+      await writePackMetadata(metadataDir, manifest, checksums, provenance);
+    }
+
+    await mkdir(dirname(out), { recursive: true });
+    await tar.create({
+      cwd: stagingRoot,
+      file: out,
+      gzip: true,
+      portable: true,
+      noMtime: true
+    }, [...files, ...metadataFiles]);
+
+    return {
+      out,
+      metadataDir,
+      manifest,
+      checksums,
+      provenance
+    };
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true });
   }
+}
 
-  await mkdir(dirname(out), { recursive: true });
-  const metadataFiles = writeMetadata
-    ? [".okfx/manifest.json", ".okfx/checksums.json", ".okfx/provenance.json"]
-    : [];
-  await tar.create({
-    cwd: root,
-    file: out,
-    gzip: true,
-    portable: true,
-    noMtime: true
-  }, [...files, ...metadataFiles]);
-
+async function stagePackFile(
+  root: string,
+  stagingRoot: string,
+  path: string,
+  conceptId: string | undefined
+): Promise<PackFileManifestEntry> {
+  const sourcePath = join(root, path);
+  const [content, sourceStat] = await Promise.all([readFile(sourcePath), stat(sourcePath)]);
+  const stagedPath = join(stagingRoot, path);
+  const mode = sourceStat.mode & 0o777;
+  await mkdir(dirname(stagedPath), { recursive: true });
+  await writeFile(stagedPath, content, { mode });
+  await chmod(stagedPath, mode);
   return {
-    out,
-    metadataDir,
-    manifest,
-    checksums,
-    provenance
+    path,
+    sha256: sha256Hex(content),
+    concept_id: conceptId
   };
+}
+
+async function writePackMetadata(
+  directory: string,
+  manifest: PackManifestIR,
+  checksums: ChecksumsIR,
+  provenance: ProvenanceIR
+): Promise<void> {
+  await Promise.all([
+    writeJson(join(directory, "manifest.json"), manifest),
+    writeJson(join(directory, "checksums.json"), checksums),
+    writeJson(join(directory, "provenance.json"), provenance)
+  ]);
 }
 
 async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: string): Promise<string[]> {

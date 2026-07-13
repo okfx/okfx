@@ -80,19 +80,29 @@ describe("packBundle", () => {
     }
   });
 
-  it("creates an archive without metadata when metadata writes are disabled", async () => {
+  it("keeps verification metadata in the archive without writing it to the bundle", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-pack-no-metadata-"));
     const out = join(root, "..", "no-metadata.okf.tar.gz");
+    const extracted = await mkdtemp(join(tmpdir(), "okfx-pack-extracted-"));
     try {
       await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Example\n---\n# Example\n", "utf8");
 
-      await packBundle(root, { out, writeMetadata: false });
+      const result = await packBundle(root, { out, writeMetadata: false });
 
-      expect(await archiveEntries(out)).toEqual(["concept.md"]);
+      expect(await archiveEntries(out)).toEqual([
+        "concept.md",
+        ".okfx/manifest.json",
+        ".okfx/checksums.json",
+        ".okfx/provenance.json"
+      ]);
       await expect(stat(join(root, ".okfx"))).rejects.toMatchObject({ code: "ENOENT" });
+      await tar.extract({ file: out, cwd: extracted });
+      expect(JSON.parse(await readFile(join(extracted, ".okfx", "manifest.json"), "utf8")))
+        .toEqual(result.manifest);
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(out, { force: true });
+      await rm(extracted, { recursive: true, force: true });
     }
   });
 });
