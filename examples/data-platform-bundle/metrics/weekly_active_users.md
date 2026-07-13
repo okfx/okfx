@@ -6,7 +6,7 @@ resource: https://docs.example.com/metrics/wau
 tags:
   - analytics
   - engagement
-timestamp: 2026-07-07T00:00:00Z
+timestamp: 2026-07-07T00:00:00.000Z
 ---
 
 # Weekly Active Users

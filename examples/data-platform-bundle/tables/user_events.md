@@ -5,7 +5,7 @@ description: Event-level activity emitted by users.
 tags:
   - analytics
   - source-table
-timestamp: 2026-07-07T00:00:00Z
+timestamp: 2026-07-07T00:00:00.000Z
 ---
 
 # User Events

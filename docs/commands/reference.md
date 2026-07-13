@@ -2,11 +2,11 @@
 type: contract
 title: okf Command Reference
 description: Stable CLI command behavior and exit-code contract.
-owner: okfx-maintainers
-status: proposed
 tags:
   - cli
   - commands
+owner: okfx-maintainers
+status: proposed
 ---
 
 # okf Command Reference

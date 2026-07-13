@@ -2,11 +2,11 @@
 type: contract
 title: okfx Plugin API
 description: Public plugin shape and executable-code trust boundary.
-owner: okfx-maintainers
-status: proposed
 tags:
   - plugins
   - api
+owner: okfx-maintainers
+status: proposed
 ---
 
 # okfx Plugin API

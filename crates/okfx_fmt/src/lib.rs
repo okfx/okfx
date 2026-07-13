@@ -54,7 +54,10 @@ pub fn format_markdown_document_with_key_order(
         Ok(Value::Mapping(mapping)) => mapping,
         Ok(Value::Null) => Mapping::new(),
         Ok(_) => {
-            diagnostics.push(invalid_frontmatter(&path, "Frontmatter must be a YAML mapping."));
+            diagnostics.push(invalid_frontmatter(
+                &path,
+                "Frontmatter must be a YAML mapping.",
+            ));
             return FormatResult {
                 formatted: content.to_string(),
                 changed: false,

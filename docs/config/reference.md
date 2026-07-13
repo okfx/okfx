@@ -2,11 +2,11 @@
 type: contract
 title: okfx Configuration
 description: Config file names, presets, rule overrides, and resource policy.
-owner: okfx-maintainers
-status: proposed
 tags:
   - config
   - presets
+owner: okfx-maintainers
+status: proposed
 ---
 
 # okfx Configuration

@@ -2,11 +2,11 @@
 type: architecture
 title: okfx Architecture
 description: System boundaries and implementation strategy for the OKF developer toolkit.
-owner: okfx-maintainers
-status: proposed
 tags:
   - architecture
   - okfx
+owner: okfx-maintainers
+status: proposed
 ---
 
 # okfx Architecture
@@ -44,4 +44,5 @@ explicitly select accelerated helpers, which fall back without changing the defa
 
 - TypeScript behavior: `pnpm build && pnpm typecheck && pnpm test`
 - Dependency and audit gate: `pnpm audit --audit-level moderate`
-- Rust scaffold: `cargo test --workspace`
+- Repository content: `pnpm check:okf`
+- Rust quality: `pnpm check:rust && cargo test --workspace`

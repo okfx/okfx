@@ -2,10 +2,7 @@ import { defineConfig } from "@okfx/core";
 
 export default defineConfig({
   okfVersion: "0.1",
-  include: [
-    "docs/**/*.md",
-    "examples/**/*.md"
-  ],
+  include: ["docs/**/*.md"],
   exclude: [
     "node_modules/**",
     ".git/**",

@@ -68,8 +68,10 @@ pnpm build
 pnpm typecheck
 pnpm test                     # vitest
 pnpm audit --audit-level moderate
+pnpm check:okf                # validate, lint, and formatting check
 
-# if you touched crates/*
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo build -p okfx_wasm --target wasm32-unknown-unknown
 cargo build -p okfx_cli --release

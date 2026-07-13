@@ -5,7 +5,7 @@ description: Operational guide for Orders API incidents.
 tags:
   - runbook
   - orders
-timestamp: 2026-07-07T00:00:00Z
+timestamp: 2026-07-07T00:00:00.000Z
 ---
 
 # Orders API Runbook

@@ -2,11 +2,11 @@
 type: test-plan
 title: okfx Testing Strategy
 description: Verification commands and fixture strategy for okfx.
-owner: okfx-maintainers
-status: proposed
 tags:
   - testing
   - verification
+owner: okfx-maintainers
+status: proposed
 ---
 
 # okfx Testing Strategy
@@ -17,7 +17,16 @@ tags:
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm audit --audit-level moderate`
+- `pnpm check:okf`
+- `pnpm check:rust`
 - `cargo test --workspace`
+- `cargo build -p okfx_wasm --target wasm32-unknown-unknown`
+- `cargo build -p okfx_cli --release`
+
+`check:okf` validates, lints, and format-checks the documentation bundle and each
+example bundle independently, so unrelated examples cannot mask or create duplicate
+concept diagnostics. `check:rust` enforces rustfmt and treats every Clippy warning as
+an error. Both CI and release verification run these gates.
 
 ## Fixture Coverage
 

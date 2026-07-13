@@ -451,11 +451,12 @@ fn slugify_heading(title: &str) -> String {
         if character.is_alphanumeric() {
             slug.push(character);
             previous_dash = false;
-        } else if character.is_whitespace() || character == '-' {
-            if !previous_dash && !slug.is_empty() {
-                slug.push('-');
-                previous_dash = true;
-            }
+        } else if (character.is_whitespace() || character == '-')
+            && !previous_dash
+            && !slug.is_empty()
+        {
+            slug.push('-');
+            previous_dash = true;
         }
     }
 

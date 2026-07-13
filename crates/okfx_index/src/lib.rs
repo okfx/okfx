@@ -42,7 +42,10 @@ pub fn crate_name() -> &'static str {
     CRATE_NAME
 }
 
-pub fn build_search_index(okf_version: Option<String>, documents: Vec<IndexDocumentInput>) -> SearchIndex {
+pub fn build_search_index(
+    okf_version: Option<String>,
+    documents: Vec<IndexDocumentInput>,
+) -> SearchIndex {
     let mut documents = documents
         .into_iter()
         .map(|document| SearchIndexDocument {
@@ -152,6 +155,9 @@ mod tests {
         assert_eq!(index.documents[0].id, "metrics/wau");
         assert_eq!(index.terms["weekly"], vec!["metrics/wau"]);
         assert_eq!(index.terms["analytics"], vec!["metrics/wau"]);
-        assert_eq!(tokenize("A weekly-active user's metric"), vec!["metric", "user", "weekly-active"]);
+        assert_eq!(
+            tokenize("A weekly-active user's metric"),
+            vec!["metric", "user", "weekly-active"]
+        );
     }
 }

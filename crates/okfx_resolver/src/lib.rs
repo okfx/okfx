@@ -56,7 +56,12 @@ pub fn normalize_relative_path(path: impl AsRef<str>) -> Option<String> {
 
 pub fn concept_id_from_path(path: impl AsRef<str>) -> Option<String> {
     let normalized = normalize_relative_path(path)?;
-    Some(normalized.strip_suffix(".md").unwrap_or(&normalized).to_string())
+    Some(
+        normalized
+            .strip_suffix(".md")
+            .unwrap_or(&normalized)
+            .to_string(),
+    )
 }
 
 pub fn is_reserved_markdown_file(path: impl AsRef<str>) -> bool {
@@ -67,7 +72,10 @@ pub fn is_reserved_markdown_file(path: impl AsRef<str>) -> bool {
         .is_some_and(|name| matches!(name, "index.md" | "log.md"))
 }
 
-pub fn resolve_markdown_target(source_path: impl AsRef<str>, target_raw: impl AsRef<str>) -> Option<String> {
+pub fn resolve_markdown_target(
+    source_path: impl AsRef<str>,
+    target_raw: impl AsRef<str>,
+) -> Option<String> {
     let target_raw = target_raw.as_ref();
     let target_without_hash = target_raw.split('#').next().unwrap_or("");
     let target_without_query = target_without_hash.split('?').next().unwrap_or("");
@@ -79,7 +87,10 @@ pub fn resolve_markdown_target(source_path: impl AsRef<str>, target_raw: impl As
         stripped.to_string()
     } else {
         let source_path = normalize_relative_path(source_path)?;
-        let source_dir = source_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
+        let source_dir = source_path
+            .rsplit_once('/')
+            .map(|(dir, _)| dir)
+            .unwrap_or("");
         if source_dir.is_empty() {
             target_without_query.to_string()
         } else {
@@ -90,7 +101,10 @@ pub fn resolve_markdown_target(source_path: impl AsRef<str>, target_raw: impl As
     concept_id_from_path(target_path)
 }
 
-pub fn resolve_links(entries: Vec<LinkEntry>, concept_ids: impl IntoIterator<Item = String>) -> ResolutionResult {
+pub fn resolve_links(
+    entries: Vec<LinkEntry>,
+    concept_ids: impl IntoIterator<Item = String>,
+) -> ResolutionResult {
     let concept_ids: BTreeSet<String> = concept_ids.into_iter().collect();
     let mut links = Vec::new();
     let mut backlinks: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -155,9 +169,15 @@ mod tests {
 
     #[test]
     fn normalizes_concept_paths() {
-        assert_eq!(normalize_relative_path("concepts/../tables/orders.md"), Some("tables/orders.md".to_string()));
+        assert_eq!(
+            normalize_relative_path("concepts/../tables/orders.md"),
+            Some("tables/orders.md".to_string())
+        );
         assert_eq!(normalize_relative_path("/absolute.md"), None);
-        assert_eq!(concept_id_from_path("tables/orders.md"), Some("tables/orders".to_string()));
+        assert_eq!(
+            concept_id_from_path("tables/orders.md"),
+            Some("tables/orders".to_string())
+        );
         assert!(is_reserved_markdown_file("docs/index.md"));
     }
 
@@ -195,7 +215,10 @@ mod tests {
 
         assert_eq!(result.links.len(), 3);
         assert!(result.links[0].resolved);
-        assert_eq!(result.links[0].target_concept_id.as_deref(), Some("tables/events"));
+        assert_eq!(
+            result.links[0].target_concept_id.as_deref(),
+            Some("tables/events")
+        );
         assert_eq!(result.backlinks["tables/events"], vec!["metrics/wau"]);
         assert_eq!(result.broken_internal_links.len(), 1);
         assert!(result.links[2].resolved);

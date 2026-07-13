@@ -2,11 +2,11 @@
 type: architecture
 title: okfx Producer Adapters
 description: Local producer adapters and reviewable-file workflow.
-owner: okfx-maintainers
-status: proposed
 tags:
   - adapters
   - imports
+owner: okfx-maintainers
+status: proposed
 ---
 
 # okfx Producer Adapters

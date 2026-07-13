@@ -492,13 +492,16 @@ pnpm typecheck
 # run the TypeScript test suite (vitest)
 pnpm test
 
-# run the CLI from source against an example bundle
-pnpm okf validate ./examples/data-platform-bundle
+# validate, lint, and format-check this repository's OKF content
+pnpm check:okf
 ```
 
 Rust workspace:
 
 ```bash
+# enforce rustfmt and Clippy
+pnpm check:rust
+
 # test all crates
 cargo test --workspace
 
@@ -509,8 +512,9 @@ cargo build -p okfx_wasm --target wasm32-unknown-unknown
 cargo build -p okfx_cli --release
 ```
 
-CI (`.github/workflows/ci.yml`) runs the TypeScript build, typecheck, tests, and a pnpm
-audit, plus the full Rust test suite and WASM/standalone builds on every push and PR.
+CI (`.github/workflows/ci.yml`) runs the TypeScript build, typecheck, tests, dependency
+audit, repository OKF checks, rustfmt, Clippy, the full Rust test suite, and
+WASM/standalone builds on every push and PR. Release verification applies the same gates.
 
 See [`docs/testing/strategy.md`](./docs/testing/strategy.md) for the full verification
 strategy and [`CONTRIBUTING.md`](./CONTRIBUTING.md) to get started.

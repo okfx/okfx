@@ -30,6 +30,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          components: rustfmt, clippy
           targets: wasm32-unknown-unknown
 
       - name: Install pnpm dependencies
@@ -46,6 +47,12 @@ jobs:
 
       - name: Audit pnpm dependencies
         run: pnpm audit --audit-level moderate
+
+      - name: Verify repository OKF content
+        run: pnpm check:okf
+
+      - name: Check Rust formatting and lints
+        run: pnpm check:rust
 
       - name: Test Rust workspace
         run: cargo test --workspace

@@ -169,7 +169,11 @@ fn changed_concept(before: &ConceptSnapshot, after: &ConceptSnapshot) -> Option<
         changes.push("body changed".to_string());
     }
     changes.extend(links_added.iter().map(|link| format!("link added: {link}")));
-    changes.extend(links_removed.iter().map(|link| format!("link removed: {link}")));
+    changes.extend(
+        links_removed
+            .iter()
+            .map(|link| format!("link removed: {link}")),
+    );
 
     if changes.is_empty() {
         return None;
@@ -212,12 +216,18 @@ mod tests {
     #[test]
     fn reports_added_removed_renamed_and_changed_concepts() {
         let before = vec![
-            concept("same", "hash-1").with_title("Old").with_body("old").with_link("old.md"),
+            concept("same", "hash-1")
+                .with_title("Old")
+                .with_body("old")
+                .with_link("old.md"),
             concept("removed", "hash-2"),
             concept("old-name", "hash-3"),
         ];
         let after = vec![
-            concept("same", "hash-4").with_title("New").with_body("new").with_link("new.md"),
+            concept("same", "hash-4")
+                .with_title("New")
+                .with_body("new")
+                .with_link("new.md"),
             concept("added", "hash-5"),
             concept("new-name", "hash-3"),
         ];
@@ -256,7 +266,8 @@ mod tests {
 
     impl ConceptBuilder for ConceptSnapshot {
         fn with_title(mut self, title: &str) -> Self {
-            self.frontmatter.insert("title".to_string(), title.to_string());
+            self.frontmatter
+                .insert("title".to_string(), title.to_string());
             self
         }
 
