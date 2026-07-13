@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { formatBundle, formatMarkdownFile } from "../src/index.js";
+import { formatBundle, formatMarkdownFile, parseMarkdownDocument } from "../src/index.js";
 
 describe("formatMarkdownFile", () => {
   it("orders frontmatter, normalizes timestamps, and trims body whitespace", () => {
@@ -52,6 +52,25 @@ usage: *summary
 
     expect(result.diagnostics).toEqual([]);
     expect(result.formatted).toContain("type: Note\ntitle: Example # keep title comment\ndescription: &summary Shared description # keep anchor comment\nusage: *summary");
+  });
+
+  it("preserves alias targets when anchor names are redefined", () => {
+    const result = formatMarkdownFile("concept.md", `---
+z: &shared one
+a: *shared
+y: &shared two
+b: *shared
+type: Note
+---
+
+# Example
+`);
+    const parsed = parseMarkdownDocument("concept.md", result.formatted, "concept");
+
+    expect(parsed.frontmatter).toMatchObject({
+      a: "one",
+      b: "two"
+    });
   });
 
   it("does not rewrite whitespace inside fenced code blocks", () => {

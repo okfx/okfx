@@ -138,6 +138,17 @@ function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
       ...references
     };
   });
+  const anchorCounts = new Map<string, number>();
+  for (const entry of entries) {
+    for (const anchor of entry.anchors) {
+      anchorCounts.set(anchor, (anchorCounts.get(anchor) ?? 0) + 1);
+    }
+  }
+  if ([...anchorCounts.values()].some((count) => count > 1)) {
+    normalizeFrontmatterTimestamp(frontmatter);
+    return;
+  }
+
   const anchorOwners = new Map<string, number>();
   for (const entry of entries) {
     for (const anchor of entry.anchors) {
@@ -159,6 +170,10 @@ function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
   }
   frontmatter.items = ordered;
 
+  normalizeFrontmatterTimestamp(frontmatter);
+}
+
+function normalizeFrontmatterTimestamp(frontmatter: YAMLMap): void {
   const timestamp = frontmatter.items.find((pair) => scalarString(pair.key) === "timestamp");
   if (timestamp && isScalar(timestamp.value) && typeof timestamp.value.value === "string") {
     timestamp.value.value = normalizeTimestamp(timestamp.value.value);
@@ -180,8 +195,8 @@ function scalarString(value: unknown): string | undefined {
   return isScalar(value) && typeof value.value === "string" ? value.value : undefined;
 }
 
-function collectYamlReferences(value: unknown): { anchors: Set<string>; aliases: Set<string> } {
-  const anchors = new Set<string>();
+function collectYamlReferences(value: unknown): { anchors: string[]; aliases: Set<string> } {
+  const anchors: string[] = [];
   const aliases = new Set<string>();
 
   const visit = (node: unknown): void => {
@@ -191,7 +206,7 @@ function collectYamlReferences(value: unknown): { anchors: Set<string>; aliases:
     }
     if (isScalar(node) || isMap(node) || isSeq(node)) {
       if (node.anchor) {
-        anchors.add(node.anchor);
+        anchors.push(node.anchor);
       }
     }
     if (isPair(node)) {
