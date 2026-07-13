@@ -342,30 +342,128 @@ function setAdd<T>(set: Set<T> | undefined, value: T): Set<T> {
 }
 
 function findCycles(conceptIds: Set<string>, adjacency: Map<string, Set<string>>): string[][] {
-  const cycles = new Map<string, string[]>();
-
-  for (const start of conceptIds) {
-    visit(start, []);
+  const reverseAdjacency = new Map<string, Set<string>>();
+  for (const id of conceptIds) {
+    reverseAdjacency.set(id, new Set());
+  }
+  for (const [source, targets] of adjacency) {
+    for (const target of targets) {
+      if (conceptIds.has(source) && conceptIds.has(target)) {
+        reverseAdjacency.get(target)?.add(source);
+      }
+    }
   }
 
-  return [...cycles.values()].sort((a, b) => a.join(">").localeCompare(b.join(">")));
-
-  function visit(id: string, stack: string[]): void {
-    if (stack.includes(id)) {
-      const cycle = [...stack.slice(stack.indexOf(id)), id];
-      const key = [...new Set(cycle)].sort().join(">");
-      cycles.set(key, cycle);
-      return;
+  const finishOrder: string[] = [];
+  const visited = new Set<string>();
+  for (const start of [...conceptIds].sort()) {
+    if (visited.has(start)) {
+      continue;
     }
-
-    if (stack.length > conceptIds.size) {
-      return;
-    }
-
-    for (const next of adjacency.get(id) ?? []) {
-      visit(next, [...stack, id]);
+    const stack: Array<{ id: string; expanded: boolean }> = [{ id: start, expanded: false }];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) {
+        break;
+      }
+      if (current.expanded) {
+        finishOrder.push(current.id);
+        continue;
+      }
+      if (visited.has(current.id)) {
+        continue;
+      }
+      visited.add(current.id);
+      stack.push({ id: current.id, expanded: true });
+      const neighbors = [...(adjacency.get(current.id) ?? [])]
+        .filter((id) => conceptIds.has(id))
+        .sort()
+        .reverse();
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          stack.push({ id: neighbor, expanded: false });
+        }
+      }
     }
   }
+
+  const assigned = new Set<string>();
+  const components: string[][] = [];
+  for (const start of finishOrder.reverse()) {
+    if (assigned.has(start)) {
+      continue;
+    }
+    const component: string[] = [];
+    const stack = [start];
+    assigned.add(start);
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (!current) {
+        break;
+      }
+      component.push(current);
+      for (const neighbor of reverseAdjacency.get(current) ?? []) {
+        if (!assigned.has(neighbor)) {
+          assigned.add(neighbor);
+          stack.push(neighbor);
+        }
+      }
+    }
+    components.push(component.sort());
+  }
+
+  return components
+    .filter((component) => component.length > 1 || adjacency.get(component[0])?.has(component[0]))
+    .map((component) => representativeCycle(component, adjacency))
+    .sort((a, b) => a.join(">").localeCompare(b.join(">")));
+}
+
+function representativeCycle(component: string[], adjacency: Map<string, Set<string>>): string[] {
+  const members = new Set(component);
+  const start = component[0];
+  if (component.length === 1) {
+    return [start, start];
+  }
+
+  const firstSteps = [...(adjacency.get(start) ?? [])]
+    .filter((id) => id !== start && members.has(id))
+    .sort();
+  for (const firstStep of firstSteps) {
+    const path = findPath(firstStep, start, members, adjacency);
+    if (path) {
+      return [start, ...path];
+    }
+  }
+
+  throw new Error(`Could not construct a representative cycle for strongly connected component: ${component.join(", ")}`);
+}
+
+function findPath(
+  from: string,
+  to: string,
+  members: Set<string>,
+  adjacency: Map<string, Set<string>>
+): string[] | undefined {
+  const parents = new Map<string, string | undefined>([[from, undefined]]);
+  const queue = [from];
+  for (const current of queue) {
+    if (current === to) {
+      const path: string[] = [];
+      let cursor: string | undefined = current;
+      while (cursor !== undefined) {
+        path.push(cursor);
+        cursor = parents.get(cursor);
+      }
+      return path.reverse();
+    }
+    for (const neighbor of [...(adjacency.get(current) ?? [])].filter((id) => members.has(id)).sort()) {
+      if (!parents.has(neighbor)) {
+        parents.set(neighbor, current);
+        queue.push(neighbor);
+      }
+    }
+  }
+  return undefined;
 }
 
 function findHighDegreeHubs(

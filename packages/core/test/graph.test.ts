@@ -37,8 +37,34 @@ describe("buildGraph", () => {
         cycleCount: 1
       });
       expect(graph.analysis.backlinks.a).toEqual(["b"]);
+      expect(graph.analysis.cycles).toEqual([["a", "b", "a"]]);
       expect(graph.analysis.orphanConceptIds).toEqual(["orphan"]);
       expect(graph.analysis.topReferencedConcepts[0]).toEqual({ id: "a", count: 1 });
+    });
+  });
+
+  it("analyzes a dense acyclic graph without enumerating every path", async () => {
+    const nodeCount = 40;
+    const files = Object.fromEntries(Array.from({ length: nodeCount }, (_, source) => {
+      const links = Array.from({ length: nodeCount - source - 1 }, (_, offset) => {
+        const target = source + offset + 1;
+        return `[Node ${target}](node-${target}.md)`;
+      });
+      return [
+        `node-${source}.md`,
+        `---\ntype: Note\ntitle: Node ${source}\n---\n${links.join("\n")}\n`
+      ];
+    }));
+
+    await withBundle(files, async (root) => {
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      const startedAt = performance.now();
+      const graph = buildGraph(bundle);
+      const elapsedMs = performance.now() - startedAt;
+
+      expect(graph.stats.edgeCount).toBe(780);
+      expect(graph.analysis.cycles).toEqual([]);
+      expect(elapsedMs).toBeLessThan(1_000);
     });
   });
 
