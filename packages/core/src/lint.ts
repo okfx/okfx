@@ -537,7 +537,7 @@ function findCircularReferences(bundle: BundleIR): DiagnosticIR[] {
       continue;
     }
 
-    const key = [...cycle].sort().join(">");
+    const key = [...new Set(cycle)].sort().join(">");
     if (reported.has(key)) {
       continue;
     }

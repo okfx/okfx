@@ -69,6 +69,8 @@ api_key = abcdefghijklmnopqrstuvwxyz
       expect(codes).toContain("hygiene/duplicate-title");
       expect(codes).toContain("hygiene/duplicate-resource");
       expect(codes).toContain("graph/circular-reference");
+      expect(result.diagnostics.filter((diagnostic) => diagnostic.code === "graph/circular-reference"))
+        .toHaveLength(1);
     });
   });
 
