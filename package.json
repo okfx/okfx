@@ -12,6 +12,7 @@
   "scripts": {
     "build": "tsc -b tsconfig.json && node packages/cli/scripts/make-executable.mjs",
     "check:okf": "node scripts/check-okf.mjs",
+    "check:release-version": "node scripts/check-release-version.mjs",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
     "clean": "pnpm -r --if-present run clean",
     "test": "vitest run",

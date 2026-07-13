@@ -27,6 +27,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Verify release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: pnpm check:release-version
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
