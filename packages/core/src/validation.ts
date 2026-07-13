@@ -100,5 +100,12 @@ function isValidConceptPath(path: string): boolean {
   }
 
   const normalized = normalizeRelativePath(path);
-  return normalized === path && !normalized.startsWith("../") && normalized !== "..";
+  const filename = normalized.slice(normalized.lastIndexOf("/") + 1);
+  const stem = filename.slice(0, -3);
+  return normalized === path
+    && !normalized.startsWith("../")
+    && normalized !== ".."
+    && stem !== ""
+    && stem !== "."
+    && stem !== "..";
 }

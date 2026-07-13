@@ -23,6 +23,11 @@ describe("@okfx/adapter-markdown", () => {
       .toThrow("must identify a file");
   });
 
+  it.each([".md", "notes/.md", "..md", "...md"])("rejects path %j without a usable concept ID", (path) => {
+    expect(() => produceMarkdownOkf([{ path, body: "# Invalid\n" }]))
+      .toThrow("must identify a concept");
+  });
+
   it("rejects whitespace-only paths", () => {
     expect(() => produceMarkdownOkf([{ path: "   ", body: "# Invalid\n" }]))
       .toThrow("must be a non-empty relative path");

@@ -916,7 +916,14 @@ fn is_auth_heading(heading: &str) -> bool {
 }
 
 fn is_valid_concept_path(path: &str) -> bool {
-    path.ends_with(".md")
+    let Some(filename) = path.rsplit('/').next() else {
+        return false;
+    };
+    let Some(stem) = filename.strip_suffix(".md") else {
+        return false;
+    };
+
+    !matches!(stem, "" | "." | "..")
         && !path.starts_with('/')
         && !path.contains('\\')
         && !path.contains('\0')
@@ -1158,6 +1165,16 @@ mod tests {
     #[test]
     fn exposes_crate_name() {
         assert_eq!(crate_name(), "okfx_rules");
+    }
+
+    #[test]
+    fn rejects_concept_paths_without_usable_ids() {
+        for path in [".md", "concepts/.md", "..md", "...md"] {
+            assert!(
+                !is_valid_concept_path(path),
+                "unexpected valid path: {path}"
+            );
+        }
     }
 
     #[test]

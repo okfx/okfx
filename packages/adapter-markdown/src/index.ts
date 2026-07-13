@@ -55,6 +55,10 @@ function normalizeConceptPath(path: string): string {
   if (!finalSegment || finalSegment === "." || finalSegment === ".." || !finalSegment.trim()) {
     throw new TypeError(`Markdown source path must identify a file: ${JSON.stringify(path)}`);
   }
+  const stem = finalSegment.replace(/\.md$/i, "");
+  if (!stem || stem === "." || stem === "..") {
+    throw new TypeError(`Markdown source path must identify a concept: ${JSON.stringify(path)}`);
+  }
 
   for (const segment of inputSegments) {
     if (!segment || segment === ".") {
@@ -71,7 +75,7 @@ function normalizeConceptPath(path: string): string {
   }
 
   const relativePath = segments.join("/");
-  return relativePath.endsWith(".md") ? relativePath : `${relativePath}.md`;
+  return /\.md$/i.test(relativePath) ? `${relativePath.slice(0, -3)}.md` : `${relativePath}.md`;
 }
 
 function titleFromPath(path: string): string {

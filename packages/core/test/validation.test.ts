@@ -91,4 +91,17 @@ describe("validateBundle", () => {
       });
     });
   });
+
+  it.each([".md", "concepts/.md", "..md", "...md"])("rejects %j because it has no usable concept ID", async (path) => {
+    await withBundle({
+      [path]: "---\ntype: Note\n---\n# Invalid\n"
+    }, async (root) => {
+      const result = validateBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({
+        code: "spec/invalid-concept-path",
+        path
+      }));
+    });
+  });
 });
