@@ -72,7 +72,8 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
     ? resolveConfig(options.config)
     : resolveConfig(options.config ?? await loadConfig(root));
   const bundle = await loadBundle(root, { config, loadConfigFile: false });
-  const files = await discoverPackFiles(root, config);
+  const out = resolve(options.out ?? `${options.bundleName ?? basename(root)}.okf.tar.gz`);
+  const files = await discoverPackFiles(root, config, out);
   const conceptIdsByPath = new Map(bundle.concepts.map((concept) => [concept.path, concept.id]));
   const manifestFiles = await Promise.all(files.map(async (path) => {
     const content = await readFile(join(root, path));
@@ -108,22 +109,25 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
   };
   const metadataDir = join(root, ".okfx");
 
-  if (options.writeMetadata ?? true) {
+  const writeMetadata = options.writeMetadata ?? true;
+  if (writeMetadata) {
     await mkdir(metadataDir, { recursive: true });
     await writeJson(join(metadataDir, "manifest.json"), manifest);
     await writeJson(join(metadataDir, "checksums.json"), checksums);
     await writeJson(join(metadataDir, "provenance.json"), provenance);
   }
 
-  const out = resolve(options.out ?? `${manifest.bundle_name}.okf.tar.gz`);
   await mkdir(dirname(out), { recursive: true });
+  const metadataFiles = writeMetadata
+    ? [".okfx/manifest.json", ".okfx/checksums.json", ".okfx/provenance.json"]
+    : [];
   await tar.create({
     cwd: root,
     file: out,
     gzip: true,
     portable: true,
     noMtime: true
-  }, [...files, ".okfx/manifest.json", ".okfx/checksums.json", ".okfx/provenance.json"]);
+  }, [...files, ...metadataFiles]);
 
   return {
     out,
@@ -134,7 +138,7 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
   };
 }
 
-async function discoverPackFiles(root: string, config: ResolvedOkfxConfig): Promise<string[]> {
+async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: string): Promise<string[]> {
   const entries = await fg(["**/*"], {
     cwd: root,
     absolute: true,
@@ -142,10 +146,19 @@ async function discoverPackFiles(root: string, config: ResolvedOkfxConfig): Prom
     unique: true,
     dot: true,
     followSymbolicLinks: false,
-    ignore: [...defaultConfig.exclude, ...config.exclude, ".okfx/**"]
+    ignore: [...defaultConfig.exclude, ...config.exclude, ".okfx/**", "**/*.okf.tar.gz"]
   });
 
-  return entries.map((entry) => relativePosixPath(root, entry)).sort((a, b) => a.localeCompare(b));
+  return entries
+    .filter((entry) => resolve(entry) !== out)
+    .map((entry) => relativePosixPath(root, entry))
+    .filter((path) => !isSensitivePackFile(path))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function isSensitivePackFile(path: string): boolean {
+  const name = basename(path).toLowerCase();
+  return name === ".env" || (name.startsWith(".env.") && name !== ".env.example");
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
