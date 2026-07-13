@@ -148,8 +148,10 @@ impl<'a> RuleContext<'a> {
             .iter()
             .map(|concept| (concept.id.as_str(), concept))
             .collect::<BTreeMap<_, _>>();
-        let mut incoming_by_concept_id = BTreeMap::new();
-        let mut outgoing_by_concept_id = BTreeMap::new();
+        let mut incoming_sources_by_concept_id: BTreeMap<&'a str, BTreeSet<&'a str>> =
+            BTreeMap::new();
+        let mut outgoing_targets_by_concept_id: BTreeMap<&'a str, BTreeSet<&'a str>> =
+            BTreeMap::new();
         let mut adjacency: BTreeMap<&'a str, Vec<&'a str>> = BTreeMap::new();
 
         for link in &input.links {
@@ -165,15 +167,28 @@ impl<'a> RuleContext<'a> {
                 continue;
             }
 
-            *incoming_by_concept_id.entry(target_id).or_insert(0) += 1;
-            *outgoing_by_concept_id
+            incoming_sources_by_concept_id
+                .entry(target_id)
+                .or_default()
+                .insert(link.source_concept_id.as_str());
+            outgoing_targets_by_concept_id
                 .entry(link.source_concept_id.as_str())
-                .or_insert(0) += 1;
+                .or_default()
+                .insert(target_id);
             adjacency
                 .entry(link.source_concept_id.as_str())
                 .or_default()
                 .push(target_id);
         }
+
+        let incoming_by_concept_id = incoming_sources_by_concept_id
+            .into_iter()
+            .map(|(id, sources)| (id, sources.len()))
+            .collect();
+        let outgoing_by_concept_id = outgoing_targets_by_concept_id
+            .into_iter()
+            .map(|(id, targets)| (id, targets.len()))
+            .collect();
 
         for targets in adjacency.values_mut() {
             targets.sort_unstable();
@@ -1313,6 +1328,24 @@ mod tests {
         assert_eq!(paths_for("agent/missing-summary"), vec!["author.md"]);
         assert_eq!(paths_for("agent/api-missing-auth-notes"), vec!["author.md"]);
         assert!(paths_for("agent/missing-usage").is_empty());
+    }
+
+    #[test]
+    fn counts_unique_neighbors_for_graph_degree() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![concept("source"), concept("target")],
+            links: (0..25).map(|_| link("source", "target")).collect(),
+            options: RuleOptions {
+                high_degree_threshold: 2,
+                ..RuleOptions::default()
+            },
+        });
+
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "graph/high-degree-hub")
+        );
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
