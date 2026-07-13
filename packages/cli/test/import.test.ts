@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -104,5 +104,32 @@ describe("okf import", () => {
 
     expect(await main(["import", "markdown", "--input", input, "--out", join(root, "knowledge"), "--write"], output.io)).toBe(2);
     expect(output.stderr()).toContain("escapes the output root");
+  });
+
+  it("refuses to write through symlinked output directories even when forced", async () => {
+    const root = await tempRoot();
+    const input = join(root, "markdown.json");
+    const out = join(root, "knowledge");
+    const external = join(root, "external");
+    await mkdir(out, { recursive: true });
+    await mkdir(external, { recursive: true });
+    await symlink(external, join(out, "notes"), process.platform === "win32" ? "junction" : "dir");
+    await writeFile(input, JSON.stringify([{ path: "notes/escaped", body: "# Escaped\n" }]), "utf8");
+
+    for (const extraArguments of [[], ["--force"]]) {
+      const output = capture();
+      expect(await main([
+        "import",
+        "markdown",
+        "--input",
+        input,
+        "--out",
+        out,
+        "--write",
+        ...extraArguments
+      ], output.io)).toBe(2);
+      expect(output.stderr()).toContain("symbolic link");
+      await expect(stat(join(external, "escaped.md"))).rejects.toMatchObject({ code: "ENOENT" });
+    }
   });
 });

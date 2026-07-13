@@ -1,5 +1,6 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, readFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
@@ -34,27 +35,20 @@ export function createImportCommand(context: CliContext): Command {
       if (options.write && !options.dryRun) {
         const out = resolve(options.out);
         const resolvedFiles = resolveProducedFiles(out, files);
+        const existingPaths = await Promise.all(resolvedFiles.map((file) => inspectOutputPath(out, file.relativePath)));
         if (!options.force) {
-          const existing = (await Promise.all(resolvedFiles.map(async (file) => {
-            try {
-              await access(file.path);
-              return file.relativePath;
-            } catch {
-              return undefined;
-            }
-          }))).filter((path): path is string => path !== undefined);
+          const existing = resolvedFiles
+            .filter((_, index) => existingPaths[index])
+            .map((file) => file.relativePath);
           if (existing.length > 0) {
             throw new Error(`Refusing to overwrite existing generated files: ${existing.join(", ")}. Use --force to overwrite.`);
           }
         }
 
         for (const file of resolvedFiles) {
-          const path = file.path;
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, file.content, {
-            encoding: "utf8",
-            flag: options.force ? "w" : "wx"
-          });
+          await ensureSafeOutputParent(out, file.relativePath);
+          await inspectOutputPath(out, file.relativePath);
+          await writeGeneratedFile(file.path, file.content, options.force);
         }
 
         context.io.stdout.write(`Generated ${files.length} OKF files in ${out}\n`);
@@ -66,6 +60,76 @@ export function createImportCommand(context: CliContext): Command {
 
       context.io.stdout.write(`${JSON.stringify({ adapter, files }, null, 2)}\n`);
     });
+}
+
+async function inspectOutputPath(root: string, relativePath: string): Promise<boolean> {
+  const segments = relativePath.split(sep);
+  let current = root;
+
+  for (const [index, segment] of segments.entries()) {
+    current = resolve(current, segment);
+    try {
+      const entry = await lstat(current);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Refusing to write through symbolic link in output path: ${relativePath}`);
+      }
+      if (index < segments.length - 1 && !entry.isDirectory()) {
+        throw new Error(`Refusing to write through non-directory output path: ${relativePath}`);
+      }
+    } catch (error) {
+      if (isFileSystemError(error, "ENOENT")) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  return true;
+}
+
+async function ensureSafeOutputParent(root: string, relativePath: string): Promise<void> {
+  await mkdir(root, { recursive: true });
+  const parent = dirname(relativePath);
+  if (parent === ".") {
+    return;
+  }
+
+  let current = root;
+  for (const segment of parent.split(sep)) {
+    current = resolve(current, segment);
+    try {
+      const entry = await lstat(current);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Refusing to write through symbolic link in output path: ${relativePath}`);
+      }
+      if (!entry.isDirectory()) {
+        throw new Error(`Refusing to write through non-directory output path: ${relativePath}`);
+      }
+    } catch (error) {
+      if (!isFileSystemError(error, "ENOENT")) {
+        throw error;
+      }
+      await mkdir(current);
+    }
+  }
+}
+
+async function writeGeneratedFile(path: string, content: string, force: boolean): Promise<void> {
+  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+  const flags = constants.O_WRONLY
+    | constants.O_CREAT
+    | noFollow
+    | (force ? constants.O_TRUNC : constants.O_EXCL);
+  const handle = await open(path, flags, 0o666);
+  try {
+    await handle.writeFile(content, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+function isFileSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === code;
 }
 
 function resolveProducedFiles(root: string, files: ProducedFile[]): Array<ProducedFile & { path: string; relativePath: string }> {
