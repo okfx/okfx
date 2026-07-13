@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { parseDocument, stringify } from "yaml";
+import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument, type Pair, type YAMLMap } from "yaml";
 
 import { loadConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { discoverMarkdownFiles } from "./bundle.js";
@@ -47,13 +47,12 @@ export function formatMarkdownFile(
     };
   }
 
-  let frontmatter: unknown;
+  let document: ReturnType<typeof parseDocument>;
   try {
-    const document = parseDocument(split.raw, { prettyErrors: false });
+    document = parseDocument(split.raw, { prettyErrors: false });
     if (document.errors.length > 0) {
       throw document.errors[0];
     }
-    frontmatter = document.toJSON();
   } catch (error) {
     diagnostics.push({
       code: "spec/invalid-frontmatter",
@@ -68,7 +67,7 @@ export function formatMarkdownFile(
     };
   }
 
-  if (!isRecord(frontmatter)) {
+  if (!isMap(document.contents)) {
     diagnostics.push({
       code: "spec/invalid-frontmatter",
       severity: "error",
@@ -82,10 +81,8 @@ export function formatMarkdownFile(
     };
   }
 
-  const formattedFrontmatter = stringify(orderFrontmatter(frontmatter, resolved.frontmatter.keyOrder), {
-    lineWidth: 0,
-    sortMapEntries: false
-  }).trimEnd();
+  orderFrontmatter(document.contents, resolved.frontmatter.keyOrder);
+  const formattedFrontmatter = document.toString({ lineWidth: 0 }).trimEnd();
   const formatted = `---\n${formattedFrontmatter}\n---\n\n${body}`;
 
   return {
@@ -131,18 +128,84 @@ export async function formatBundle(rootInput: string, options: FormatBundleOptio
   };
 }
 
-function orderFrontmatter(frontmatter: Record<string, unknown>, keyOrder: string[]): Record<string, unknown> {
-  const ordered: Record<string, unknown> = {};
-  const keys = Object.keys(frontmatter).sort((a, b) => keyRank(a, keyOrder) - keyRank(b, keyOrder) || a.localeCompare(b));
-
-  for (const key of keys) {
-    const value = key === "timestamp" && typeof frontmatter[key] === "string"
-      ? normalizeTimestamp(frontmatter[key])
-      : frontmatter[key];
-    ordered[key] = value;
+function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
+  const entries = frontmatter.items.map((pair, index) => {
+    const references = collectYamlReferences(pair);
+    return {
+      pair,
+      index,
+      key: scalarString(pair.key),
+      ...references
+    };
+  });
+  const anchorOwners = new Map<string, number>();
+  for (const entry of entries) {
+    for (const anchor of entry.anchors) {
+      anchorOwners.set(anchor, entry.index);
+    }
   }
 
-  return ordered;
+  const remaining = new Set(entries.map((entry) => entry.index));
+  const ordered: Pair[] = [];
+  while (remaining.size > 0) {
+    const candidates = entries.filter((entry) => remaining.has(entry.index) && [...entry.aliases].every((alias) => {
+      const owner = anchorOwners.get(alias);
+      return owner === undefined || owner === entry.index || !remaining.has(owner);
+    }));
+    const next = (candidates.length > 0 ? candidates : entries.filter((entry) => remaining.has(entry.index)))
+      .sort((a, b) => compareFrontmatterEntries(a, b, keyOrder))[0];
+    ordered.push(next.pair);
+    remaining.delete(next.index);
+  }
+  frontmatter.items = ordered;
+
+  const timestamp = frontmatter.items.find((pair) => scalarString(pair.key) === "timestamp");
+  if (timestamp && isScalar(timestamp.value) && typeof timestamp.value.value === "string") {
+    timestamp.value.value = normalizeTimestamp(timestamp.value.value);
+  }
+}
+
+function compareFrontmatterEntries(
+  a: { key?: string; index: number },
+  b: { key?: string; index: number },
+  keyOrder: string[]
+): number {
+  if (a.key === undefined || b.key === undefined) {
+    return a.key === undefined ? (b.key === undefined ? a.index - b.index : 1) : -1;
+  }
+  return keyRank(a.key, keyOrder) - keyRank(b.key, keyOrder) || a.key.localeCompare(b.key) || a.index - b.index;
+}
+
+function scalarString(value: unknown): string | undefined {
+  return isScalar(value) && typeof value.value === "string" ? value.value : undefined;
+}
+
+function collectYamlReferences(value: unknown): { anchors: Set<string>; aliases: Set<string> } {
+  const anchors = new Set<string>();
+  const aliases = new Set<string>();
+
+  const visit = (node: unknown): void => {
+    if (isAlias(node)) {
+      aliases.add(node.source);
+      return;
+    }
+    if (isScalar(node) || isMap(node) || isSeq(node)) {
+      if (node.anchor) {
+        anchors.add(node.anchor);
+      }
+    }
+    if (isPair(node)) {
+      visit(node.key);
+      visit(node.value);
+    } else if (isMap(node)) {
+      node.items.forEach(visit);
+    } else if (isSeq(node)) {
+      node.items.forEach(visit);
+    }
+  };
+
+  visit(value);
+  return { anchors, aliases };
 }
 
 function keyRank(key: string, keyOrder: string[]): number {
@@ -156,13 +219,67 @@ function normalizeTimestamp(value: string): string {
 }
 
 function normalizeBody(body: string): string {
-  return `${body
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.replace(/[ \t]+$/g, ""))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/\s*$/g, "")}\n`;
+  const normalizedBody = body.replace(/\r\n?/g, "\n");
+  const lines = normalizedBody.split("\n");
+  if (normalizedBody.endsWith("\n")) {
+    lines.pop();
+  }
+  const output: string[] = [];
+  let fence: { marker: "`" | "~"; length: number } | undefined;
+  let pendingBlankLine = false;
+
+  for (const line of lines) {
+    if (fence) {
+      if (isClosingFence(line, fence)) {
+        output.push(trimTrailingWhitespace(line));
+        fence = undefined;
+      } else {
+        output.push(line);
+      }
+      continue;
+    }
+
+    const normalizedLine = trimTrailingWhitespace(line);
+    const openingFence = parseOpeningFence(normalizedLine);
+    if (openingFence) {
+      if (pendingBlankLine && output.length > 0) {
+        output.push("");
+      }
+      pendingBlankLine = false;
+      output.push(normalizedLine);
+      fence = openingFence;
+    } else if (normalizedLine.length === 0) {
+      pendingBlankLine = output.length > 0;
+    } else {
+      if (pendingBlankLine) {
+        output.push("");
+      }
+      pendingBlankLine = false;
+      output.push(normalizedLine);
+    }
+  }
+
+  return `${output.join("\n")}\n`;
+}
+
+function trimTrailingWhitespace(line: string): string {
+  return line.replace(/[ \t]+$/g, "");
+}
+
+function parseOpeningFence(line: string): { marker: "`" | "~"; length: number } | undefined {
+  const match = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+  if (!match) {
+    return undefined;
+  }
+  return {
+    marker: match[1][0] as "`" | "~",
+    length: match[1].length
+  };
+}
+
+function isClosingFence(line: string, fence: { marker: "`" | "~"; length: number }): boolean {
+  const match = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+  return Boolean(match && match[1][0] === fence.marker && match[1].length >= fence.length);
 }
 
 interface FrontmatterSplit {
@@ -176,7 +293,7 @@ function splitFrontmatter(content: string): FrontmatterSplit | undefined {
   }
 
   const rest = content.slice(content.startsWith("---\r\n") ? 5 : 4);
-  const closing = /^---\s*$/m.exec(rest);
+  const closing = /^---[ \t]*\r?$/m.exec(rest);
   if (!closing || closing.index === undefined) {
     return undefined;
   }
@@ -184,8 +301,4 @@ function splitFrontmatter(content: string): FrontmatterSplit | undefined {
   const raw = rest.slice(0, closing.index);
   const body = rest.slice(closing.index + closing[0].length).replace(/^\r?\n/, "");
   return { raw, body };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

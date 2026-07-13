@@ -38,6 +38,46 @@ timestamp: 2026-07-07T00:00:00.000Z
 Body
 `);
   });
+
+  it("preserves YAML comments and anchor relationships while ordering keys", () => {
+    const result = formatMarkdownFile("concept.md", `---
+description: &summary Shared description # keep anchor comment
+title: Example # keep title comment
+type: Note
+usage: *summary
+---
+
+# Example
+`);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.formatted).toContain("type: Note\ntitle: Example # keep title comment\ndescription: &summary Shared description # keep anchor comment\nusage: *summary");
+  });
+
+  it("does not rewrite whitespace inside fenced code blocks", () => {
+    const content = [
+      "---",
+      "type: Note",
+      "title: Example",
+      "---",
+      "",
+      "# Example   ",
+      "",
+      "```text",
+      "first  ",
+      "",
+      "",
+      "second\t",
+      "```",
+      "",
+      "After   ",
+      ""
+    ].join("\n");
+
+    const result = formatMarkdownFile("concept.md", content);
+
+    expect(result.formatted).toContain("# Example\n\n```text\nfirst  \n\n\nsecond\t\n```\n\nAfter\n");
+  });
 });
 
 describe("formatBundle", () => {
