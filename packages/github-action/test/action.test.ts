@@ -16,6 +16,9 @@ describe("@okfx/github-action", () => {
     expect(action).toContain("GITHUB_STEP_SUMMARY");
     expect(action).toContain("actions/github-script@v7");
     expect(action).toContain("OKF quality gate");
+    expect(action.match(/const graph = readJson\(process\.env\.OKF_GRAPH_JSON\);/g)).toHaveLength(2);
+    expect(action.match(/\.\.\.\(lint\?\.stats \?\? \{\}\)/g)).toHaveLength(2);
+    expect(action.match(/OKF_RUN_DOCTOR === "true"/g)).toHaveLength(2);
     expect(action).toContain('default: "0.1.0"');
     expect(action).not.toContain('@okfx/cli":"latest"');
     expect(runBlockLines(action).some((line) => line.includes("${{ inputs."))).toBe(false);

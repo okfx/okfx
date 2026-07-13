@@ -124,6 +124,7 @@ runs:
       shell: bash
       env:
         OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_RUN_DOCTOR: ${{ inputs.doctor }}
         OKF_LINT_JSON: ${{ inputs.lint-json-out }}
         OKF_DOCTOR_JSON: ${{ inputs.doctor-json-out }}
         OKF_GRAPH_JSON: ${{ inputs.graph-out }}
@@ -131,10 +132,11 @@ runs:
         node <<'NODE'
         const fs = require("node:fs");
         const readJson = (path) => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, "utf8")) : undefined;
-        const doctor = readJson(process.env.OKF_DOCTOR_JSON);
+        const doctor = process.env.OKF_RUN_DOCTOR === "true" ? readJson(process.env.OKF_DOCTOR_JSON) : undefined;
         const lint = readJson(process.env.OKF_LINT_JSON);
+        const graph = readJson(process.env.OKF_GRAPH_JSON);
         const source = doctor ?? lint ?? {};
-        const summary = source.summary ?? {};
+        const summary = { ...(lint?.stats ?? {}), ...(graph?.stats ?? {}), ...(source.summary ?? {}) };
         const counts = source.counts ?? {};
         const lines = [
           "## OKF Summary",
@@ -167,6 +169,7 @@ runs:
       uses: actions/github-script@v7
       env:
         OKF_BUNDLE: ${{ inputs.bundle }}
+        OKF_RUN_DOCTOR: ${{ inputs.doctor }}
         OKF_LINT_JSON: ${{ inputs.lint-json-out }}
         OKF_DOCTOR_JSON: ${{ inputs.doctor-json-out }}
         OKF_GRAPH_JSON: ${{ inputs.graph-out }}
@@ -175,10 +178,11 @@ runs:
         script: |
           const fs = require("node:fs");
           const readJson = (path) => fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, "utf8")) : undefined;
-          const doctor = readJson(process.env.OKF_DOCTOR_JSON);
+          const doctor = process.env.OKF_RUN_DOCTOR === "true" ? readJson(process.env.OKF_DOCTOR_JSON) : undefined;
           const lint = readJson(process.env.OKF_LINT_JSON);
+          const graph = readJson(process.env.OKF_GRAPH_JSON);
           const source = doctor ?? lint ?? {};
-          const summary = source.summary ?? {};
+          const summary = { ...(lint?.stats ?? {}), ...(graph?.stats ?? {}), ...(source.summary ?? {}) };
           const counts = source.counts ?? {};
           const body = [
             "## OKF Summary",
