@@ -92,4 +92,37 @@ describe("okf diff", () => {
     expect(output.stdout()).toBe("");
     expect(await readFile(out, "utf8")).toContain("## OKF Diff");
   });
+
+  it("keeps untrusted concept data inside Markdown code spans", async () => {
+    const before = await tempRoot();
+    const after = await tempRoot();
+    const dangerousKey = "<img src=x onerror=alert(1)>";
+    await write(
+      before,
+      "same.md",
+      `---\ntype: Note\ntitle: Same\n"${dangerousKey}": before\n---\n# Same\n`
+    );
+    await write(
+      after,
+      "same.md",
+      `---\ntype: Note\ntitle: Same\n"${dangerousKey}": after\n---\n# Same\n`
+    );
+    await write(
+      after,
+      "report` [Injected](evil).md",
+      "---\ntype: Note\ntitle: Added\n---\n# Added\n"
+    );
+    const output = capture();
+
+    const code = await main(["diff", before, after, "--format", "markdown"], output.io);
+
+    expect(code).toBe(1);
+    expect(output.stdout()).toContain(
+      "- ``+ report` [Injected](evil)``"
+    );
+    expect(output.stdout()).toContain(
+      "  - `frontmatter.<img src=x onerror=alert(1)> changed`"
+    );
+    expect(output.stdout()).not.toContain("  - frontmatter.<img");
+  });
 });

@@ -119,7 +119,7 @@ function markdownList(title: string, values: string[], marker: string): string {
     return `### ${title}\n\nNone.\n`;
   }
 
-  return `### ${title}\n\n${values.map((value) => `- \`${marker} ${value}\``).join("\n")}\n`;
+  return `### ${title}\n\n${values.map((value) => `- ${markdownCode(`${marker} ${value}`)}`).join("\n")}\n`;
 }
 
 function markdownRenameList(diff: BundleDiffIR): string {
@@ -127,7 +127,7 @@ function markdownRenameList(diff: BundleDiffIR): string {
     return "### Renamed concepts\n\nNone.\n";
   }
 
-  return `### Renamed concepts\n\n${diff.renamedConcepts.map((entry) => `- \`${entry.from}\` -> \`${entry.to}\``).join("\n")}\n`;
+  return `### Renamed concepts\n\n${diff.renamedConcepts.map((entry) => `- ${markdownCode(entry.from)} -> ${markdownCode(entry.to)}`).join("\n")}\n`;
 }
 
 function markdownChangedList(diff: BundleDiffIR): string {
@@ -135,7 +135,7 @@ function markdownChangedList(diff: BundleDiffIR): string {
     return "### Changed concepts\n\nNone.\n";
   }
 
-  return `### Changed concepts\n\n${diff.changedConcepts.map((concept) => `- \`${concept.id}\`\n${concept.changes.map((change) => `  - ${change}`).join("\n")}`).join("\n")}\n`;
+  return `### Changed concepts\n\n${diff.changedConcepts.map((concept) => `- ${markdownCode(concept.id)}\n${concept.changes.map((change) => `  - ${markdownCode(change)}`).join("\n")}`).join("\n")}\n`;
 }
 
 function markdownReadinessSection(diff: BundleDiffIR): string {
@@ -144,4 +144,12 @@ function markdownReadinessSection(diff: BundleDiffIR): string {
 
 function formatDelta(delta: number): string {
   return delta > 0 ? `+${delta}` : `${delta}`;
+}
+
+function markdownCode(value: string): string {
+  const visibleValue = value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+  const longestFence = Math.max(0, ...[...visibleValue.matchAll(/`+/g)].map((match) => match[0].length));
+  const fence = "`".repeat(longestFence + 1);
+  const padding = /^[ `]|[ `]$/.test(visibleValue) ? " " : "";
+  return `${fence}${padding}${visibleValue}${padding}${fence}`;
 }
