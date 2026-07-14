@@ -86,7 +86,6 @@ fn build_term_map(documents: &[SearchIndexDocument]) -> BTreeMap<String, Vec<Str
             ],
             document.tags.clone(),
             document.headings.clone(),
-            document.backlinks.clone(),
         ]
         .concat()
         .join(" ");
@@ -155,6 +154,7 @@ mod tests {
         assert_eq!(index.documents[0].id, "metrics/wau");
         assert_eq!(index.terms["weekly"], vec!["metrics/wau"]);
         assert_eq!(index.terms["analytics"], vec!["metrics/wau"]);
+        assert!(!index.terms.contains_key("index"));
         assert_eq!(
             tokenize("A weekly-active user's metric"),
             vec!["metric", "user", "weekly-active"]
