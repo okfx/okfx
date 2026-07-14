@@ -1,8 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
 import { InvalidArgumentError } from "commander";
 
+import { ensureSafeGeneratedParent, inspectGeneratedPath, writeGeneratedFile } from "./generated-files.js";
 import type { CliIO } from "./program.js";
 import type { DiagnosticIR } from "@okfx/core";
 
@@ -23,8 +23,11 @@ export async function writeOutput(text: string, outPath: string | undefined, io:
   }
 
   const resolved = resolve(outPath);
-  await mkdir(dirname(resolved), { recursive: true });
-  await writeFile(resolved, text, "utf8");
+  const root = dirname(resolved);
+  const relativePath = basename(resolved);
+  await ensureSafeGeneratedParent(root, relativePath);
+  await inspectGeneratedPath(root, relativePath);
+  await writeGeneratedFile(resolved, text, true);
 }
 
 export function formatDiagnosticGroups(diagnostics: DiagnosticIR[]): string {
