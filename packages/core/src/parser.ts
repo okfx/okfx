@@ -45,6 +45,8 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
         const value = document.toJSON();
         if (!isPlainRecord(value)) {
           diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
+        } else if (containsReferenceCycle(value)) {
+          diagnostics.push(invalidFrontmatter(path, "Frontmatter must not contain recursive YAML aliases."));
         } else {
           frontmatter = value;
         }
@@ -118,4 +120,46 @@ function invalidFrontmatter(path: string, message: string): DiagnosticIR {
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function containsReferenceCycle(value: unknown): boolean {
+  const visiting = new WeakSet<object>();
+  const visited = new WeakSet<object>();
+  const stack: Array<{ value: unknown; exiting: boolean }> = [{ value, exiting: false }];
+
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (typeof frame.value !== "object" || frame.value === null) {
+      continue;
+    }
+    if (frame.exiting) {
+      visiting.delete(frame.value);
+      visited.add(frame.value);
+      continue;
+    }
+    if (visiting.has(frame.value)) {
+      return true;
+    }
+    if (visited.has(frame.value)) {
+      continue;
+    }
+
+    visiting.add(frame.value);
+    stack.push({ value: frame.value, exiting: true });
+    for (const child of referenceChildren(frame.value)) {
+      stack.push({ value: child, exiting: false });
+    }
+  }
+
+  return false;
+}
+
+function referenceChildren(value: object): unknown[] {
+  if (value instanceof Map) {
+    return [...value.keys(), ...value.values()];
+  }
+  if (value instanceof Set) {
+    return [...value.values()];
+  }
+  return Object.values(value);
 }

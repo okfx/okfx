@@ -1126,6 +1126,18 @@ mod tests {
     }
 
     #[test]
+    fn rejects_recursive_yaml_aliases() {
+        let parsed = parse_markdown_document(
+            "bad.md",
+            "---\nmetadata: &metadata { self: *metadata }\n---\n# Bad\n",
+            "bad",
+        );
+
+        assert!(parsed.frontmatter.is_none());
+        assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+    }
+
+    #[test]
     fn accepts_trailing_whitespace_on_frontmatter_closers() {
         let parsed =
             parse_markdown_document("note.md", "---\ntype: Note\n---   \n# Note\n", "note");

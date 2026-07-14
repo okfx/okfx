@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 import { parseMarkdownDocument } from "../src/index.js";
 
 describe("Markdown code fences", () => {
+  it("rejects recursive YAML aliases before they enter the JSON IR", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "---\nmetadata: &metadata { self: *metadata }\n---\n# Concept\n",
+      "concept"
+    );
+
+    expect(parsed.frontmatter).toBeUndefined();
+    expect(parsed.diagnostics).toContainEqual(expect.objectContaining({
+      code: "spec/invalid-frontmatter",
+      message: "Frontmatter must not contain recursive YAML aliases."
+    }));
+  });
+
   it("parses ATX indentation and closing markers without truncating literal hashes", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "# C#",
