@@ -323,19 +323,20 @@ function fieldFixForCode(document: vscode.TextDocument, code: string | undefined
   const value = field === "type"
     ? "Note"
     : titleFromDocument(document);
+  const yamlValue = field === "title" ? JSON.stringify(value) : value;
   const insert = frontmatterInsertionPoint(document);
   if (insert) {
     return {
       field,
       position: insert,
-      text: `${field}: ${value}\n`
+      text: `${field}: ${yamlValue}\n`
     };
   }
 
   return {
     field,
     position: new vscode.Position(0, 0),
-    text: `---\n${field}: ${value}\n---\n\n`
+    text: `---\n${field}: ${yamlValue}\n---\n\n`
   };
 }
 
