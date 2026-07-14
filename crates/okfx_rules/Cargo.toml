@@ -12,3 +12,4 @@ path = "src/lib.rs"
 okfx_core = { path = "../okfx_core" }
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"

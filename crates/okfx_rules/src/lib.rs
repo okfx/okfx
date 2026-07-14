@@ -1148,10 +1148,36 @@ fn trim_url_candidate(mut value: &str) -> &str {
 }
 
 fn concept_text_without_resources(concept: &ConceptRuleInput) -> String {
+    let raw = concept.frontmatter_raw.as_deref().unwrap_or_default();
+    let frontmatter = frontmatter_without_resources(raw);
+
+    format!("{frontmatter}\n{}", concept.body_text)
+}
+
+fn frontmatter_without_resources(raw: &str) -> String {
+    if let Ok(serde_yaml::Value::Mapping(mut mapping)) =
+        serde_yaml::from_str::<serde_yaml::Value>(raw)
+    {
+        let resource_keys = mapping
+            .keys()
+            .filter(|key| {
+                key.as_str()
+                    .is_some_and(|key| key.eq_ignore_ascii_case("resource"))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in resource_keys {
+            mapping.remove(&key);
+        }
+        if let Ok(serialized) = serde_yaml::to_string(&serde_yaml::Value::Mapping(mapping)) {
+            return serialized;
+        }
+    }
+
     let mut frontmatter_lines = Vec::new();
     let mut inside_resource = false;
 
-    for line in logical_lines(concept.frontmatter_raw.as_deref().unwrap_or_default()) {
+    for line in logical_lines(raw) {
         if let Some(key) = top_level_frontmatter_key(line) {
             inside_resource = key.eq_ignore_ascii_case("resource");
         }
@@ -1160,7 +1186,7 @@ fn concept_text_without_resources(concept: &ConceptRuleInput) -> String {
         }
     }
 
-    format!("{}\n{}", frontmatter_lines.join("\n"), concept.body_text)
+    frontmatter_lines.join("\n")
 }
 
 fn top_level_frontmatter_key(line: &str) -> Option<&str> {
@@ -1714,6 +1740,34 @@ mod tests {
 
         assert!(codes.contains(&"security/private-url"));
         assert!(!codes.contains(&"security/internal-url"));
+    }
+
+    #[test]
+    fn excludes_resource_fields_across_valid_yaml_mapping_styles() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("quoted")
+                    .with_frontmatter("type: Note\n\"resource\": http://localhost/quoted")
+                    .with_resource("http://localhost/quoted"),
+                concept("flow")
+                    .with_frontmatter("{type: Note, resource: http://localhost/flow}")
+                    .with_resource("http://localhost/flow"),
+            ],
+            ..RuleInput::default()
+        });
+
+        let paths_for = |code: &str| {
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == code)
+                .filter_map(|diagnostic| diagnostic.path.as_deref())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            paths_for("security/private-url"),
+            vec!["flow.md", "quoted.md"]
+        );
+        assert!(paths_for("security/internal-url").is_empty());
     }
 
     #[test]

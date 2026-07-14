@@ -317,6 +317,7 @@ dependencies = [
  "okfx_core",
  "regex",
  "serde",
+ "serde_yaml",
 ]
 
 [[package]]
