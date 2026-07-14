@@ -516,7 +516,32 @@ function containsInternalUrl(value: string): boolean {
 }
 
 function extractUrls(value: string): string[] {
-  return value.match(/\bhttps?:\/\/[^\s<>"')\]]+/g) ?? [];
+  return (value.match(/\bhttps?:\/\/[^\s<>"']+/g) ?? []).map(trimUrlCandidate);
+}
+
+function trimUrlCandidate(value: string): string {
+  let trimmed = value;
+  while (trimmed.length > 0) {
+    const withoutSentencePunctuation = trimmed.replace(/[.,;:!?]+$/u, "");
+    if (withoutSentencePunctuation !== trimmed) {
+      trimmed = withoutSentencePunctuation;
+      continue;
+    }
+    if (trimmed.endsWith(")") && countCharacter(trimmed, ")") > countCharacter(trimmed, "(")) {
+      trimmed = trimmed.slice(0, -1);
+      continue;
+    }
+    if (trimmed.endsWith("]") && countCharacter(trimmed, "]") > countCharacter(trimmed, "[")) {
+      trimmed = trimmed.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+  return trimmed;
+}
+
+function countCharacter(value: string, character: string): number {
+  return [...value].filter((candidate) => candidate === character).length;
 }
 
 function isPrivateUrl(value: string): boolean {

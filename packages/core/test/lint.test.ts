@@ -290,6 +290,20 @@ resource:
     });
   });
 
+  it("detects bracketed private IPv6 URLs in body text", async () => {
+    await withBundle({
+      "ipv6.md": "---\ntype: Note\ntitle: IPv6\n---\n# IPv6\n\nSee http://[::1]/admin.\n",
+      "mapped.md": "---\ntype: Note\ntitle: Mapped\n---\n# Mapped\n\n[Local](http://[::ffff:127.0.0.1]/admin)\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "security/internal-url")
+        .map((diagnostic) => diagnostic.path))
+        .toEqual(["ipv6.md", "mapped.md"]);
+    });
+  });
+
   it("runs configured plugin rules and honors rule overrides", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
