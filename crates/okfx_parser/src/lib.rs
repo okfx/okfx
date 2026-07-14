@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub const CRATE_NAME: &str = "okfx_parser";
+const MAX_LINK_DESTINATION_NESTING: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -427,6 +428,9 @@ fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usi
         let character = line[cursor..].chars().next()?;
         if character == '(' && !is_escaped_delimiter(bytes, cursor) {
             depth += 1;
+            if depth > MAX_LINK_DESTINATION_NESTING {
+                return None;
+            }
         } else if character == ')' && !is_escaped_delimiter(bytes, cursor) {
             if depth == 0 {
                 return Some((destination_start, cursor, cursor));
@@ -1147,6 +1151,26 @@ mod tests {
             ]
         );
         assert_eq!(parsed.links[0].location.end.as_ref().unwrap().offset, 37);
+    }
+
+    #[test]
+    fn bounds_nested_parentheses_in_link_destinations() {
+        let accepted = format!("({}target{})", "(".repeat(63), ")".repeat(63));
+        let rejected = format!("({}target{})", "(".repeat(64), ")".repeat(64));
+        let parsed = parse_markdown_document(
+            "concept.md",
+            format!("[Accepted]({accepted})\n[Rejected]({rejected})\n"),
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .filter_map(|link| link.text.as_deref())
+                .collect::<Vec<_>>(),
+            vec!["Accepted"]
+        );
     }
 
     #[test]

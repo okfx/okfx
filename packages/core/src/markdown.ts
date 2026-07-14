@@ -6,6 +6,8 @@ export interface ExtractedMarkdown {
   links: LinkIR[];
 }
 
+const MAX_LINK_DESTINATION_NESTING = 64;
+
 export function extractMarkdown(
   bodyRaw: string,
   sourceConceptId: string,
@@ -160,6 +162,9 @@ function parseLinkDestination(
     }
     if (character === "(" && !isEscaped(markdown, cursor)) {
       depth += 1;
+      if (depth > MAX_LINK_DESTINATION_NESTING) {
+        return undefined;
+      }
     } else if (character === ")" && !isEscaped(markdown, cursor)) {
       if (depth === 0) {
         return { targetStart: destinationStart, targetEnd: cursor, closingParen: cursor };

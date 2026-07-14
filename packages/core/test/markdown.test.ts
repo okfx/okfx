@@ -114,6 +114,18 @@ describe("Markdown code fences", () => {
     expect(parsed.links[0]?.location.end.offset).toBe(37);
   });
 
+  it("bounds nested parentheses in link destinations", () => {
+    const accepted = `(${"(".repeat(63)}target${")".repeat(63)})`;
+    const rejected = `(${"(".repeat(64)}target${")".repeat(64)})`;
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      `[Accepted](${accepted})\n[Rejected](${rejected})\n`,
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => link.text)).toEqual(["Accepted"]);
+  });
+
   it("parses nested and empty link labels", () => {
     const parsed = parseMarkdownDocument(
       "concept.md",

@@ -71,6 +71,17 @@ describe("performance baselines", () => {
     expect(parsed.links).toEqual([]);
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
+
+  it("bounds overlapping malformed link destinations", () => {
+    const content = `[${"[x](".repeat(8_000)}]`;
+    const started = performance.now();
+
+    const parsed = parseMarkdownDocument("malformed.md", content, "malformed");
+    const elapsedMs = performance.now() - started;
+
+    expect(parsed.links).toEqual([]);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
 });
 
 async function makeLargeBundle(count: number): Promise<string> {
