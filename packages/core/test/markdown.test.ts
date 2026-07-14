@@ -24,6 +24,12 @@ describe("Markdown code fences", () => {
     expect(parsed.body.text).toContain("####### Not a heading");
   });
 
+  it("preserves Unicode whitespace in ATX heading content", () => {
+    const parsed = parseMarkdownDocument("concept.md", "# \u00a0Padded\u00a0\n", "concept");
+
+    expect(parsed.body.headings[0]).toMatchObject({ title: "\u00a0Padded\u00a0", slug: "padded" });
+  });
+
   it("ignores headings and links inside backtick and tilde fences", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "---",

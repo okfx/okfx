@@ -302,7 +302,9 @@ function parseAtxHeading(line: string): { level: number; title: string } | undef
 
   return {
     level: match[1].length,
-    title: remainder.replace(/[ \t]+#+[ \t]*$/, "").trim()
+    title: remainder
+      .replace(/[ \t]+#+[ \t]*$/, "")
+      .replace(/^[ \t]+|[ \t]+$/g, "")
   };
 }
 
