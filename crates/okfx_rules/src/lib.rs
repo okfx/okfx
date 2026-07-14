@@ -1,7 +1,7 @@
 use okfx_core::find_representative_cycles;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::LazyLock;
 
@@ -416,9 +416,14 @@ fn graph_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
 fn style_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let key_order = configured_frontmatter_key_order(context.options);
+    let key_ranks = frontmatter_key_ranks(&key_order);
 
     for concept in context.concepts {
-        if !frontmatter_key_order_is_stable(concept.frontmatter_raw.as_deref(), &key_order) {
+        if !frontmatter_key_order_is_stable(
+            concept.frontmatter_raw.as_deref(),
+            &key_ranks,
+            key_order.len(),
+        ) {
             push_concept_diagnostic(
                 &mut diagnostics,
                 context.options,
@@ -839,7 +844,11 @@ fn configured_frontmatter_key_order(options: &RuleOptions) -> Vec<String> {
     }
 }
 
-fn frontmatter_key_order_is_stable(raw: Option<&str>, configured_order: &[String]) -> bool {
+fn frontmatter_key_order_is_stable(
+    raw: Option<&str>,
+    key_ranks: &HashMap<&str, usize>,
+    fallback_rank: usize,
+) -> bool {
     let Some(raw) = raw else {
         return true;
     };
@@ -854,11 +863,21 @@ fn frontmatter_key_order_is_stable(raw: Option<&str>, configured_order: &[String
     };
     let mut desired = keys.clone();
     desired.sort_by(|left, right| {
-        frontmatter_key_rank(left, configured_order)
-            .cmp(&frontmatter_key_rank(right, configured_order))
+        key_ranks
+            .get(left.as_str())
+            .unwrap_or(&fallback_rank)
+            .cmp(key_ranks.get(right.as_str()).unwrap_or(&fallback_rank))
             .then_with(|| left.cmp(right))
     });
     keys == desired
+}
+
+fn frontmatter_key_ranks(configured_order: &[String]) -> HashMap<&str, usize> {
+    let mut ranks = HashMap::with_capacity(configured_order.len());
+    for (rank, key) in configured_order.iter().enumerate() {
+        ranks.entry(key.as_str()).or_insert(rank);
+    }
+    ranks
 }
 
 fn frontmatter_key(line: &str) -> Option<String> {
@@ -876,13 +895,6 @@ fn frontmatter_key(line: &str) -> Option<String> {
     } else {
         None
     }
-}
-
-fn frontmatter_key_rank(key: &str, configured_order: &[String]) -> usize {
-    configured_order
-        .iter()
-        .position(|entry| entry == key)
-        .unwrap_or(configured_order.len())
 }
 
 fn concept_headings(concept: &ConceptRuleInput) -> Vec<String> {

@@ -90,6 +90,22 @@ type: Note
     expect(result.formatted).toContain("type: Note\nz_anchor: &summary Shared description\na_alias: *summary");
   });
 
+  it("orders large frontmatter configs without rescanning the configured keys", () => {
+    const keyOrder = Array.from({ length: 20_000 }, (_, index) => `configured_${index}`);
+    const keys = Array.from({ length: 1_500 }, (_, index) => `configured_${19_999 - index}`);
+    const content = `---\n${keys.map((key) => `${key}: value`).join("\n")}\n---\n# Example\n`;
+    const started = performance.now();
+
+    const result = formatMarkdownFile("concept.md", content, {
+      frontmatter: { keyOrder }
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.formatted.indexOf("configured_18500:"))
+      .toBeLessThan(result.formatted.indexOf("configured_19999:"));
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
   it("preserves alias targets when anchor names are redefined", () => {
     const result = formatMarkdownFile("concept.md", `---
 z: &shared one

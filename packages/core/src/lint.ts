@@ -1,7 +1,7 @@
 import { BlockList, isIP } from "node:net";
 import { isMap, isScalar, parseDocument } from "yaml";
 
-import { compareStrings } from "./compare.js";
+import { buildStringRanks, compareStrings } from "./compare.js";
 import { conceptIdFromPath } from "./paths.js";
 import {
   apiMissingAuthNotesDiagnostics,
@@ -191,9 +191,13 @@ const builtInLintRules: BuiltInRule[] = [
   {
     id: "style/frontmatter-key-order",
     defaultSeverity: "warning",
-    run: ({ bundle, config }) => bundle.concepts
-      .filter((concept) => !frontmatterKeyOrderIsStable(concept, config.frontmatter.keyOrder))
-      .map((concept) => conceptDiagnostic("style/frontmatter-key-order", "warning", concept, "Frontmatter keys should use the configured stable order."))
+    run: ({ bundle, config }) => {
+      const configuredOrder = config.frontmatter.keyOrder;
+      const ranks = buildStringRanks(configuredOrder);
+      return bundle.concepts
+        .filter((concept) => !frontmatterKeyOrderIsStable(concept, ranks, configuredOrder.length))
+        .map((concept) => conceptDiagnostic("style/frontmatter-key-order", "warning", concept, "Frontmatter keys should use the configured stable order."));
+    }
   },
   {
     id: "style/timestamp-format",
@@ -601,13 +605,19 @@ function conceptTextWithoutResources(concept: ConceptIR): string {
   return `${JSON.stringify(frontmatter)}\n${concept.body.raw}`;
 }
 
-function frontmatterKeyOrderIsStable(concept: ConceptIR, configuredOrder: string[]): boolean {
+function frontmatterKeyOrderIsStable(
+  concept: ConceptIR,
+  ranks: ReadonlyMap<string, number>,
+  fallbackRank: number
+): boolean {
   if (concept.frontmatterRaw === undefined) {
     return true;
   }
 
   const keys = frontmatterKeys(concept.frontmatterRaw);
-  const desired = [...keys].sort((a, b) => frontmatterKeyRank(a, configuredOrder) - frontmatterKeyRank(b, configuredOrder) || compareStrings(a, b));
+  const desired = [...keys].sort((a, b) => (
+    (ranks.get(a) ?? fallbackRank) - (ranks.get(b) ?? fallbackRank) || compareStrings(a, b)
+  ));
   return keys.join("\0") === desired.join("\0");
 }
 
@@ -644,11 +654,6 @@ function frontmatterKeys(raw: string): string[] {
     // Invalid frontmatter is reported separately; retain the best-effort key scan here.
   }
   return keys;
-}
-
-function frontmatterKeyRank(key: string, configuredOrder: string[]): number {
-  const index = configuredOrder.indexOf(key);
-  return index === -1 ? configuredOrder.length : index;
 }
 
 function isIsoTimestamp(value: string): boolean {

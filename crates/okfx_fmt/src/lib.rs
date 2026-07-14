@@ -1,5 +1,5 @@
 use serde_yaml::{Mapping, Value};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 pub const CRATE_NAME: &str = "okfx_fmt";
 
@@ -196,12 +196,13 @@ fn preserve_frontmatter(raw: &str) -> String {
 
 fn stringify_ordered_frontmatter(frontmatter: Mapping, key_order: &[&str]) -> String {
     let mut entries = frontmatter.into_iter().collect::<Vec<_>>();
+    let key_ranks = key_ranks(key_order);
     entries.sort_by(|(left, _), (right, _)| {
         let left_key = key_name(left);
         let right_key = key_name(right);
-        key_rank(&left_key, key_order)
-            .cmp(&key_rank(&right_key, key_order))
-            .then_with(|| left_key.cmp(&right_key))
+        key_rank(left_key, &key_ranks, key_order.len())
+            .cmp(&key_rank(right_key, &key_ranks, key_order.len()))
+            .then_with(|| left_key.cmp(right_key))
     });
 
     let mut ordered = Mapping::new();
@@ -220,15 +221,20 @@ fn stringify_ordered_frontmatter(frontmatter: Mapping, key_order: &[&str]) -> St
     format!("{yaml}\n")
 }
 
-fn key_name(value: &Value) -> String {
-    value.as_str().unwrap_or_default().to_string()
+fn key_name(value: &Value) -> &str {
+    value.as_str().unwrap_or_default()
 }
 
-fn key_rank(key: &str, key_order: &[&str]) -> usize {
-    key_order
-        .iter()
-        .position(|candidate| *candidate == key)
-        .unwrap_or(key_order.len())
+fn key_ranks<'a>(key_order: &'a [&'a str]) -> HashMap<&'a str, usize> {
+    let mut ranks = HashMap::with_capacity(key_order.len());
+    for (rank, key) in key_order.iter().enumerate() {
+        ranks.entry(*key).or_insert(rank);
+    }
+    ranks
+}
+
+fn key_rank(key: &str, key_ranks: &HashMap<&str, usize>, fallback_rank: usize) -> usize {
+    key_ranks.get(key).copied().unwrap_or(fallback_rank)
 }
 
 fn normalize_timestamp_value(value: Value) -> Value {
@@ -424,6 +430,31 @@ mod tests {
             result.formatted,
             "---\ntype: Note\ntitle: Example\n---\n\n# Example\n"
         );
+    }
+
+    #[test]
+    fn orders_large_frontmatter_configs_without_rescanning_configured_keys() {
+        let key_order = (0..20_000)
+            .map(|index| format!("configured_{index}"))
+            .collect::<Vec<_>>();
+        let key_order_refs = key_order.iter().map(String::as_str).collect::<Vec<_>>();
+        let keys = (18_500..20_000).rev().collect::<Vec<_>>();
+        let frontmatter = keys
+            .iter()
+            .map(|index| format!("configured_{index}: value"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let content = format!("---\n{frontmatter}\n---\n# Example\n");
+        let started = std::time::Instant::now();
+
+        let result =
+            format_markdown_document_with_key_order("concept.md", content, &key_order_refs);
+
+        assert!(result.diagnostics.is_empty());
+        assert!(
+            result.formatted.find("configured_18500:") < result.formatted.find("configured_19999:")
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
     #[test]

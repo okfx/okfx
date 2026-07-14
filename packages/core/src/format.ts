@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument, type Pair, type YAMLMap } from "yaml";
 
-import { compareStrings } from "./compare.js";
+import { buildStringRanks, compareStrings } from "./compare.js";
 import { loadConfig, mergeConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { discoverMarkdownFiles } from "./bundle.js";
 import { resolveBundleRoot } from "./paths.js";
@@ -130,6 +130,7 @@ export async function formatBundle(rootInput: string, options: FormatBundleOptio
 }
 
 function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
+  const keyRanks = buildStringRanks(keyOrder);
   const entries: FrontmatterEntry[] = frontmatter.items.map((pair, index) => {
     const references = collectYamlReferences(pair);
     return {
@@ -168,7 +169,9 @@ function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
     }
   }
 
-  const compareEntries = (a: FrontmatterEntry, b: FrontmatterEntry) => compareFrontmatterEntries(a, b, keyOrder);
+  const compareEntries = (a: FrontmatterEntry, b: FrontmatterEntry) => (
+    compareFrontmatterEntries(a, b, keyRanks, keyOrder.length)
+  );
   const remaining = new Set(entries.map((entry) => entry.index));
   const available: FrontmatterEntry[] = [];
   const allEntries: FrontmatterEntry[] = [];
@@ -270,12 +273,15 @@ function normalizeFrontmatterTimestamp(frontmatter: YAMLMap): void {
 function compareFrontmatterEntries(
   a: { key?: string; index: number },
   b: { key?: string; index: number },
-  keyOrder: string[]
+  keyRanks: ReadonlyMap<string, number>,
+  fallbackRank: number
 ): number {
   if (a.key === undefined || b.key === undefined) {
     return a.key === undefined ? (b.key === undefined ? a.index - b.index : 1) : -1;
   }
-  return keyRank(a.key, keyOrder) - keyRank(b.key, keyOrder) || compareStrings(a.key, b.key) || a.index - b.index;
+  return (keyRanks.get(a.key) ?? fallbackRank) - (keyRanks.get(b.key) ?? fallbackRank)
+    || compareStrings(a.key, b.key)
+    || a.index - b.index;
 }
 
 function scalarString(value: unknown): string | undefined {
@@ -308,11 +314,6 @@ function collectYamlReferences(value: unknown): { anchors: string[]; aliases: Se
 
   visit(value);
   return { anchors, aliases };
-}
-
-function keyRank(key: string, keyOrder: string[]): number {
-  const index = keyOrder.indexOf(key);
-  return index === -1 ? keyOrder.length : index;
 }
 
 function normalizeTimestamp(value: string): string {

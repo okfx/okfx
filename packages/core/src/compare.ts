@@ -14,3 +14,13 @@ export function compareStrings(left: string, right: string): number {
 
   return leftIndex < left.length ? 1 : (rightIndex < right.length ? -1 : 0);
 }
+
+export function buildStringRanks(values: readonly string[]): ReadonlyMap<string, number> {
+  const ranks = new Map<string, number>();
+  for (const [index, value] of values.entries()) {
+    if (!ranks.has(value)) {
+      ranks.set(value, index);
+    }
+  }
+  return ranks;
+}
