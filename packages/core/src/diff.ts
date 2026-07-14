@@ -119,6 +119,8 @@ function changedConcept(before: ConceptIR, after: ConceptIR): ConceptChangeIR | 
   const changes = [
     ...frontmatterChanged.map((key) => `frontmatter.${key} changed`),
     ...(bodyChanged ? ["body changed"] : []),
+    ...(resourceChanged && !frontmatterChanged.includes("resource") ? ["resource changed"] : []),
+    ...(tagsChanged && !frontmatterChanged.includes("tags") ? ["tags changed"] : []),
     ...linksAdded.map((link) => `link added: ${link}`),
     ...linksRemoved.map((link) => `link removed: ${link}`)
   ];

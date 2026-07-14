@@ -133,4 +133,33 @@ type: Note
       await after.cleanup();
     }
   });
+
+  it("reports resource and tag changes outside frontmatter", async () => {
+    const before = await bundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    });
+
+    try {
+      const concept = before.loaded.concepts[0]!;
+      const after = {
+        ...before.loaded,
+        concepts: [{
+          ...concept,
+          resource: "https://example.com/catalog",
+          tags: ["analytics"]
+        }]
+      };
+
+      const diff = diffBundles(before.loaded, after);
+
+      expect(diff.stats.changedCount).toBe(1);
+      expect(diff.changedConcepts[0]).toMatchObject({
+        changes: ["resource changed", "tags changed"],
+        resourceChanged: true,
+        tagsChanged: true
+      });
+    } finally {
+      await before.cleanup();
+    }
+  });
 });
