@@ -369,7 +369,11 @@ function configuredRule(config: ResolvedOkfxConfig, ruleId: string) {
 }
 
 function pluginRuleDefaultSeverity(rule: LoadedOkfxPlugin["rules"][string]): DiagnosticSeverity {
-  const severity = rule.meta?.defaultSeverity ?? rule.meta?.severity ?? "warning";
+  const configuredMeta = ownProperty(rule, "meta");
+  const meta = isRecord(configuredMeta) ? configuredMeta : undefined;
+  const severity = meta
+    ? ownProperty(meta, "defaultSeverity") ?? ownProperty(meta, "severity") ?? "warning"
+    : "warning";
   if (severity !== "error" && severity !== "warning" && severity !== "advice" && severity !== "info") {
     throw new TypeError(`unsupported default severity ${JSON.stringify(severity)}`);
   }
@@ -385,18 +389,19 @@ function normalizePluginDiagnostic(
     throw new TypeError("rule diagnostics must be objects");
   }
 
-  const code = value.code === undefined || value.code === ""
+  const configuredCode = ownProperty(value, "code");
+  const code = configuredCode === undefined || configuredCode === ""
     ? ruleId
-    : requiredPluginString(value.code, "code");
+    : requiredPluginString(configuredCode, "code");
   return {
     code,
     severity,
-    message: requiredPluginString(value.message, "message"),
+    message: requiredPluginString(ownProperty(value, "message"), "message"),
     ...optionalPluginStringField(value, "path"),
     ...optionalPluginStringField(value, "conceptId"),
     ...optionalPluginStringField(value, "docsUrl"),
-    ...normalizePluginLocation(value.location),
-    ...normalizePluginFix(value.fix)
+    ...normalizePluginLocation(ownProperty(value, "location")),
+    ...normalizePluginFix(ownProperty(value, "fix"))
   };
 }
 
@@ -408,10 +413,11 @@ function normalizePluginLocation(value: unknown): Pick<DiagnosticIR, "location">
     throw new TypeError("diagnostic location must be an object");
   }
 
-  const start = normalizePluginSourceLocation(value.start, "location.start");
-  const end = value.end === undefined
+  const start = normalizePluginSourceLocation(ownProperty(value, "start"), "location.start");
+  const configuredEnd = ownProperty(value, "end");
+  const end = configuredEnd === undefined
     ? undefined
-    : normalizePluginSourceLocation(value.end, "location.end");
+    : normalizePluginSourceLocation(configuredEnd, "location.end");
   return { location: { start, ...(end ? { end } : {}) } };
 }
 
@@ -419,11 +425,12 @@ function normalizePluginSourceLocation(value: unknown, label: string): NonNullab
   if (!isRecord(value)) {
     throw new TypeError(`diagnostic ${label} must be an object`);
   }
-  const line = requiredPluginInteger(value.line, `${label}.line`, 1);
-  const column = requiredPluginInteger(value.column, `${label}.column`, 1);
-  const offset = value.offset === undefined
+  const line = requiredPluginInteger(ownProperty(value, "line"), `${label}.line`, 1);
+  const column = requiredPluginInteger(ownProperty(value, "column"), `${label}.column`, 1);
+  const configuredOffset = ownProperty(value, "offset");
+  const offset = configuredOffset === undefined
     ? undefined
-    : requiredPluginInteger(value.offset, `${label}.offset`, 0);
+    : requiredPluginInteger(configuredOffset, `${label}.offset`, 0);
   return { line, column, ...(offset === undefined ? {} : { offset }) };
 }
 
@@ -434,12 +441,13 @@ function normalizePluginFix(value: unknown): Pick<DiagnosticIR, "fix"> | Record<
   if (!isRecord(value)) {
     throw new TypeError("diagnostic fix must be an object");
   }
-  const replacement = value.replacement === undefined
+  const configuredReplacement = ownProperty(value, "replacement");
+  const replacement = configuredReplacement === undefined
     ? undefined
-    : requiredPluginString(value.replacement, "fix.replacement");
+    : requiredPluginString(configuredReplacement, "fix.replacement");
   return {
     fix: {
-      description: requiredPluginString(value.description, "fix.description"),
+      description: requiredPluginString(ownProperty(value, "description"), "fix.description"),
       ...(replacement === undefined ? {} : { replacement })
     }
   };
@@ -449,7 +457,8 @@ function optionalPluginStringField(
   value: Record<string, unknown>,
   key: "path" | "conceptId" | "docsUrl"
 ): Partial<Pick<DiagnosticIR, typeof key>> {
-  return value[key] === undefined ? {} : { [key]: requiredPluginString(value[key], key) };
+  const configuredValue = ownProperty(value, key);
+  return configuredValue === undefined ? {} : { [key]: requiredPluginString(configuredValue, key) };
 }
 
 function requiredPluginString(value: unknown, label: string): string {
@@ -468,6 +477,10 @@ function requiredPluginInteger(value: unknown, label: string, minimum: number): 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function ownProperty<T extends object, K extends keyof T>(value: T, key: K): T[K] | undefined {
+  return Object.hasOwn(value, key) ? value[key] : undefined;
 }
 
 function createRuleContext(bundle: BundleIR, config: ResolvedOkfxConfig): RuleContext {

@@ -411,6 +411,44 @@ resource:
     });
   });
 
+  it("ignores plugin metadata and diagnostic fields inherited from prototypes", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    }, async (root) => {
+      const inheritedMetaRule = Object.assign(
+        Object.create({ meta: { defaultSeverity: "error" } }),
+        { run: () => [{ message: "Inherited metadata ignored." }] }
+      );
+      const result = await lintBundleWithPlugins(
+        await loadBundle(root, { loadConfigFile: false }),
+        {
+          plugins: [{
+            name: "prototype-plugin",
+            source: "inline",
+            options: {},
+            rules: {
+              "custom/inherited-meta": inheritedMetaRule,
+              "custom/inherited-diagnostic": {
+                run: () => [Object.create({ code: "forged", message: "Inherited" })]
+              },
+              "custom/inherited-path": {
+                run: () => [Object.assign(Object.create({ path: "forged.md" }), { message: "Own" })]
+              }
+            }
+          }]
+        }
+      );
+
+      expect(result.diagnostics.find((diagnostic) => diagnostic.code === "custom/inherited-meta")?.severity)
+        .toBe("warning");
+      expect(result.diagnostics.find((diagnostic) => diagnostic.code === "custom/inherited-path"))
+        .toEqual(expect.not.objectContaining({ path: "forged.md" }));
+      expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: "forged" }));
+      expect(result.diagnostics.find((diagnostic) => diagnostic.code === "plugin/rule-failed")?.message)
+        .toContain("diagnostic message must be a string");
+    });
+  });
+
   it("runs plugin rules whose ids match object prototype properties", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
