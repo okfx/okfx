@@ -342,19 +342,27 @@ fn parse_links(
             cursor = close_bracket + 1;
             continue;
         }
-        if link_label_contains_link(line, open_bracket + 1, close_bracket, &label_ends) {
+        if link_label_contains_link(
+            line,
+            source_line,
+            open_bracket + 1,
+            close_bracket,
+            &label_ends,
+        ) {
             cursor = open_bracket + 1;
             continue;
         }
         let target_start = close_bracket + 2;
         let Some((parsed_target_start, target_end, close_paren)) =
-            parse_link_destination(line, target_start)
+            parse_link_destination(source_line, target_start)
         else {
             cursor = close_bracket + 1;
             continue;
         };
-        let target_raw = line[parsed_target_start..target_end].to_string();
-        let text = line[open_bracket + 1..close_bracket].trim().to_string();
+        let target_raw = source_line[parsed_target_start..target_end].to_string();
+        let text = source_line[open_bracket + 1..close_bracket]
+            .trim()
+            .to_string();
         advance_utf16_position(
             source_line,
             &mut source_byte_position,
@@ -545,6 +553,7 @@ fn matching_link_label_ends(value: &str) -> BTreeMap<usize, usize> {
 
 fn link_label_contains_link(
     value: &str,
+    source_value: &str,
     start: usize,
     end: usize,
     label_ends: &BTreeMap<usize, usize>,
@@ -569,7 +578,7 @@ fn link_label_contains_link(
         if let Some(nested_end) = label_ends.get(&nested_start).copied()
             && nested_end < end
             && value[nested_end + 1..].starts_with('(')
-            && parse_link_destination(value, nested_end + 2)
+            && parse_link_destination(source_value, nested_end + 2)
                 .is_some_and(|(_, _, closing_paren)| closing_paren < end)
         {
             return true;
@@ -681,7 +690,7 @@ fn strip_inline_links(markdown: &str) -> String {
             cursor = close_bracket + 1;
             continue;
         }
-        if link_label_contains_link(markdown, open + 1, close_bracket, &label_ends) {
+        if link_label_contains_link(markdown, markdown, open + 1, close_bracket, &label_ends) {
             cursor = open + 1;
             continue;
         }
@@ -1157,7 +1166,7 @@ mod tests {
     fn ignores_links_inside_inline_code_spans() {
         let parsed = parse_markdown_document(
             "note.md",
-            "# Visible\n`[single](hidden-single.md)`\n``before\n[multiline](hidden-multiline.md)\nafter``\n\\`[literal](visible.md)\n[Also visible](also-visible.md)\n",
+            "# Visible\n`[single](hidden-single.md)`\n``before\n[multiline](hidden-multiline.md)\nafter``\n\\`[literal](visible.md)\n[Also visible](also-visible.md)\n[Use `code`](code-label.md)\n[Version](docs/`v1`.md)\n",
             "note",
         );
 
@@ -1167,7 +1176,16 @@ mod tests {
                 .iter()
                 .map(|link| link.target_raw.as_str())
                 .collect::<Vec<_>>(),
-            vec!["visible.md", "also-visible.md"]
+            vec![
+                "visible.md",
+                "also-visible.md",
+                "code-label.md",
+                "docs/`v1`.md"
+            ]
+        );
+        assert_eq!(
+            parsed.links.get(2).and_then(|link| link.text.as_deref()),
+            Some("Use `code`")
         );
     }
 

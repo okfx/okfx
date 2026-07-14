@@ -104,6 +104,12 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.indexOf("visible.md"))).toBe("visible.md");
   });
 
+  it("treats backticks in destinations as literal path characters", () => {
+    const line = "[Version](docs/`v1`.md)";
+
+    expect(markdownTargetAt(line, line.indexOf("v1"))).toBe("docs/`v1`.md");
+  });
+
   it("indexes unmatched backtick runs by delimiter length", () => {
     const line = Array.from(
       { length: 1_600 },

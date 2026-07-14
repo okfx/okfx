@@ -34,12 +34,12 @@ export function markdownTargetAt(line: string, character: number): string | unde
     const labelStart = labels.startsByEnd.get(linkStart);
     if (labelStart === undefined
       || (searchableLine[labelStart - 1] === "!" && !isEscaped(searchableLine, labelStart - 1))
-      || linkLabelContainsLink(searchableLine, labelStart + 1, linkStart, labels.endsByStart)) {
+      || linkLabelContainsLink(searchableLine, line, labelStart + 1, linkStart, labels.endsByStart)) {
       continue;
     }
 
     const targetStart = linkStart + 2;
-    const destination = parseDestination(searchableLine, targetStart);
+    const destination = parseDestination(line, targetStart);
     if (!destination || cursor < targetStart || cursor > destination.closingParen) {
       continue;
     }
@@ -180,6 +180,7 @@ function matchingLinkLabels(line: string): {
 
 function linkLabelContainsLink(
   line: string,
+  sourceLine: string,
   start: number,
   end: number,
   labelEnds: ReadonlyMap<number, number>
@@ -198,7 +199,7 @@ function linkLabelContainsLink(
 
     const nestedEnd = labelEnds.get(nestedStart);
     if (nestedEnd !== undefined && nestedEnd < end && line[nestedEnd + 1] === "(") {
-      const destination = parseDestination(line, nestedEnd + 2);
+      const destination = parseDestination(sourceLine, nestedEnd + 2);
       if (destination && destination.closingParen < end) {
         return true;
       }

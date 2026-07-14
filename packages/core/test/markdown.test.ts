@@ -88,13 +88,18 @@ describe("Markdown code fences", () => {
       "after``",
       "\\`[literal](visible.md)",
       "[Also visible](also-visible.md)",
+      "[Use `code`](code-label.md)",
+      "[Version](docs/`v1`.md)",
       ""
     ].join("\n"), "concept");
 
     expect(parsed.links.map((link) => link.targetRaw)).toEqual([
       "visible.md",
-      "also-visible.md"
+      "also-visible.md",
+      "code-label.md",
+      "docs/`v1`.md"
     ]);
+    expect(parsed.links.at(-2)?.text).toBe("Use `code`");
   });
 
   it("parses balanced and escaped parentheses in link destinations", () => {

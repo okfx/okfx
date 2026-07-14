@@ -23,7 +23,7 @@ export function extractMarkdown(
       text: plainText(bodyRaw),
       headings: extractHeadings(searchableBody, locate)
     },
-    links: extractLinks(linkSearchableBody, sourceConceptId, locate)
+    links: extractLinks(linkSearchableBody, bodyRaw, sourceConceptId, locate)
   };
 }
 
@@ -67,7 +67,12 @@ function extractHeadings(bodyRaw: string, locate: SourceLocator): HeadingIR[] {
   return headings;
 }
 
-function extractLinks(bodyRaw: string, sourceConceptId: string, locate: SourceLocator): LinkIR[] {
+function extractLinks(
+  bodyRaw: string,
+  sourceBodyRaw: string,
+  sourceConceptId: string,
+  locate: SourceLocator
+): LinkIR[] {
   const links: LinkIR[] = [];
   const labelEnds = matchingLinkLabelEnds(bodyRaw);
   let cursor = 0;
@@ -91,18 +96,18 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, locate: SourceLo
       cursor = startOffset + 1;
       continue;
     }
-    if (linkLabelContainsLink(bodyRaw, startOffset + 1, labelEnd, labelEnds)) {
+    if (linkLabelContainsLink(bodyRaw, sourceBodyRaw, startOffset + 1, labelEnd, labelEnds)) {
       cursor = startOffset + 1;
       continue;
     }
-    const destination = parseLinkDestination(bodyRaw, labelEnd + 2);
+    const destination = parseLinkDestination(sourceBodyRaw, labelEnd + 2);
     if (!destination) {
       cursor = labelEnd + 1;
       continue;
     }
 
-    const targetRaw = bodyRaw.slice(destination.targetStart, destination.targetEnd);
-    const text = bodyRaw.slice(startOffset + 1, labelEnd).trim();
+    const targetRaw = sourceBodyRaw.slice(destination.targetStart, destination.targetEnd);
+    const text = sourceBodyRaw.slice(startOffset + 1, labelEnd).trim();
     links.push({
       sourceConceptId,
       targetRaw,
@@ -253,6 +258,7 @@ function matchingLinkLabelEnds(value: string): Map<number, number> {
 
 function linkLabelContainsLink(
   value: string,
+  sourceValue: string,
   start: number,
   end: number,
   labelEnds: Map<number, number>
@@ -271,7 +277,7 @@ function linkLabelContainsLink(
 
     const nestedEnd = labelEnds.get(nestedStart);
     if (nestedEnd !== undefined && nestedEnd < end && value[nestedEnd + 1] === "(") {
-      const destination = parseLinkDestination(value, nestedEnd + 2);
+      const destination = parseLinkDestination(sourceValue, nestedEnd + 2);
       if (destination && destination.closingParen < end) {
         return true;
       }
@@ -343,7 +349,7 @@ function stripInlineLinks(markdown: string): string {
       cursor = startOffset + 1;
       continue;
     }
-    if (linkLabelContainsLink(markdown, startOffset + 1, labelEnd, labelEnds)) {
+    if (linkLabelContainsLink(markdown, markdown, startOffset + 1, labelEnd, labelEnds)) {
       cursor = startOffset + 1;
       continue;
     }
