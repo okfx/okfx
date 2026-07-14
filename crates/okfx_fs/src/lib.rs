@@ -184,14 +184,16 @@ pub fn resolve_markdown_target(
         return None;
     }
 
-    let target_path = if let Some(root_relative) = without_query.strip_prefix('/') {
+    let decoded_target = decode_markdown_path(without_query);
+
+    let target_path = if let Some(root_relative) = decoded_target.strip_prefix('/') {
         root_relative.to_string()
     } else {
         let source_dir = dirname(&normalize_relative_path(source_path));
         if source_dir.is_empty() {
-            without_query.to_string()
+            decoded_target
         } else {
-            format!("{source_dir}/{without_query}")
+            format!("{source_dir}/{decoded_target}")
         }
     };
 
@@ -201,6 +203,71 @@ pub fn resolve_markdown_target(
     }
 
     Some(concept_id_from_path(normalized))
+}
+
+fn decode_markdown_path(value: &str) -> String {
+    let mut characters = value.chars().peekable();
+    let mut unescaped = String::with_capacity(value.len());
+    while let Some(character) = characters.next() {
+        if character == '\\'
+            && characters
+                .peek()
+                .is_some_and(|next| next.is_ascii_punctuation())
+        {
+            unescaped.push(characters.next().unwrap_or_default());
+        } else {
+            unescaped.push(character);
+        }
+    }
+
+    decode_percent_runs(&unescaped)
+}
+
+fn decode_percent_runs(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut output = String::with_capacity(value.len());
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'%'
+            && cursor + 2 < bytes.len()
+            && hex_value(bytes[cursor + 1]).is_some()
+            && hex_value(bytes[cursor + 2]).is_some()
+        {
+            let start = cursor;
+            let mut decoded = Vec::new();
+            while cursor + 2 < bytes.len() && bytes[cursor] == b'%' {
+                let (Some(high), Some(low)) =
+                    (hex_value(bytes[cursor + 1]), hex_value(bytes[cursor + 2]))
+                else {
+                    break;
+                };
+                decoded.push((high << 4) | low);
+                cursor += 3;
+            }
+            if let Ok(decoded) = String::from_utf8(decoded) {
+                output.push_str(&decoded);
+            } else {
+                output.push_str(&value[start..cursor]);
+            }
+            continue;
+        }
+
+        let character = value[cursor..].chars().next().unwrap_or_default();
+        output.push(character);
+        cursor += character.len_utf8();
+    }
+
+    output
+}
+
+fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn walk_directory(
@@ -374,6 +441,30 @@ mod tests {
         );
         assert_eq!(
             resolve_markdown_target("concepts/metrics/wau.md", "../../../outside.md"),
+            None
+        );
+    }
+
+    #[test]
+    fn decodes_markdown_destinations_without_allowing_traversal() {
+        assert_eq!(
+            resolve_markdown_target("index.md", r"docs/foo_\(bar\).md"),
+            Some("docs/foo_(bar)".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("index.md", "docs/hello%20world.md"),
+            Some("docs/hello world".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("index.md", "docs/topic%23one.md"),
+            Some("docs/topic#one".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("index.md", "docs/100%.md"),
+            Some("docs/100%".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("concepts/current.md", "%2e%2e/%2e%2e/outside.md"),
             None
         );
     }

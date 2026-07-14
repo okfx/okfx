@@ -19,4 +19,20 @@ describe("relativeMarkdownTarget", () => {
     expect(resolveMarkdownTarget(source, relativeMarkdownTarget(source, target)))
       .toBe("shared/auth");
   });
+
+  it("decodes escaped and percent-encoded Markdown destinations", () => {
+    expect(resolveMarkdownTarget("index.md", "docs/foo_\\(bar\\).md"))
+      .toBe("docs/foo_(bar)");
+    expect(resolveMarkdownTarget("index.md", "docs/hello%20world.md"))
+      .toBe("docs/hello world");
+    expect(resolveMarkdownTarget("index.md", "docs/topic%23one.md"))
+      .toBe("docs/topic#one");
+    expect(resolveMarkdownTarget("index.md", "docs/100%.md"))
+      .toBe("docs/100%");
+  });
+
+  it("rejects traversal after decoding a Markdown destination", () => {
+    expect(resolveMarkdownTarget("concepts/current.md", "%2e%2e/%2e%2e/outside.md"))
+      .toBeUndefined();
+  });
 });

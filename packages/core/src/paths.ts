@@ -51,9 +51,11 @@ export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): st
     return undefined;
   }
 
-  const targetPath = withoutQuery.startsWith("/")
-    ? withoutQuery.slice(1)
-    : posix.join(dirname(normalizeRelativePath(sourcePath)), withoutQuery);
+  const decodedTarget = decodeMarkdownPath(withoutQuery);
+
+  const targetPath = decodedTarget.startsWith("/")
+    ? decodedTarget.slice(1)
+    : posix.join(dirname(normalizeRelativePath(sourcePath)), decodedTarget);
 
   const normalized = normalizeRelativePath(targetPath);
   if (normalized.startsWith("../") || normalized === ".." || isAbsolute(normalized)) {
@@ -61,6 +63,37 @@ export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): st
   }
 
   return conceptIdFromPath(normalized);
+}
+
+function decodeMarkdownPath(value: string): string {
+  const characters = [...value];
+  let unescaped = "";
+  for (let index = 0; index < characters.length; index += 1) {
+    const character = characters[index] ?? "";
+    const next = characters[index + 1];
+    if (character === "\\" && next !== undefined && isAsciiPunctuation(next)) {
+      unescaped += next;
+      index += 1;
+    } else {
+      unescaped += character;
+    }
+  }
+
+  return unescaped.replace(/(?:%[0-9a-f]{2})+/giu, (encoded) => {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  });
+}
+
+function isAsciiPunctuation(value: string): boolean {
+  const code = value.codePointAt(0) ?? 0;
+  return (code >= 0x21 && code <= 0x2f)
+    || (code >= 0x3a && code <= 0x40)
+    || (code >= 0x5b && code <= 0x60)
+    || (code >= 0x7b && code <= 0x7e);
 }
 
 export function relativeMarkdownTarget(sourcePath: string, targetPath: string): string {
