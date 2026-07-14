@@ -339,6 +339,10 @@ fn parse_links(
             cursor = close_bracket + 1;
             continue;
         }
+        if link_label_contains_link(line, open_bracket + 1, close_bracket) {
+            cursor = open_bracket + 1;
+            continue;
+        }
         let target_start = close_bracket + 2;
         let Some((parsed_target_start, target_end, close_paren)) =
             parse_link_destination(line, target_start)
@@ -511,6 +515,38 @@ fn find_link_label_end(value: &str, start: usize) -> Option<usize> {
     None
 }
 
+fn link_label_contains_link(value: &str, start: usize, end: usize) -> bool {
+    let bytes = value.as_bytes();
+    let mut cursor = start;
+
+    while cursor < end {
+        let Some(nested_relative) = bytes[cursor..end].iter().position(|byte| *byte == b'[') else {
+            return false;
+        };
+        let nested_start = cursor + nested_relative;
+        if is_escaped_delimiter(bytes, nested_start)
+            || (nested_start > 0
+                && bytes[nested_start - 1] == b'!'
+                && !is_escaped_delimiter(bytes, nested_start - 1))
+        {
+            cursor = nested_start + 1;
+            continue;
+        }
+
+        if let Some(nested_end) = find_link_label_end(value, nested_start + 1)
+            && nested_end < end
+            && value[nested_end + 1..].starts_with('(')
+            && parse_link_destination(value, nested_end + 2)
+                .is_some_and(|(_, _, closing_paren)| closing_paren < end)
+        {
+            return true;
+        }
+        cursor = nested_start + 1;
+    }
+
+    false
+}
+
 fn classify_link_target(target: &str) -> LinkKind {
     let target = unescape_markdown_destination(target);
     if target.is_empty() {
@@ -606,6 +642,10 @@ fn strip_inline_links(markdown: &str) -> String {
         };
         if !markdown[close_bracket + 1..].starts_with('(') {
             cursor = close_bracket + 1;
+            continue;
+        }
+        if link_label_contains_link(markdown, open + 1, close_bracket) {
+            cursor = open + 1;
             continue;
         }
         let Some((_, _, close_paren)) = parse_link_destination(markdown, close_bracket + 2) else {
@@ -1024,6 +1064,24 @@ mod tests {
             ]
         );
         assert_eq!(parsed.body.text, "See [details] Escaped \\] label");
+    }
+
+    #[test]
+    fn keeps_inner_links_from_becoming_nested_outer_links() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "[Outer [Inner](inner.md)](outer.md) [Image ![Alt](image.png)](image-outer.md)\n",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["inner.md", "image-outer.md"]
+        );
     }
 
     #[test]

@@ -110,6 +110,16 @@ describe("Markdown code fences", () => {
     expect(parsed.body.text).toBe("See [details] Escaped \\] label");
   });
 
+  it("keeps inner links from becoming nested outer links", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "[Outer [Inner](inner.md)](outer.md) [Image ![Alt](image.png)](image-outer.md)\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual(["inner.md", "image-outer.md"]);
+  });
+
   it("parses empty and enclosed destinations with optional titles", () => {
     const parsed = parseMarkdownDocument(
       "concept.md",

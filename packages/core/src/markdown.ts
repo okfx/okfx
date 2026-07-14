@@ -88,6 +88,10 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
       cursor = startOffset + 1;
       continue;
     }
+    if (linkLabelContainsLink(bodyRaw, startOffset + 1, labelEnd)) {
+      cursor = startOffset + 1;
+      continue;
+    }
     const destination = parseLinkDestination(bodyRaw, labelEnd + 2);
     if (!destination) {
       cursor = labelEnd + 1;
@@ -239,6 +243,32 @@ function findLinkLabelEnd(value: string, start: number): number {
   return -1;
 }
 
+function linkLabelContainsLink(value: string, start: number, end: number): boolean {
+  let cursor = start;
+  while (cursor < end) {
+    const nestedStart = value.indexOf("[", cursor);
+    if (nestedStart === -1 || nestedStart >= end) {
+      return false;
+    }
+    if (isEscaped(value, nestedStart)
+      || (value[nestedStart - 1] === "!" && !isEscaped(value, nestedStart - 1))) {
+      cursor = nestedStart + 1;
+      continue;
+    }
+
+    const nestedEnd = findLinkLabelEnd(value, nestedStart + 1);
+    if (nestedEnd !== -1 && nestedEnd < end && value[nestedEnd + 1] === "(") {
+      const destination = parseLinkDestination(value, nestedEnd + 2);
+      if (destination && destination.closingParen < end) {
+        return true;
+      }
+    }
+    cursor = nestedStart + 1;
+  }
+
+  return false;
+}
+
 export function slugifyHeading(title: string): string {
   return title
     .trim()
@@ -294,6 +324,10 @@ function stripInlineLinks(markdown: string): string {
     const image = markdown[startOffset - 1] === "!" && !isEscaped(markdown, startOffset - 1);
     const labelEnd = findLinkLabelEnd(markdown, startOffset + 1);
     if (labelEnd === -1 || markdown[labelEnd + 1] !== "(") {
+      cursor = startOffset + 1;
+      continue;
+    }
+    if (linkLabelContainsLink(markdown, startOffset + 1, labelEnd)) {
       cursor = startOffset + 1;
       continue;
     }
