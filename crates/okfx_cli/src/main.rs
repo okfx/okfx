@@ -202,6 +202,7 @@ mod tests {
     fn includes_format_diagnostic_messages() {
         let diagnostic = okfx_fmt::FormatDiagnostic {
             code: "spec/invalid-frontmatter".to_string(),
+            severity: "error".to_string(),
             message: "Frontmatter must be a YAML mapping.".to_string(),
             path: Some("bad.md".to_string()),
         };
@@ -216,6 +217,7 @@ mod tests {
     fn escapes_control_characters_in_terminal_fields() {
         let diagnostic = okfx_fmt::FormatDiagnostic {
             code: "test/injected\n::group::code".to_string(),
+            severity: "error".to_string(),
             message: "bad\r\n::add-mask::secret\tend".to_string(),
             path: Some("bad.md\u{1b}]52;c;value\u{7}".to_string()),
         };
