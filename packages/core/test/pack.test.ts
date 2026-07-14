@@ -106,10 +106,16 @@ describe("packBundle", () => {
       await writeFile(join(root, ".aws/credentials"), "aws_secret_access_key=secret\n", "utf8");
       await writeFile(join(root, "terraform.tfstate"), JSON.stringify({ secret: "value" }), "utf8");
       await writeFile(join(root, "server.pem"), "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----\n", "utf8");
+      await writeFile(
+        join(root, "secret.md"),
+        "---\ntype: Note\n---\n# Secret\n\n-----BEGIN PRIVATE KEY-----\nsecret\n",
+        "utf8"
+      );
       await writeFile(join(root, "certificate.pem"), "-----BEGIN CERTIFICATE-----\npublic\n-----END CERTIFICATE-----\n", "utf8");
 
       const result = await packBundle(root, { out });
 
+      expect(result.manifest.concept_count).toBe(1);
       expect(result.manifest.files.map((file) => file.path)).toEqual([
         ".env.example",
         "certificate.pem",

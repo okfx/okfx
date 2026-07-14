@@ -124,7 +124,7 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
       okf_version: config.okfVersion,
       bundle_name: options.bundleName ?? basename(root),
       created_at: createdAt,
-      concept_count: bundle.stats.conceptCount,
+      concept_count: manifestFiles.filter((file) => file.concept_id !== undefined).length,
       file_count: manifestFiles.length,
       content_hash: sha256Hex(JSON.stringify(manifestFiles.map((file) => [file.path, file.sha256]))),
       source,
