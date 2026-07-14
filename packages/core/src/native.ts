@@ -53,6 +53,14 @@ export interface FormatAcceleratedResult {
 const requireFromHere = createRequire(import.meta.url);
 let nativeAttemptCache: { key: string; attempt: BindingLoadAttempt } | undefined;
 let wasmAttemptCache: { key: string; attempt: Promise<BindingLoadAttempt> } | undefined;
+const PARSE_BINDING_FUNCTIONS = [
+  "parseMarkdownDocumentJson",
+  "parse_markdown_document_json"
+] as const;
+const FORMAT_BINDING_FUNCTIONS = [
+  "formatMarkdownDocumentJson",
+  "format_markdown_document_json"
+] as const;
 
 export const NATIVE_PLATFORM_PACKAGES: readonly NativePlatformPackage[] = [
   {
@@ -184,10 +192,7 @@ export function parseMarkdownDocumentAccelerated(
   options: NativeCallOptions = {}
 ): ParsedMarkdownDocument {
   const binding = options.binding === undefined ? loadOptionalNativeBinding() : options.binding ?? undefined;
-  const parseNative = bindingFunction(binding, [
-    "parseMarkdownDocumentJson",
-    "parse_markdown_document_json"
-  ]);
+  const parseNative = bindingFunction(binding, PARSE_BINDING_FUNCTIONS);
 
   if (!parseNative) {
     return parseMarkdownDocument(path, content, sourceConceptId);
@@ -207,7 +212,9 @@ export async function parseMarkdownDocumentAcceleratedAsync(
   sourceConceptId: string,
   options: NativeCallOptions = {}
 ): Promise<ParsedMarkdownDocument> {
-  const binding = options.binding === undefined ? await loadOptionalBackendBinding() : options.binding ?? undefined;
+  const binding = options.binding === undefined
+    ? await loadOptionalBackendBindingFor(PARSE_BINDING_FUNCTIONS)
+    : options.binding ?? undefined;
   return parseMarkdownDocumentAccelerated(path, content, sourceConceptId, { binding: binding ?? null });
 }
 
@@ -218,10 +225,7 @@ export function formatMarkdownFileAccelerated(
   options: NativeCallOptions = {}
 ): FormatAcceleratedResult {
   const binding = options.binding === undefined ? loadOptionalNativeBinding() : options.binding ?? undefined;
-  const formatNative = bindingFunction(binding, [
-    "formatMarkdownDocumentJson",
-    "format_markdown_document_json"
-  ]);
+  const formatNative = bindingFunction(binding, FORMAT_BINDING_FUNCTIONS);
 
   if (!formatNative) {
     return formatMarkdownFile(path, content, config);
@@ -241,8 +245,21 @@ export async function formatMarkdownFileAcceleratedAsync(
   config: OkfxConfig | ResolvedOkfxConfig = {},
   options: NativeCallOptions = {}
 ): Promise<FormatAcceleratedResult> {
-  const binding = options.binding === undefined ? await loadOptionalBackendBinding() : options.binding ?? undefined;
+  const binding = options.binding === undefined
+    ? await loadOptionalBackendBindingFor(FORMAT_BINDING_FUNCTIONS)
+    : options.binding ?? undefined;
   return formatMarkdownFileAccelerated(path, content, config, { binding: binding ?? null });
+}
+
+async function loadOptionalBackendBindingFor(
+  functionNames: readonly string[]
+): Promise<NativeJsonBinding | undefined> {
+  const native = loadOptionalNativeBinding();
+  if (bindingFunction(native, functionNames)) {
+    return native;
+  }
+  const wasm = await loadOptionalWasmBinding();
+  return bindingFunction(wasm, functionNames) ? wasm : undefined;
 }
 
 interface BindingLoadAttempt {
@@ -409,7 +426,7 @@ function localCandidate(relative: string): BindingCandidate {
 
 function bindingFunction(
   binding: NativeJsonBinding | undefined,
-  names: string[]
+  names: readonly string[]
 ): ((...args: string[]) => string) | undefined {
   for (const name of names) {
     if (!binding || !Object.hasOwn(binding, name)) {

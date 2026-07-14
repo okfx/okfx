@@ -218,6 +218,54 @@ export default async function initialize() {
     }
   });
 
+  it("selects WASM when a loaded native module lacks the requested capabilities", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-backend-capability-"));
+    const nativePath = join(root, "binding.cjs");
+    const wasmPath = join(root, "binding.mjs");
+    const previousNative = process.env.OKFX_NATIVE_BINDING;
+    const previousWasm = process.env.OKFX_WASM_BINDING;
+    const content = "wasm";
+    try {
+      await writeFile(nativePath, `
+module.exports.nativeCapabilitiesJson = () => "{}";
+`, "utf8");
+      await writeFile(wasmPath, `
+export function parse_markdown_document_json(path, content, sourceConceptId) {
+  return JSON.stringify({
+    path,
+    body: { raw: content, text: "from wasm", headings: [] },
+    links: [],
+    diagnostics: [],
+    content_hash: ${JSON.stringify(contentHash(content))}
+  });
+}
+export function format_markdown_document_json() {
+  return JSON.stringify({ formatted: "from wasm", changed: true, diagnostics: [] });
+}
+`, "utf8");
+      process.env.OKFX_NATIVE_BINDING = nativePath;
+      process.env.OKFX_WASM_BINDING = wasmPath;
+
+      const parsed = await parseMarkdownDocumentAcceleratedAsync("native.md", content, "native");
+      const formatted = await formatMarkdownFileAcceleratedAsync("native.md", content);
+
+      expect(parsed.body.text).toBe("from wasm");
+      expect(formatted.formatted).toBe("from wasm");
+    } finally {
+      if (previousNative === undefined) {
+        delete process.env.OKFX_NATIVE_BINDING;
+      } else {
+        process.env.OKFX_NATIVE_BINDING = previousNative;
+      }
+      if (previousWasm === undefined) {
+        delete process.env.OKFX_WASM_BINDING;
+      } else {
+        process.env.OKFX_WASM_BINDING = previousWasm;
+      }
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("supports WASM-style async bindings and normalizes Rust JSON field names", async () => {
     const content = "---\ntype: Note\n---\n# WASM\n[Other](other.md)\n";
     const binding: NativeJsonBinding = {
