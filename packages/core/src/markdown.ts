@@ -1,4 +1,5 @@
 import type { HeadingIR, LinkIR, LinkKind, MarkdownBodyIR, SourceLocationIR } from "./types.js";
+import { unescapeMarkdownDestination } from "./markdown-destination.js";
 
 export interface ExtractedMarkdown {
   body: MarkdownBodyIR;
@@ -24,15 +25,16 @@ export function extractMarkdown(
 }
 
 export function classifyLinkTarget(targetRaw: string): LinkKind {
-  if (targetRaw.startsWith("#")) {
+  const target = unescapeMarkdownDestination(targetRaw);
+  if (target.startsWith("#")) {
     return "anchor";
   }
 
-  if (/^[a-z][a-z0-9+.-]*:/i.test(targetRaw) || targetRaw.startsWith("//")) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//")) {
     return "external";
   }
 
-  if (targetRaw.trim().length === 0) {
+  if (target.trim().length === 0) {
     return "unknown";
   }
 

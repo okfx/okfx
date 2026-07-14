@@ -512,15 +512,33 @@ fn find_link_label_end(value: &str, start: usize) -> Option<usize> {
 }
 
 fn classify_link_target(target: &str) -> LinkKind {
+    let target = unescape_markdown_destination(target);
     if target.is_empty() {
         LinkKind::Unknown
     } else if target.starts_with('#') {
         LinkKind::Anchor
-    } else if target.starts_with("//") || looks_like_scheme(target) {
+    } else if target.starts_with("//") || looks_like_scheme(&target) {
         LinkKind::External
     } else {
         LinkKind::Internal
     }
+}
+
+fn unescape_markdown_destination(value: &str) -> String {
+    let mut characters = value.chars().peekable();
+    let mut unescaped = String::with_capacity(value.len());
+    while let Some(character) = characters.next() {
+        if character == '\\'
+            && characters
+                .peek()
+                .is_some_and(|next| next.is_ascii_punctuation())
+        {
+            unescaped.push(characters.next().unwrap_or_default());
+        } else {
+            unescaped.push(character);
+        }
+    }
+    unescaped
 }
 
 fn looks_like_scheme(target: &str) -> bool {
@@ -1065,6 +1083,24 @@ mod tests {
                 .map(|link| link.target_raw.as_str())
                 .collect::<Vec<_>>(),
             vec!["docs/leading.md", "docs/a b.md", "docs/title.md"]
+        );
+    }
+
+    #[test]
+    fn classifies_links_after_applying_markdown_backslash_escapes() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            r"[External](https\://example.com) [Anchor](\#details) [Internal](docs/item.md)",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.kind)
+                .collect::<Vec<_>>(),
+            vec![LinkKind::External, LinkKind::Anchor, LinkKind::Internal]
         );
     }
 

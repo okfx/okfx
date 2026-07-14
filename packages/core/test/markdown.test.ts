@@ -150,6 +150,16 @@ describe("Markdown code fences", () => {
     ]);
   });
 
+  it("classifies links after applying Markdown backslash escapes", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      String.raw`[External](https\://example.com) [Anchor](\#details) [Internal](docs/item.md)` + "\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => link.kind)).toEqual(["external", "anchor", "internal"]);
+  });
+
   it("honors escaped link and image markers", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "\\[Escaped](hidden.md)",
