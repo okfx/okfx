@@ -1297,8 +1297,10 @@ fn resource_host(value: &str) -> Option<String> {
         .and_then(|host| host.split_once(']').map(|(host, _)| host))
     {
         host.to_string()
-    } else {
+    } else if is_special_scheme {
         decode_url_host(authority.split(':').next().unwrap_or_default())?
+    } else {
+        authority.split(':').next().unwrap_or_default().to_string()
     };
     let host = decoded_host.trim().trim_end_matches('.').to_lowercase();
     (!host.is_empty()).then_some(host)
@@ -1602,6 +1604,35 @@ mod tests {
 
         assert_eq!(messages_for("security/private-url").len(), 2);
         assert_eq!(messages_for("security/non-allowlisted-resource").len(), 2);
+    }
+
+    #[test]
+    fn preserves_opaque_hosts_when_enforcing_resource_allowlists() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("resources")
+                    .with_resource("s3://local%68ost/private")
+                    .with_resource("s3://blocked%2fproject/data"),
+            ],
+            options: RuleOptions {
+                resource_allow_hosts: vec!["localhost".to_string()],
+                ..RuleOptions::default()
+            },
+            ..RuleInput::default()
+        });
+
+        let non_allowlisted = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "security/non-allowlisted-resource")
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(non_allowlisted.len(), 2);
+        assert!(
+            non_allowlisted
+                .iter()
+                .any(|message| message.contains("blocked%2fproject"))
+        );
     }
 
     #[test]
