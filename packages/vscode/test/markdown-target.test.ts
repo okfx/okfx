@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { markdownTargetAt, resolveDefinitionTarget } from "../src/markdown-target.js";
+import {
+  markdownTargetAt,
+  markdownTargetAtDocument,
+  resolveDefinitionTarget
+} from "../src/markdown-target.js";
 
 describe("markdownTargetAt", () => {
   it("returns balanced destinations without optional titles", () => {
@@ -95,5 +99,24 @@ describe("resolveDefinitionTarget", () => {
     expect(resolveDefinitionTarget("concepts/current.md", "https://example.com"))
       .toBeUndefined();
     expect(resolveDefinitionTarget("concepts/current.md", "#details")).toBeUndefined();
+  });
+});
+
+describe("markdownTargetAtDocument", () => {
+  it("ignores links inside backtick and tilde fenced code", () => {
+    const markdown = [
+      "[Before](before.md)",
+      "```markdown",
+      "[Hidden](hidden.md)",
+      "```",
+      "[After](after.md)",
+      "~~~text",
+      "[Also hidden](also-hidden.md)"
+    ].join("\n");
+
+    expect(markdownTargetAtDocument(markdown, 0, 12)).toBe("before.md");
+    expect(markdownTargetAtDocument(markdown, 2, 12)).toBeUndefined();
+    expect(markdownTargetAtDocument(markdown, 4, 10)).toBe("after.md");
+    expect(markdownTargetAtDocument(markdown, 6, 17)).toBeUndefined();
   });
 });

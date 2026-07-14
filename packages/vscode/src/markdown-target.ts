@@ -6,6 +6,18 @@ export function resolveDefinitionTarget(sourcePath: string, targetRaw: string): 
     : undefined;
 }
 
+export function markdownTargetAtDocument(
+  markdown: string,
+  lineNumber: number,
+  character: number
+): string | undefined {
+  const lines = markdown.split(/\r\n|\n|\r/);
+  if (lineNumber < 0 || lineNumber >= lines.length || lineIsFencedCode(lines, lineNumber)) {
+    return undefined;
+  }
+  return markdownTargetAt(lines[lineNumber]!, character);
+}
+
 export function markdownTargetAt(line: string, character: number): string | undefined {
   const cursor = Math.max(0, Math.min(character, line.length));
   const searchableLine = maskInlineCode(line);
@@ -85,6 +97,47 @@ function backtickRunLength(value: string, start: number): number {
     end += 1;
   }
   return end - start;
+}
+
+function lineIsFencedCode(lines: string[], lineNumber: number): boolean {
+  let fence: { marker: "`" | "~"; length: number } | undefined;
+  for (let index = 0; index <= lineNumber; index += 1) {
+    const line = lines[index] ?? "";
+    if (fence) {
+      if (isClosingFence(line, fence)) {
+        fence = undefined;
+      }
+      if (index === lineNumber) {
+        return true;
+      }
+      continue;
+    }
+
+    const openingFence = parseOpeningFence(line);
+    if (openingFence) {
+      fence = openingFence;
+      if (index === lineNumber) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function parseOpeningFence(line: string): { marker: "`" | "~"; length: number } | undefined {
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!match || (match[1]!.startsWith("`") && match[2]!.includes("`"))) {
+    return undefined;
+  }
+  return {
+    marker: match[1]![0] as "`" | "~",
+    length: match[1]!.length
+  };
+}
+
+function isClosingFence(line: string, fence: { marker: "`" | "~"; length: number }): boolean {
+  const match = /^ {0,3}(`+|~+)[ \t]*$/.exec(line);
+  return Boolean(match && match[1]![0] === fence.marker && match[1]!.length >= fence.length);
 }
 
 function findLinkLabelStart(line: string, closingBracket: number): number | undefined {

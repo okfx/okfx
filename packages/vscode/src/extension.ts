@@ -19,7 +19,7 @@ import {
   type DiagnosticSeverity
 } from "@okfx/core";
 
-import { markdownTargetAt, resolveDefinitionTarget } from "./markdown-target.js";
+import { markdownTargetAtDocument, resolveDefinitionTarget } from "./markdown-target.js";
 
 let diagnostics: vscode.DiagnosticCollection | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
@@ -265,7 +265,7 @@ async function provideDefinition(
     return undefined;
   }
 
-  const targetRaw = markdownTargetAt(document.lineAt(position).text, position.character);
+  const targetRaw = markdownTargetAtDocument(document.getText(), position.line, position.character);
   if (!targetRaw) {
     return undefined;
   }
