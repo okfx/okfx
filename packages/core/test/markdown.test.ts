@@ -3,6 +3,27 @@ import { describe, expect, it } from "vitest";
 import { parseMarkdownDocument } from "../src/index.js";
 
 describe("Markdown code fences", () => {
+  it("parses ATX indentation and closing markers without truncating literal hashes", () => {
+    const parsed = parseMarkdownDocument("concept.md", [
+      "# C#",
+      "## Closed ##",
+      "###",
+      "   #### Indented ####",
+      "    # Code block",
+      "####### Not a heading",
+      ""
+    ].join("\n"), "concept");
+
+    expect(parsed.body.headings.map(({ level, title, slug }) => ({ level, title, slug }))).toEqual([
+      { level: 1, title: "C#", slug: "c" },
+      { level: 2, title: "Closed", slug: "closed" },
+      { level: 3, title: "", slug: "" },
+      { level: 4, title: "Indented", slug: "indented" }
+    ]);
+    expect(parsed.body.text).toContain("C# Closed");
+    expect(parsed.body.text).toContain("####### Not a heading");
+  });
+
   it("ignores headings and links inside backtick and tilde fences", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "---",

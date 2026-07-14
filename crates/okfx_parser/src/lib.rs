@@ -248,26 +248,7 @@ fn parse_markdown_body(
 }
 
 fn parse_heading(line: &str, absolute_line_offset: usize, line_number: usize) -> Option<Heading> {
-    let hashes = line
-        .chars()
-        .take_while(|character| *character == '#')
-        .count();
-    if !(1..=6).contains(&hashes) {
-        return None;
-    }
-    if !line
-        .chars()
-        .nth(hashes)
-        .is_some_and(|character| character == ' ' || character == '\t')
-    {
-        return None;
-    }
-
-    let title = line[hashes..]
-        .trim()
-        .trim_end_matches('#')
-        .trim()
-        .to_string();
+    let (hashes, title) = parse_atx_heading(line)?;
     let line_source_length = utf16_len(line);
     Some(Heading {
         level: hashes,
@@ -286,6 +267,42 @@ fn parse_heading(line: &str, absolute_line_offset: usize, line_number: usize) ->
             }),
         },
     })
+}
+
+fn parse_atx_heading(line: &str) -> Option<(usize, String)> {
+    let indent = line
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == b' ')
+        .count();
+    if indent > 3 {
+        return None;
+    }
+
+    let candidate = &line[indent..];
+    let hashes = candidate
+        .as_bytes()
+        .iter()
+        .take_while(|byte| **byte == b'#')
+        .count();
+    if !(1..=6).contains(&hashes) {
+        return None;
+    }
+
+    let remainder = &candidate[hashes..];
+    if !remainder.is_empty() && !remainder.starts_with([' ', '\t']) {
+        return None;
+    }
+
+    let trimmed_end = remainder.trim_end_matches([' ', '\t']);
+    let without_hashes = trimmed_end.trim_end_matches('#');
+    let content =
+        if without_hashes.len() < trimmed_end.len() && without_hashes.ends_with([' ', '\t']) {
+            without_hashes.trim_end_matches([' ', '\t'])
+        } else {
+            trimmed_end
+        };
+    Some((hashes, content.trim_start_matches([' ', '\t']).to_string()))
 }
 
 fn parse_links(
@@ -460,9 +477,10 @@ fn plain_text(markdown: &str) -> String {
             continue;
         }
         let without_links = strip_inline_links(line);
-        let stripped = without_links
-            .trim_start_matches('#')
-            .replace(['*', '_', '~', '`', '>', '-'], " ");
+        let heading_text = parse_atx_heading(&without_links)
+            .map(|(_, title)| title)
+            .unwrap_or(without_links);
+        let stripped = heading_text.replace(['*', '_', '~', '`', '>', '-'], " ");
         text.push_str(&stripped);
         text.push(' ');
     }
@@ -724,6 +742,32 @@ mod tests {
     #[test]
     fn exposes_crate_name() {
         assert_eq!(crate_name(), "okfx_parser");
+    }
+
+    #[test]
+    fn parses_atx_indentation_and_closing_markers() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "# C#\n## Closed ##\n###\n   #### Indented ####\n    # Code block\n####### Not a heading\n",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .body
+                .headings
+                .iter()
+                .map(|heading| (heading.level, heading.title.as_str(), heading.slug.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (1, "C#", "c"),
+                (2, "Closed", "closed"),
+                (3, "", ""),
+                (4, "Indented", "indented")
+            ]
+        );
+        assert!(parsed.body.text.contains("C# Closed"));
+        assert!(parsed.body.text.contains("####### Not a heading"));
     }
 
     #[test]

@@ -41,15 +41,18 @@ export function classifyLinkTarget(targetRaw: string): LinkKind {
 
 function extractHeadings(bodyRaw: string, bodyStartOffset: number, bodyStartLine: number): HeadingIR[] {
   const headings: HeadingIR[] = [];
-  const headingPattern = /^(#{1,6})[ \t]+(.+?)\s*#*\s*$/gm;
+  const headingPattern = /^ {0,3}#+[^\r\n]*$/gm;
 
   for (const match of bodyRaw.matchAll(headingPattern)) {
-    const rawTitle = match[2] ?? "";
+    const heading = parseAtxHeading(match[0]);
+    if (!heading) {
+      continue;
+    }
     const startOffset = bodyStartOffset + (match.index ?? 0);
     headings.push({
-      level: match[1]?.length ?? 1,
-      title: rawTitle.trim(),
-      slug: slugifyHeading(rawTitle),
+      level: heading.level,
+      title: heading.title,
+      slug: slugifyHeading(heading.title),
       location: {
         start: locationFromOffset(bodyRaw, match.index ?? 0, bodyStartOffset, bodyStartLine),
         end: locationFromOffset(bodyRaw, (match.index ?? 0) + match[0].length, bodyStartOffset, bodyStartLine)
@@ -197,11 +200,28 @@ export function slugifyHeading(title: string): string {
 
 function plainText(markdown: string): string {
   return stripInlineLinks(maskFencedCode(markdown))
+    .replace(/^ {0,3}#+[^\r\n]*$/gm, (line) => parseAtxHeading(line)?.title ?? line)
     .replace(/`+/g, "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/[`*_~>#-]/g, " ")
+    .replace(/[`*_~>-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function parseAtxHeading(line: string): { level: number; title: string } | undefined {
+  const match = /^ {0,3}(#+)(.*)$/.exec(line);
+  if (!match || match[1].length > 6) {
+    return undefined;
+  }
+
+  const remainder = match[2] ?? "";
+  if (remainder.length > 0 && remainder[0] !== " " && remainder[0] !== "\t") {
+    return undefined;
+  }
+
+  return {
+    level: match[1].length,
+    title: remainder.replace(/[ \t]+#+[ \t]*$/, "").trim()
+  };
 }
 
 function stripInlineLinks(markdown: string): string {
