@@ -284,9 +284,20 @@ function registerResources(server: McpServer, api: OkfBundleApi, config: Resolve
     title: "OKF concept",
     mimeType: "application/json"
   }, async (uri, variables) => {
-    const id = decodeURIComponent(String(variables.id));
+    const id = decodeResourceId(String(variables.id));
+    if (id === undefined) {
+      return jsonResource(uri.href, { error: "invalid concept id encoding" });
+    }
     return jsonResource(uri.href, await api.getConcept(id) ?? { error: "concept not found", id });
   });
+}
+
+function decodeResourceId(value: string): string | undefined {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
 }
 
 function registerTools(server: McpServer, api: OkfBundleApi, config: ResolvedOkfxConfig): void {

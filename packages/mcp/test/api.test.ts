@@ -2,6 +2,8 @@ import { mkdtemp, mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 
 import { resolveConfig } from "@okfx/core";
@@ -155,5 +157,28 @@ export default {};
   it("creates an MCP server", async () => {
     const server = await createOkfMcpServer({ root: process.cwd() });
     expect(server.isConnected()).toBe(false);
+  });
+
+  it("reports malformed concept resource IDs without an internal server error", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-mcp-resource-"));
+    const client = new Client({ name: "okfx-test", version: "0.0.0" });
+    const server = await createOkfMcpServer({ root });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+
+      const result = await client.readResource({ uri: "okf://concept/%" });
+      const content = result.contents[0];
+
+      expect(content).toMatchObject({ uri: "okf://concept/%", mimeType: "application/json" });
+      expect(content && "text" in content ? JSON.parse(content.text) : undefined).toEqual({
+        error: "invalid concept id encoding"
+      });
+    } finally {
+      await client.close();
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
