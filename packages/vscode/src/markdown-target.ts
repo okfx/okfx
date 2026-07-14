@@ -10,13 +10,29 @@ export function markdownTargetAt(line: string, character: number): string | unde
   if (!destination || cursor < targetStart || cursor > destination.closingParen) {
     return undefined;
   }
-  return line.slice(targetStart, destination.targetEnd);
+  const enclosed = line[targetStart] === "<";
+  return line.slice(enclosed ? targetStart + 1 : targetStart, destination.targetEnd);
 }
 
 function parseDestination(
   line: string,
   targetStart: number
 ): { targetEnd: number; closingParen: number } | undefined {
+  if (line[targetStart] === "<") {
+    let cursor = targetStart + 1;
+    while (cursor < line.length) {
+      const character = line[cursor];
+      if (character === "<" && !isEscaped(line, cursor)) {
+        return undefined;
+      }
+      if (character === ">" && !isEscaped(line, cursor)) {
+        return parseDestinationTail(line, cursor + 1, cursor);
+      }
+      cursor += 1;
+    }
+    return undefined;
+  }
+
   let depth = 0;
   let cursor = targetStart;
 
@@ -26,14 +42,14 @@ function parseDestination(
       depth += 1;
     } else if (character === ")" && !isEscaped(line, cursor)) {
       if (depth === 0) {
-        return cursor === targetStart ? undefined : { targetEnd: cursor, closingParen: cursor };
+        return { targetEnd: cursor, closingParen: cursor };
       }
       depth -= 1;
     } else if (/\s/u.test(character ?? "")) {
-      if (depth !== 0 || cursor === targetStart) {
+      if (depth !== 0) {
         return undefined;
       }
-      return parseTitle(line, cursor);
+      return parseDestinationTail(line, cursor, cursor);
     }
     cursor += 1;
   }
@@ -41,22 +57,28 @@ function parseDestination(
   return undefined;
 }
 
-function parseTitle(
+function parseDestinationTail(
   line: string,
+  tailStart: number,
   targetEnd: number
 ): { targetEnd: number; closingParen: number } | undefined {
-  let cursor = targetEnd;
+  let cursor = tailStart;
   while (cursor < line.length && /[ \t]/u.test(line[cursor] ?? "")) {
     cursor += 1;
   }
+  if (line[cursor] === ")") {
+    return { targetEnd, closingParen: cursor };
+  }
+
   const quote = line[cursor];
-  if (quote !== "\"" && quote !== "'") {
+  if (quote !== "\"" && quote !== "'" && quote !== "(") {
     return undefined;
   }
+  const closingQuote = quote === "(" ? ")" : quote;
 
   cursor += 1;
   while (cursor < line.length) {
-    if (line[cursor] === quote && !isEscaped(line, cursor)) {
+    if (line[cursor] === closingQuote && !isEscaped(line, cursor)) {
       return line[cursor + 1] === ")"
         ? { targetEnd, closingParen: cursor + 1 }
         : undefined;

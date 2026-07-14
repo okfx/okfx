@@ -22,4 +22,11 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.indexOf("second.md") + 2)).toBe("second.md");
     expect(markdownTargetAt(line, line.indexOf(" and ") + 2)).toBeUndefined();
   });
+
+  it("returns empty and angle-enclosed destinations", () => {
+    const enclosed = "[Angle](<docs/a b.md> (Reference))";
+
+    expect(markdownTargetAt(enclosed, enclosed.indexOf("a b"))).toBe("docs/a b.md");
+    expect(markdownTargetAt("[Empty]()", 8)).toBe("");
+  });
 });

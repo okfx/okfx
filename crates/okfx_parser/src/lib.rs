@@ -340,11 +340,13 @@ fn parse_links(
             continue;
         }
         let target_start = close_bracket + 2;
-        let Some((target_end, close_paren)) = parse_link_destination(line, target_start) else {
+        let Some((parsed_target_start, target_end, close_paren)) =
+            parse_link_destination(line, target_start)
+        else {
             cursor = close_bracket + 1;
             continue;
         };
-        let target_raw = line[target_start..target_end].to_string();
+        let target_raw = line[parsed_target_start..target_end].to_string();
         let text = line[open_bracket + 1..close_bracket].trim().to_string();
 
         links.push(Link {
@@ -372,8 +374,22 @@ fn parse_links(
     links
 }
 
-fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usize)> {
+fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usize, usize)> {
     let bytes = line.as_bytes();
+    if bytes.get(target_start) == Some(&b'<') {
+        let mut cursor = target_start + 1;
+        while cursor < bytes.len() {
+            match bytes[cursor] {
+                b'<' if !is_escaped_delimiter(bytes, cursor) => return None,
+                b'>' if !is_escaped_delimiter(bytes, cursor) => {
+                    return parse_link_destination_tail(line, cursor + 1, target_start + 1, cursor);
+                }
+                _ => cursor += 1,
+            }
+        }
+        return None;
+    }
+
     let mut depth = 0;
     let mut cursor = target_start;
 
@@ -383,14 +399,14 @@ fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usi
             depth += 1;
         } else if character == ')' && !is_escaped_delimiter(bytes, cursor) {
             if depth == 0 {
-                return (cursor > target_start).then_some((cursor, cursor));
+                return Some((target_start, cursor, cursor));
             }
             depth -= 1;
         } else if character.is_whitespace() {
-            if depth != 0 || cursor == target_start {
+            if depth != 0 {
                 return None;
             }
-            return parse_link_title(line, cursor, target_start);
+            return parse_link_destination_tail(line, cursor, target_start, cursor);
         }
         cursor += character.len_utf8();
     }
@@ -398,24 +414,38 @@ fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usi
     None
 }
 
-fn parse_link_title(line: &str, target_end: usize, target_start: usize) -> Option<(usize, usize)> {
+fn parse_link_destination_tail(
+    line: &str,
+    tail_start: usize,
+    target_start: usize,
+    target_end: usize,
+) -> Option<(usize, usize, usize)> {
     let bytes = line.as_bytes();
-    let mut cursor = target_end;
+    let mut cursor = tail_start;
     while bytes
         .get(cursor)
         .is_some_and(|byte| matches!(*byte, b' ' | b'\t'))
     {
         cursor += 1;
     }
+    if bytes.get(cursor) == Some(&b')') {
+        return Some((target_start, target_end, cursor));
+    }
+
     let quote = *bytes.get(cursor)?;
-    if !matches!(quote, b'\'' | b'"') || target_end == target_start {
+    if !matches!(quote, b'\'' | b'"' | b'(') {
         return None;
     }
+    let closing_quote = if quote == b'(' { b')' } else { quote };
 
     cursor += 1;
     while cursor < bytes.len() {
-        if bytes[cursor] == quote && !is_escaped_delimiter(bytes, cursor) {
-            return (bytes.get(cursor + 1) == Some(&b')')).then_some((target_end, cursor + 1));
+        if bytes[cursor] == closing_quote && !is_escaped_delimiter(bytes, cursor) {
+            return (bytes.get(cursor + 1) == Some(&b')')).then_some((
+                target_start,
+                target_end,
+                cursor + 1,
+            ));
         }
         cursor += 1;
     }
@@ -523,7 +553,7 @@ fn strip_inline_links(markdown: &str) -> String {
             cursor = close_bracket + 1;
             continue;
         }
-        let Some((_, close_paren)) = parse_link_destination(markdown, close_bracket + 2) else {
+        let Some((_, _, close_paren)) = parse_link_destination(markdown, close_bracket + 2) else {
             cursor = close_bracket + 1;
             continue;
         };
@@ -939,6 +969,30 @@ mod tests {
             ]
         );
         assert_eq!(parsed.body.text, "See [details] Escaped \\] label");
+    }
+
+    #[test]
+    fn parses_empty_and_enclosed_destinations_with_titles() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "[Empty]() [Spaced]( ) [Angle](<docs/a b.md> \"Reference\") [Title](docs/title.md (Reference))\n",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| (link.target_raw.as_str(), link.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                ("", LinkKind::Unknown),
+                ("", LinkKind::Unknown),
+                ("docs/a b.md", LinkKind::Internal),
+                ("docs/title.md", LinkKind::Internal)
+            ]
+        );
+        assert_eq!(parsed.body.text, "Empty Spaced Angle Title");
     }
 
     #[test]

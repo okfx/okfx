@@ -92,7 +92,7 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
       continue;
     }
 
-    const targetRaw = bodyRaw.slice(labelEnd + 2, destination.targetEnd);
+    const targetRaw = bodyRaw.slice(destination.targetStart, destination.targetEnd);
     const text = bodyRaw.slice(startOffset + 1, labelEnd).trim();
     links.push({
       sourceConceptId,
@@ -114,7 +114,22 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
 function parseLinkDestination(
   markdown: string,
   targetStart: number
-): { targetEnd: number; closingParen: number } | undefined {
+): { targetStart: number; targetEnd: number; closingParen: number } | undefined {
+  if (markdown[targetStart] === "<") {
+    let cursor = targetStart + 1;
+    while (cursor < markdown.length) {
+      const character = markdown[cursor];
+      if (character === "\r" || character === "\n" || (character === "<" && !isEscaped(markdown, cursor))) {
+        return undefined;
+      }
+      if (character === ">" && !isEscaped(markdown, cursor)) {
+        return parseLinkDestinationTail(markdown, cursor + 1, targetStart + 1, cursor);
+      }
+      cursor += 1;
+    }
+    return undefined;
+  }
+
   let depth = 0;
   let cursor = targetStart;
 
@@ -127,14 +142,14 @@ function parseLinkDestination(
       depth += 1;
     } else if (character === ")" && !isEscaped(markdown, cursor)) {
       if (depth === 0) {
-        return cursor === targetStart ? undefined : { targetEnd: cursor, closingParen: cursor };
+        return { targetStart, targetEnd: cursor, closingParen: cursor };
       }
       depth -= 1;
     } else if (/\s/u.test(character ?? "")) {
-      if (depth !== 0 || cursor === targetStart) {
+      if (depth !== 0) {
         return undefined;
       }
-      return parseLinkTitle(markdown, cursor, targetStart);
+      return parseLinkDestinationTail(markdown, cursor, targetStart, cursor);
     }
     cursor += 1;
   }
@@ -142,19 +157,25 @@ function parseLinkDestination(
   return undefined;
 }
 
-function parseLinkTitle(
+function parseLinkDestinationTail(
   markdown: string,
-  targetEnd: number,
-  targetStart: number
-): { targetEnd: number; closingParen: number } | undefined {
-  let cursor = targetEnd;
+  tailStart: number,
+  targetStart: number,
+  targetEnd: number
+): { targetStart: number; targetEnd: number; closingParen: number } | undefined {
+  let cursor = tailStart;
   while (cursor < markdown.length && /[ \t]/u.test(markdown[cursor] ?? "")) {
     cursor += 1;
   }
+  if (markdown[cursor] === ")") {
+    return { targetStart, targetEnd, closingParen: cursor };
+  }
+
   const quote = markdown[cursor];
-  if ((quote !== "\"" && quote !== "'") || targetEnd === targetStart) {
+  if (quote !== "\"" && quote !== "'" && quote !== "(") {
     return undefined;
   }
+  const closingQuote = quote === "(" ? ")" : quote;
 
   cursor += 1;
   while (cursor < markdown.length) {
@@ -162,9 +183,9 @@ function parseLinkTitle(
     if (character === "\r" || character === "\n") {
       return undefined;
     }
-    if (character === quote && !isEscaped(markdown, cursor)) {
+    if (character === closingQuote && !isEscaped(markdown, cursor)) {
       return markdown[cursor + 1] === ")"
-        ? { targetEnd, closingParen: cursor + 1 }
+        ? { targetStart, targetEnd, closingParen: cursor + 1 }
         : undefined;
     }
     cursor += 1;

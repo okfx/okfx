@@ -110,6 +110,22 @@ describe("Markdown code fences", () => {
     expect(parsed.body.text).toBe("See [details] Escaped \\] label");
   });
 
+  it("parses empty and enclosed destinations with optional titles", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "[Empty]() [Spaced]( ) [Angle](<docs/a b.md> \"Reference\") [Title](docs/title.md (Reference))\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => ({ target: link.targetRaw, kind: link.kind }))).toEqual([
+      { target: "", kind: "unknown" },
+      { target: "", kind: "unknown" },
+      { target: "docs/a b.md", kind: "internal" },
+      { target: "docs/title.md", kind: "internal" }
+    ]);
+    expect(parsed.body.text).toBe("Empty Spaced Angle Title");
+  });
+
   it("honors escaped link and image markers", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "\\[Escaped](hidden.md)",
