@@ -16,6 +16,10 @@ static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 static PRIVATE_KEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"-----BEGIN [A-Z ]*PRIVATE KEY-----").expect("private-key pattern must be valid")
 });
+static AWS_ACCESS_KEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[^A-Za-z0-9_])AKIA[0-9A-Z]{16}(?:$|[^A-Za-z0-9_])")
+        .expect("AWS access-key pattern must be valid")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1034,15 +1038,7 @@ fn contains_private_key(value: &str) -> bool {
 }
 
 fn contains_aws_access_key(value: &str) -> bool {
-    value
-        .split(|ch: char| !ch.is_ascii_alphanumeric())
-        .any(|token| {
-            token.len() == 20
-                && token.starts_with("AKIA")
-                && token[4..]
-                    .chars()
-                    .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit())
-        })
+    AWS_ACCESS_KEY_PATTERN.is_match(value)
 }
 
 fn contains_token_looking_value(value: &str) -> bool {
@@ -1740,6 +1736,17 @@ mod tests {
         assert!(!contains_private_key(
             "-----BEGIN lowercase PRIVATE KEY-----"
         ));
+    }
+
+    #[test]
+    fn applies_ascii_word_boundaries_to_aws_access_keys() {
+        let key = "AKIAABCDEFGHIJKLMNOP";
+
+        assert!(contains_aws_access_key(key));
+        assert!(contains_aws_access_key(&format!("key={key}.")));
+        assert!(contains_aws_access_key(&format!("密{key}钥")));
+        assert!(!contains_aws_access_key(&format!("_{key}")));
+        assert!(!contains_aws_access_key(&format!("{key}_suffix")));
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
