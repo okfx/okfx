@@ -1038,16 +1038,43 @@ fn contains_token_looking_value(value: &str) -> bool {
 }
 
 fn contains_assigned_secret(value: &str) -> bool {
-    logical_lines(value).any(|line| {
-        let lower = line.to_lowercase();
-        ["api_key", "api-key", "secret", "token"]
-            .iter()
-            .any(|key| lower.contains(key))
-            && line
-                .split(['=', ':'])
-                .nth(1)
-                .is_some_and(|candidate| secret_value_len(candidate) >= 20)
-    })
+    logical_lines(value).any(contains_assigned_secret_line)
+}
+
+fn contains_assigned_secret_line(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+
+    ["apikey", "api_key", "api-key", "secret", "token"]
+        .into_iter()
+        .any(|key| {
+            lower.match_indices(key).any(|(start, _)| {
+                let end = start + key.len();
+                if start > 0 && is_ascii_word_byte(bytes[start - 1]) {
+                    return false;
+                }
+                if end < bytes.len() && is_ascii_word_byte(bytes[end]) {
+                    return false;
+                }
+
+                let mut candidate = &line[end..];
+                candidate = candidate.trim_start_matches(char::is_whitespace);
+                let Some(separator) = candidate.chars().next() else {
+                    return false;
+                };
+                if !matches!(separator, ':' | '=') {
+                    return false;
+                }
+                candidate =
+                    candidate[separator.len_utf8()..].trim_start_matches(char::is_whitespace);
+                candidate = candidate.strip_prefix(['"', '\'']).unwrap_or(candidate);
+                secret_value_len(candidate) >= 20
+            })
+        })
+}
+
+fn is_ascii_word_byte(value: u8) -> bool {
+    value.is_ascii_alphanumeric() || value == b'_'
 }
 
 fn secret_value_len(value: &str) -> usize {
@@ -1665,6 +1692,24 @@ mod tests {
         assert!(!contains_internal_url(
             "See [Public](https://[2001:db8::1]/guide)."
         ));
+    }
+
+    #[test]
+    fn matches_secret_assignments_at_keyword_boundaries() {
+        let secret = "abcdefghijklmnopqrstuvwxyz";
+
+        assert!(contains_token_looking_value(&format!(
+            "metadata: token = \"{secret}\""
+        )));
+        assert!(contains_token_looking_value(&format!(
+            "api-key: '{secret}'"
+        )));
+        assert!(!contains_token_looking_value(&format!(
+            "notsecret={secret}"
+        )));
+        assert!(!contains_token_looking_value(&format!(
+            "tokenized={secret}"
+        )));
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
