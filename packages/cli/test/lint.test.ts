@@ -191,4 +191,25 @@ describe("okf lint", () => {
     expect(code).toBe(3);
     expect(output.stdout()).toContain("plugin/load-failed");
   });
+
+  it("does not treat plugin-namespaced rule diagnostics as runtime failures", async () => {
+    const root = await tempRoot();
+    await write(root, "okfx.config.ts", "export default { plugins: ['./policy-plugin.ts'] };\n");
+    await write(root, "policy-plugin.ts", `export default {
+  name: "policy-plugin",
+  rules: {
+    "plugin/policy": {
+      run: () => [{ message: "Policy advice." }]
+    }
+  }
+};
+`);
+    await write(root, "concept.md", "---\ntype: Note\ntitle: Concept\ndescription: Demo\n---\n# Concept\n");
+    const output = capture();
+
+    const code = await main(["lint", root], output.io);
+
+    expect(code).toBe(0);
+    expect(output.stdout()).toContain("plugin/policy");
+  });
 });

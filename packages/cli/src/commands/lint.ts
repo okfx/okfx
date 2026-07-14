@@ -20,6 +20,12 @@ import type { CliContext } from "../program.js";
 
 type LintFormat = "pretty" | "json" | "sarif";
 
+const pluginFailureCodes = new Set([
+  "plugin/invalid-shape",
+  "plugin/load-failed",
+  "plugin/rule-failed"
+]);
+
 export function createLintCommand(context: CliContext): Command {
   return new Command("lint")
     .description("run quality and style rules")
@@ -203,7 +209,7 @@ function formatPluginSummary(result: LintResult): string {
 }
 
 function exitCodeForLint(result: LintResult): number {
-  if (result.diagnostics.some((diagnostic) => diagnostic.code.startsWith("plugin/"))) {
+  if (result.diagnostics.some((diagnostic) => pluginFailureCodes.has(diagnostic.code))) {
     return 3;
   }
 
