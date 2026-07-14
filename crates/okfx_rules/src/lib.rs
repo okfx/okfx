@@ -1060,17 +1060,53 @@ fn contains_unredacted_email(value: &str) -> bool {
 }
 
 fn contains_internal_url(value: &str) -> bool {
-    value
-        .split_whitespace()
-        .map(|token| {
-            token.trim_matches(|ch: char| {
-                matches!(
-                    ch,
-                    ',' | '.' | ';' | ':' | ')' | '(' | ']' | '[' | '"' | '\''
-                )
+    value.char_indices().any(|(start, _)| {
+        let rest = &value[start..];
+        let is_url = rest
+            .get(..7)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
+            || rest
+                .get(..8)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://"));
+        if !is_url
+            || value[..start]
+                .chars()
+                .next_back()
+                .is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
+        {
+            return false;
+        }
+
+        let end = rest
+            .char_indices()
+            .find_map(|(offset, character)| {
+                (character.is_whitespace() || matches!(character, '<' | '>' | '"' | '\''))
+                    .then_some(start + offset)
             })
-        })
-        .any(is_private_url)
+            .unwrap_or(value.len());
+        is_private_url(trim_url_candidate(&value[start..end]))
+    })
+}
+
+fn trim_url_candidate(mut value: &str) -> &str {
+    loop {
+        let without_sentence_punctuation = value.trim_end_matches(|character: char| {
+            matches!(character, '.' | ',' | ';' | ':' | '!' | '?')
+        });
+        if without_sentence_punctuation.len() != value.len() {
+            value = without_sentence_punctuation;
+            continue;
+        }
+        if value.ends_with(')') && value.matches(')').count() > value.matches('(').count() {
+            value = &value[..value.len() - 1];
+            continue;
+        }
+        if value.ends_with(']') && value.matches(']').count() > value.matches('[').count() {
+            value = &value[..value.len() - 1];
+            continue;
+        }
+        return value;
+    }
 }
 
 fn concept_text_without_resources(concept: &ConceptRuleInput) -> String {
@@ -1555,6 +1591,19 @@ mod tests {
         ] {
             assert!(!is_private_url(url), "unexpected private URL: {url}");
         }
+    }
+
+    #[test]
+    fn extracts_private_urls_from_markdown_links() {
+        assert!(contains_internal_url(
+            "See [Local](HTTP://[::1]/admin) for details."
+        ));
+        assert!(contains_internal_url(
+            "See [Mapped](http://[::ffff:127.0.0.1]/admin)."
+        ));
+        assert!(!contains_internal_url(
+            "See [Public](https://[2001:db8::1]/guide)."
+        ));
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
