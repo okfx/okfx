@@ -169,6 +169,9 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
     let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
     let value = serde_yaml::from_str::<serde_yaml::Value>(&normalized)
         .map_err(|error| error.to_string())?;
+    if !has_only_string_mapping_keys(&value) {
+        return Err("Frontmatter keys must be strings.".to_string());
+    }
     let mapping = match value {
         serde_yaml::Value::Mapping(mapping) => mapping,
         _ => return Err("Frontmatter must be a YAML mapping.".to_string()),
@@ -185,6 +188,17 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
     }
 
     Ok(frontmatter)
+}
+
+fn has_only_string_mapping_keys(value: &serde_yaml::Value) -> bool {
+    match value {
+        serde_yaml::Value::Mapping(mapping) => mapping.iter().all(|(key, value)| {
+            matches!(key, serde_yaml::Value::String(_)) && has_only_string_mapping_keys(value)
+        }),
+        serde_yaml::Value::Sequence(sequence) => sequence.iter().all(has_only_string_mapping_keys),
+        serde_yaml::Value::Tagged(tagged) => has_only_string_mapping_keys(&tagged.value),
+        _ => true,
+    }
 }
 
 fn parse_markdown_body(
@@ -1112,7 +1126,7 @@ mod tests {
 
     #[test]
     fn rejects_non_string_frontmatter_keys() {
-        for entry in ["1: one", "[a, b]: sequence"] {
+        for entry in ["1: one", "[a, b]: sequence", "metadata: {1: one}"] {
             let content = format!("---\n{entry}\n---\n# Bad\n");
             let parsed = parse_markdown_document("bad.md", content, "bad");
 

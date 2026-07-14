@@ -236,7 +236,7 @@ describe("parseMarkdownDocument", () => {
     });
   });
 
-  it.each(["1: one", "[a, b]: sequence"])(
+  it.each(["1: one", "[a, b]: sequence", "metadata: {1: one}"])(
     "rejects non-string frontmatter key %j",
     (entry) => {
       const parsed = parseMarkdownDocument(

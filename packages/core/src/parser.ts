@@ -1,4 +1,4 @@
-import { isMap, isScalar, parseDocument } from "yaml";
+import { isMap, isScalar, isSeq, parseDocument } from "yaml";
 
 import { contentHash } from "./hash.js";
 import { extractMarkdown } from "./markdown.js";
@@ -37,9 +37,7 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
 
       if (!isMap(document.contents)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
-      } else if (!document.contents.items.every(
-        (pair) => isScalar(pair.key) && typeof pair.key.value === "string"
-      )) {
+      } else if (!hasOnlyStringMappingKeys(document.contents)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
       } else {
         const value = document.toJSON();
@@ -120,6 +118,26 @@ function invalidFrontmatter(path: string, message: string): DiagnosticIR {
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyStringMappingKeys(value: unknown): boolean {
+  const stack = [value];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        if (!isScalar(pair.key) || typeof pair.key.value !== "string") {
+          return false;
+        }
+        stack.push(pair.value);
+      }
+    } else if (isSeq(node)) {
+      for (const item of node.items) {
+        stack.push(item);
+      }
+    }
+  }
+  return true;
 }
 
 function containsReferenceCycle(value: unknown): boolean {
