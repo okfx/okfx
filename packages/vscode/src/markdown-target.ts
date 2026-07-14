@@ -1,5 +1,7 @@
 import { classifyLinkTarget, resolveMarkdownTarget } from "@okfx/core";
 
+const MAX_LINK_DESTINATION_NESTING = 64;
+
 export function resolveDefinitionTarget(sourcePath: string, targetRaw: string): string | undefined {
   return classifyLinkTarget(targetRaw) === "internal"
     ? resolveMarkdownTarget(sourcePath, targetRaw)
@@ -254,6 +256,9 @@ function parseDestination(
     const character = line[cursor];
     if (character === "(" && !isEscaped(line, cursor)) {
       depth += 1;
+      if (depth > MAX_LINK_DESTINATION_NESTING) {
+        return undefined;
+      }
     } else if (character === ")" && !isEscaped(line, cursor)) {
       if (depth === 0) {
         return { targetStart: destinationStart, targetEnd: cursor, closingParen: cursor };

@@ -22,6 +22,16 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.indexOf("bar"))).toBe("docs/foo_\\(bar\\).md");
   });
 
+  it("matches the parser's destination nesting limit", () => {
+    const accepted = `(${"(".repeat(63)}target${")".repeat(63)})`;
+    const rejected = `(${"(".repeat(64)}target${")".repeat(64)})`;
+    const acceptedLine = `[Accepted](${accepted})`;
+    const rejectedLine = `[Rejected](${rejected})`;
+
+    expect(markdownTargetAt(acceptedLine, acceptedLine.indexOf("target"))).toBe(accepted);
+    expect(markdownTargetAt(rejectedLine, rejectedLine.indexOf("target"))).toBeUndefined();
+  });
+
   it("selects the link containing the cursor", () => {
     const line = "[First](first.md) and [Second](second.md)";
 
