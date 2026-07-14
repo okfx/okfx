@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildGraph, buildSearchIndex, diffBundles, lintBundle, loadBundle, parseMarkdownDocument } from "../src/index.js";
+import { buildGraph, buildSearchIndex, diffBundles, lintBundle, loadBundle, parseMarkdownDocument, validateBundle } from "../src/index.js";
 import { metricMissingSourceDiagnostics } from "../src/agent-rules.js";
 import type { BundleIR, ConceptIR } from "../src/types.js";
 
@@ -183,6 +183,35 @@ describe("performance baselines", () => {
 
     expect(diff.renamedConcepts).toHaveLength(count);
     expect(elapsedMs).toBeLessThan(1500);
+  }, 5000);
+
+  it("indexes invalid frontmatter diagnostics by concept path", () => {
+    const count = 40_000;
+    const concepts: ConceptIR[] = Array.from({ length: count }, (_, index) => ({
+      id: `concept-${index}`,
+      path: `concept-${index}.md`,
+      type: "",
+      frontmatter: {},
+      frontmatterRaw: "type: [",
+      body: { raw: "", text: "", headings: [] },
+      links: [],
+      contentHash: ""
+    }));
+    const bundle = bundleWithConcepts(concepts);
+    bundle.diagnostics = concepts.map((concept) => ({
+      code: "spec/invalid-frontmatter",
+      severity: "error",
+      message: "Invalid frontmatter.",
+      path: concept.path
+    }));
+    bundle.stats.diagnosticCount = count;
+    const started = performance.now();
+
+    const result = validateBundle(bundle);
+    const elapsedMs = performance.now() - started;
+
+    expect(result.diagnostics).toHaveLength(count);
+    expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
 });
 

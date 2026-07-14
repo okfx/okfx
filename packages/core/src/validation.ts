@@ -10,10 +10,13 @@ export interface ValidationResult {
 }
 
 export function validateBundle(bundle: BundleIR): ValidationResult {
+  const invalidFrontmatterPaths = new Set(bundle.diagnostics
+    .filter((diagnostic) => diagnostic.code === "spec/invalid-frontmatter" && diagnostic.path !== undefined)
+    .map((diagnostic) => diagnostic.path!));
   const diagnostics = sortDiagnostics([
     ...bundle.diagnostics,
     ...validateOkfVersion(bundle),
-    ...bundle.concepts.flatMap((concept) => validateConcept(concept, bundle.diagnostics))
+    ...bundle.concepts.flatMap((concept) => validateConcept(concept, invalidFrontmatterPaths))
   ]);
   const counts = countDiagnostics(diagnostics);
 
@@ -36,11 +39,9 @@ function validateOkfVersion(bundle: BundleIR): DiagnosticIR[] {
   }];
 }
 
-function validateConcept(concept: ConceptIR, existingDiagnostics: DiagnosticIR[]): DiagnosticIR[] {
+function validateConcept(concept: ConceptIR, invalidFrontmatterPaths: ReadonlySet<string>): DiagnosticIR[] {
   const diagnostics: DiagnosticIR[] = [];
-  const hasInvalidFrontmatter = existingDiagnostics.some(
-    (diagnostic) => diagnostic.path === concept.path && diagnostic.code === "spec/invalid-frontmatter"
-  );
+  const hasInvalidFrontmatter = invalidFrontmatterPaths.has(concept.path);
 
   if (concept.frontmatterRaw === undefined) {
     diagnostics.push({
