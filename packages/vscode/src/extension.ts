@@ -352,7 +352,12 @@ function publishDiagnostics(root: string, entries: DiagnosticIR[]): void {
     if (!diagnostic.path) {
       continue;
     }
-    byPath.set(diagnostic.path, [...(byPath.get(diagnostic.path) ?? []), diagnostic]);
+    const pathDiagnostics = byPath.get(diagnostic.path);
+    if (pathDiagnostics) {
+      pathDiagnostics.push(diagnostic);
+    } else {
+      byPath.set(diagnostic.path, [diagnostic]);
+    }
   }
 
   for (const path of diagnosticPathsByRoot.get(root) ?? []) {
