@@ -81,8 +81,8 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
       continue;
     }
 
-    const labelEnd = findUnescaped(bodyRaw, "]", startOffset + 1, true);
-    if (labelEnd === -1 || labelEnd === startOffset + 1 || bodyRaw[labelEnd + 1] !== "(") {
+    const labelEnd = findLinkLabelEnd(bodyRaw, startOffset + 1);
+    if (labelEnd === -1 || bodyRaw[labelEnd + 1] !== "(") {
       cursor = startOffset + 1;
       continue;
     }
@@ -93,10 +93,11 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
     }
 
     const targetRaw = bodyRaw.slice(labelEnd + 2, destination.targetEnd);
+    const text = bodyRaw.slice(startOffset + 1, labelEnd).trim();
     links.push({
       sourceConceptId,
       targetRaw,
-      text: bodyRaw.slice(startOffset + 1, labelEnd).trim(),
+      text: text || undefined,
       kind: classifyLinkTarget(targetRaw),
       resolved: false,
       location: {
@@ -172,17 +173,24 @@ function parseLinkTitle(
   return undefined;
 }
 
-function findUnescaped(value: string, needle: string, start: number, stopAtLineEnd = false): number {
-  let cursor = start;
-  while (cursor < value.length) {
+function findLinkLabelEnd(value: string, start: number): number {
+  let depth = 0;
+  for (let cursor = start; cursor < value.length; cursor += 1) {
     const character = value[cursor];
-    if (stopAtLineEnd && (character === "\r" || character === "\n")) {
+    if (character === "\r" || character === "\n") {
       return -1;
     }
-    if (character === needle && !isEscaped(value, cursor)) {
-      return cursor;
+    if (isEscaped(value, cursor)) {
+      continue;
     }
-    cursor += 1;
+    if (character === "[") {
+      depth += 1;
+    } else if (character === "]") {
+      if (depth === 0) {
+        return cursor;
+      }
+      depth -= 1;
+    }
   }
   return -1;
 }
@@ -240,8 +248,8 @@ function stripInlineLinks(markdown: string): string {
     }
 
     const image = markdown[startOffset - 1] === "!" && !isEscaped(markdown, startOffset - 1);
-    const labelEnd = findUnescaped(markdown, "]", startOffset + 1, true);
-    if (labelEnd === -1 || labelEnd === startOffset + 1 || markdown[labelEnd + 1] !== "(") {
+    const labelEnd = findLinkLabelEnd(markdown, startOffset + 1);
+    if (labelEnd === -1 || markdown[labelEnd + 1] !== "(") {
       cursor = startOffset + 1;
       continue;
     }

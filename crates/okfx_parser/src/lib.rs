@@ -332,10 +332,10 @@ fn parse_links(
             cursor = open_bracket + 1;
             continue;
         }
-        let Some(close_bracket) = find_unescaped_byte(bytes, open_bracket + 1, b']') else {
+        let Some(close_bracket) = find_link_label_end(line, open_bracket + 1) else {
             break;
         };
-        if close_bracket == open_bracket + 1 || !line[close_bracket + 1..].starts_with('(') {
+        if !line[close_bracket + 1..].starts_with('(') {
             cursor = close_bracket + 1;
             continue;
         }
@@ -423,14 +423,25 @@ fn parse_link_title(line: &str, target_end: usize, target_start: usize) -> Optio
     None
 }
 
-fn find_unescaped_byte(value: &[u8], start: usize, needle: u8) -> Option<usize> {
-    value[start..]
-        .iter()
-        .enumerate()
-        .find_map(|(offset, byte)| {
-            let index = start + offset;
-            (*byte == needle && !is_escaped_delimiter(value, index)).then_some(index)
-        })
+fn find_link_label_end(value: &str, start: usize) -> Option<usize> {
+    let bytes = value.as_bytes();
+    let mut depth = 0;
+    let mut cursor = start;
+
+    while cursor < bytes.len() {
+        match bytes[cursor] {
+            b'[' if !is_escaped_delimiter(bytes, cursor) => depth += 1,
+            b']' if !is_escaped_delimiter(bytes, cursor) => {
+                if depth == 0 {
+                    return Some(cursor);
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+        cursor += 1;
+    }
+    None
 }
 
 fn classify_link_target(target: &str) -> LinkKind {
@@ -505,10 +516,10 @@ fn strip_inline_links(markdown: &str) -> String {
         }
 
         let image = open > 0 && bytes[open - 1] == b'!' && !is_escaped_delimiter(bytes, open - 1);
-        let Some(close_bracket) = find_unescaped_byte(bytes, open + 1, b']') else {
+        let Some(close_bracket) = find_link_label_end(markdown, open + 1) else {
             break;
         };
-        if close_bracket == open + 1 || !markdown[close_bracket + 1..].starts_with('(') {
+        if !markdown[close_bracket + 1..].starts_with('(') {
             cursor = close_bracket + 1;
             continue;
         }
@@ -905,6 +916,29 @@ mod tests {
             ]
         );
         assert_eq!(parsed.links[0].location.end.as_ref().unwrap().offset, 37);
+    }
+
+    #[test]
+    fn parses_nested_and_empty_link_labels() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "[See [details]](details.md) [](empty.md) [Escaped \\] label](escaped.md)\n",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| (link.target_raw.as_str(), link.text.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("details.md", Some("See [details]")),
+                ("empty.md", None),
+                ("escaped.md", Some("Escaped \\] label"))
+            ]
+        );
+        assert_eq!(parsed.body.text, "See [details] Escaped \\] label");
     }
 
     #[test]

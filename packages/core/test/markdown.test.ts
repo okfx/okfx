@@ -95,6 +95,21 @@ describe("Markdown code fences", () => {
     expect(parsed.links[0]?.location.end.offset).toBe(37);
   });
 
+  it("parses nested and empty link labels", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "[See [details]](details.md) [](empty.md) [Escaped \\] label](escaped.md)\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => ({ target: link.targetRaw, text: link.text }))).toEqual([
+      { target: "details.md", text: "See [details]" },
+      { target: "empty.md", text: undefined },
+      { target: "escaped.md", text: "Escaped \\] label" }
+    ]);
+    expect(parsed.body.text).toBe("See [details] Escaped \\] label");
+  });
+
   it("honors escaped link and image markers", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "\\[Escaped](hidden.md)",
