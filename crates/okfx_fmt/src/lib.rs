@@ -210,14 +210,37 @@ fn normalize_timestamp_value(value: Value) -> Value {
         return value;
     };
 
-    if timestamp.len() == 10
-        && timestamp.as_bytes().get(4) == Some(&b'-')
-        && timestamp.as_bytes().get(7) == Some(&b'-')
-    {
+    if valid_date_shorthand(timestamp) {
         Value::String(format!("{timestamp}T00:00:00.000Z"))
     } else {
         value
     }
+}
+
+fn valid_date_shorthand(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes
+            .iter()
+            .enumerate()
+            .any(|(index, byte)| index != 4 && index != 7 && !byte.is_ascii_digit())
+    {
+        return false;
+    }
+
+    let year = value[0..4].parse::<u32>().unwrap_or_default();
+    let month = value[5..7].parse::<u32>().unwrap_or_default();
+    let day = value[8..10].parse::<u32>().unwrap_or_default();
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => return false,
+    };
+    day > 0 && day <= days_in_month
 }
 
 fn normalize_body(body: &str) -> String {
@@ -344,6 +367,22 @@ mod tests {
         assert_eq!(
             result.formatted,
             "---\ntype: Note\ntitle: Example\ntags:\n- b\n- a\ntimestamp: 2026-07-07T00:00:00.000Z\n---\n\n# Example\n\nBody\n"
+        );
+    }
+
+    #[test]
+    fn normalizes_only_valid_calendar_date_shorthands() {
+        assert_eq!(
+            normalize_timestamp_value(Value::String("2024-02-29".to_string())),
+            Value::String("2024-02-29T00:00:00.000Z".to_string())
+        );
+        assert_eq!(
+            normalize_timestamp_value(Value::String("2025-02-29".to_string())),
+            Value::String("2025-02-29".to_string())
+        );
+        assert_eq!(
+            normalize_timestamp_value(Value::String("July 7, 2026".to_string())),
+            Value::String("July 7, 2026".to_string())
         );
     }
 

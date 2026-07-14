@@ -229,8 +229,22 @@ function keyRank(key: string, keyOrder: string[]): number {
 }
 
 function normalizeTimestamp(value: string): string {
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? value : new Date(parsed).toISOString();
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!date) {
+    return value;
+  }
+
+  const year = Number(date[1]);
+  const month = Number(date[2]);
+  const day = Number(date[3]);
+  const daysInMonth = month === 2
+    ? (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28)
+    : ([4, 6, 9, 11].includes(month) ? 30 : 31);
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth) {
+    return value;
+  }
+
+  return `${value}T00:00:00.000Z`;
 }
 
 function normalizeBody(body: string): string {

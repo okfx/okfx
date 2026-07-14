@@ -39,6 +39,19 @@ Body
 `);
   });
 
+  it("normalizes only valid calendar date shorthands", () => {
+    const formatTimestamp = (timestamp: string) => formatMarkdownFile("concept.md", `---
+type: Note
+timestamp: ${timestamp}
+---
+# Example
+`).formatted;
+
+    expect(formatTimestamp("2024-02-29")).toContain("timestamp: 2024-02-29T00:00:00.000Z");
+    expect(formatTimestamp("2025-02-29")).toContain("timestamp: 2025-02-29\n");
+    expect(formatTimestamp("July 7, 2026")).toContain("timestamp: July 7, 2026\n");
+  });
+
   it("preserves YAML comments and anchor relationships while ordering keys", () => {
     const result = formatMarkdownFile("concept.md", `---
 description: &summary Shared description # keep anchor comment
