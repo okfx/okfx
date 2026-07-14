@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { formatMarkdownFile } from "./format.js";
+import { contentHash } from "./hash.js";
 import { parseMarkdownDocument, type ParsedMarkdownDocument } from "./parser.js";
 import type { DiagnosticIR, HeadingIR, LinkIR, LinkKind, SourceLocationIR, SourceRangeIR } from "./types.js";
 
@@ -190,7 +191,12 @@ export function parseMarkdownDocumentAccelerated(
     return parseMarkdownDocument(path, content, sourceConceptId);
   }
 
-  return normalizeParsedDocument(parseJson(parseNative(path, content, sourceConceptId)), path, sourceConceptId);
+  return normalizeParsedDocument(
+    parseJson(parseNative(path, content, sourceConceptId)),
+    path,
+    sourceConceptId,
+    content
+  );
 }
 
 export async function parseMarkdownDocumentAcceleratedAsync(
@@ -421,20 +427,41 @@ function normalizeBindingModule(module: unknown, initialized?: unknown): NativeJ
   return binding;
 }
 
-function normalizeParsedDocument(value: unknown, fallbackPath: string, fallbackSourceConceptId: string): ParsedMarkdownDocument {
+function normalizeParsedDocument(
+  value: unknown,
+  fallbackPath: string,
+  fallbackSourceConceptId: string,
+  content: string
+): ParsedMarkdownDocument {
   const document = requiredRecord(value, "parsed document");
+  const returnedPath = optionalStrictString(document.path, "parsed document path");
+  if (returnedPath !== undefined && returnedPath !== fallbackPath) {
+    throw new TypeError(`Binding returned parsed document path "${returnedPath}" for "${fallbackPath}".`);
+  }
   const body = requiredRecord(document.body, "parsed document body");
   const headings = requiredArray(body.headings, "parsed document headings").map(normalizeHeading);
   const links = requiredArray(document.links, "parsed document links").map((link) => normalizeLink(link, fallbackSourceConceptId));
-  const diagnostics = requiredArray(document.diagnostics, "parsed document diagnostics").map(normalizeDiagnostic);
+  const diagnostics = requiredArray(document.diagnostics, "parsed document diagnostics")
+    .map((diagnostic) => normalizeDiagnostic(diagnostic, fallbackPath));
   const frontmatter = document.frontmatter === null || document.frontmatter === undefined
     ? undefined
     : requiredRecord(document.frontmatter, "parsed document frontmatter");
+  const returnedContentHash = requiredString(
+    field(document, "contentHash", "content_hash"),
+    "parsed document content hash"
+  );
+  const expectedContentHash = contentHash(content);
+  if (returnedContentHash !== expectedContentHash) {
+    throw new TypeError("Binding returned parsed document content hash that does not match the input.");
+  }
 
   return {
-    path: optionalString(document.path) ?? fallbackPath,
+    path: fallbackPath,
     frontmatter,
-    frontmatterRaw: optionalString(field(document, "frontmatterRaw", "frontmatter_raw")),
+    frontmatterRaw: optionalStrictString(
+      field(document, "frontmatterRaw", "frontmatter_raw"),
+      "parsed document frontmatter raw"
+    ),
     body: {
       raw: requiredString(body.raw, "parsed document body.raw"),
       text: requiredString(body.text, "parsed document body.text"),
@@ -442,7 +469,7 @@ function normalizeParsedDocument(value: unknown, fallbackPath: string, fallbackS
     },
     links,
     diagnostics,
-    contentHash: requiredString(field(document, "contentHash", "content_hash"), "parsed document content hash")
+    contentHash: returnedContentHash
   };
 }
 
@@ -479,7 +506,7 @@ function normalizeFormatDiagnostic(value: unknown): FormatAcceleratedResult["dia
 function normalizeHeading(value: unknown): HeadingIR {
   const heading = requiredRecord(value, "heading");
   return {
-    level: requiredNumber(heading.level, "heading level"),
+    level: requiredInteger(heading.level, "heading level", 1, 6),
     title: requiredString(heading.title, "heading title"),
     slug: requiredString(heading.slug, "heading slug"),
     location: normalizeRange(heading.location)
@@ -488,23 +515,39 @@ function normalizeHeading(value: unknown): HeadingIR {
 
 function normalizeLink(value: unknown, fallbackSourceConceptId: string): LinkIR {
   const link = requiredRecord(value, "link");
+  const returnedSourceConceptId = optionalStrictString(
+    field(link, "sourceConceptId", "source_concept_id"),
+    "link source concept ID"
+  );
+  if (returnedSourceConceptId !== undefined && returnedSourceConceptId !== fallbackSourceConceptId) {
+    throw new TypeError(
+      `Binding returned link source concept ID "${returnedSourceConceptId}" for "${fallbackSourceConceptId}".`
+    );
+  }
   const kind = requiredString(link.kind, "link kind");
   if (!isLinkKind(kind)) {
     throw new TypeError(`Unsupported link kind from binding: ${kind}`);
   }
   return {
-    sourceConceptId: optionalString(field(link, "sourceConceptId", "source_concept_id")) ?? fallbackSourceConceptId,
+    sourceConceptId: fallbackSourceConceptId,
     targetRaw: requiredString(field(link, "targetRaw", "target_raw"), "link target"),
-    targetConceptId: optionalString(field(link, "targetConceptId", "target_concept_id")),
-    text: optionalString(link.text),
+    targetConceptId: optionalStrictString(
+      field(link, "targetConceptId", "target_concept_id"),
+      "link target concept ID"
+    ),
+    text: optionalStrictString(link.text, "link text"),
     kind,
-    resolved: typeof link.resolved === "boolean" ? link.resolved : false,
+    resolved: requiredBoolean(link.resolved, "link resolved state"),
     location: normalizeRange(link.location)
   };
 }
 
-function normalizeDiagnostic(value: unknown): DiagnosticIR {
+function normalizeDiagnostic(value: unknown, fallbackPath: string): DiagnosticIR {
   const diagnostic = requiredRecord(value, "diagnostic");
+  const returnedPath = optionalStrictString(diagnostic.path, "diagnostic path");
+  if (returnedPath !== undefined && returnedPath !== fallbackPath) {
+    throw new TypeError(`Binding returned diagnostic path "${returnedPath}" for "${fallbackPath}".`);
+  }
   const severity = requiredString(diagnostic.severity, "diagnostic severity");
   if (severity !== "error" && severity !== "warning" && severity !== "advice" && severity !== "info") {
     throw new TypeError(`Unsupported diagnostic severity from binding: ${severity}`);
@@ -513,8 +556,11 @@ function normalizeDiagnostic(value: unknown): DiagnosticIR {
     code: requiredString(diagnostic.code, "diagnostic code"),
     severity,
     message: requiredString(diagnostic.message, "diagnostic message"),
-    path: optionalString(diagnostic.path),
-    conceptId: optionalString(field(diagnostic, "conceptId", "concept_id")),
+    path: returnedPath,
+    conceptId: optionalStrictString(
+      field(diagnostic, "conceptId", "concept_id"),
+      "diagnostic concept ID"
+    ),
     location: diagnostic.location === null || diagnostic.location === undefined
       ? undefined
       : normalizeRange(diagnostic.location)
@@ -523,19 +569,37 @@ function normalizeDiagnostic(value: unknown): DiagnosticIR {
 
 function normalizeRange(value: unknown): SourceRangeIR {
   const range = requiredRecord(value, "source range");
-  return {
-    start: normalizeLocation(range.start),
-    end: range.end === null || range.end === undefined ? undefined : normalizeLocation(range.end)
-  };
+  const start = normalizeLocation(range.start);
+  const end = range.end === null || range.end === undefined ? undefined : normalizeLocation(range.end);
+  if (
+    end
+    && (
+      locationPrecedes(end, start)
+      || (end.offset !== undefined && start.offset !== undefined && end.offset < start.offset)
+    )
+  ) {
+    throw new TypeError("Binding returned a source range whose end precedes its start.");
+  }
+  return { start, end };
 }
 
 function normalizeLocation(value: unknown): SourceLocationIR {
   const location = requiredRecord(value, "source location");
   return {
-    line: requiredNumber(location.line, "source line"),
-    column: requiredNumber(location.column, "source column"),
-    offset: typeof location.offset === "number" ? location.offset : undefined
+    line: requiredInteger(location.line, "source line", 1),
+    column: requiredInteger(location.column, "source column", 1),
+    offset: optionalInteger(location.offset, "source offset", 0)
   };
+}
+
+function locationPrecedes(left: SourceLocationIR, right: SourceLocationIR): boolean {
+  if (left.line !== right.line) {
+    return left.line < right.line;
+  }
+  if (left.column !== right.column) {
+    return left.column < right.column;
+  }
+  return false;
 }
 
 function field(record: Record<string, unknown>, camelCase: string, snakeCase: string): unknown {
@@ -563,11 +627,24 @@ function requiredString(value: unknown, label: string): string {
   return value;
 }
 
-function requiredNumber(value: unknown, label: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new TypeError(`Binding returned invalid ${label}; expected a finite number.`);
+function requiredInteger(value: unknown, label: string, minimum: number, maximum?: number): number {
+  if (
+    typeof value !== "number"
+    || !Number.isSafeInteger(value)
+    || value < minimum
+    || (maximum !== undefined && value > maximum)
+  ) {
+    const range = maximum === undefined ? `at least ${minimum}` : `between ${minimum} and ${maximum}`;
+    throw new TypeError(`Binding returned invalid ${label}; expected a safe integer ${range}.`);
   }
   return value;
+}
+
+function optionalInteger(value: unknown, label: string, minimum: number): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return requiredInteger(value, label, minimum);
 }
 
 function requiredBoolean(value: unknown, label: string): boolean {
@@ -582,10 +659,6 @@ function optionalStrictString(value: unknown, label: string): string | undefined
     return undefined;
   }
   return requiredString(value, label);
-}
-
-function optionalString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 function isLinkKind(value: string): value is LinkKind {

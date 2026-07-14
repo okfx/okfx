@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatMarkdownFileAccelerated,
   formatMarkdownFileAcceleratedAsync,
+  contentHash,
   getNativeBackendStatusAsync,
   nativeCapabilities,
   nativeCapabilitiesAsync,
@@ -41,7 +42,7 @@ describe("native wrapper", () => {
         body: { raw: "", text: "", headings: [] },
         links: [],
         diagnostics: [],
-        contentHash: "native"
+        contentHash: contentHash("")
       }),
       formatMarkdownDocumentJson: () => JSON.stringify({
         formatted: "native",
@@ -51,7 +52,8 @@ describe("native wrapper", () => {
     };
 
     expect(nativeCapabilities(binding)).toMatchObject({ crate: "okfx_napi" });
-    expect(parseMarkdownDocumentAccelerated("native.md", "", "native", { binding }).contentHash).toBe("native");
+    expect(parseMarkdownDocumentAccelerated("native.md", "", "native", { binding }).contentHash)
+      .toBe(contentHash(""));
     expect(formatMarkdownFileAccelerated("native.md", "", {}, { binding }).formatted).toBe("native");
   });
 
@@ -81,7 +83,7 @@ describe("native wrapper", () => {
           location: { start: { line: 5, column: 1, offset: 27 }, end: null }
         }],
         diagnostics: [],
-        content_hash: "sha256:wasm"
+        content_hash: contentHash("")
       }),
       format_markdown_document_json: () => JSON.stringify({
         formatted: "wasm",
@@ -96,7 +98,7 @@ describe("native wrapper", () => {
     expect(await nativeCapabilitiesAsync(binding)).toMatchObject({ crate: "okfx_wasm" });
     expect(parsed).toMatchObject({
       frontmatterRaw: "type: Note\n",
-      contentHash: "sha256:wasm",
+      contentHash: contentHash(""),
       links: [{ sourceConceptId: "wasm", targetRaw: "other.md" }]
     });
     expect(formatted.formatted).toBe("wasm");
@@ -132,6 +134,75 @@ describe("native wrapper", () => {
         })
       }
     })).toThrow("Unsupported format diagnostic severity");
+  });
+
+  it("rejects inconsistent parsed document identities, hashes, and locations", () => {
+    const parsedDocument = (overrides: Record<string, unknown> = {}) => ({
+      path: "native.md",
+      body: { raw: "", text: "", headings: [] },
+      links: [],
+      diagnostics: [],
+      contentHash: contentHash("input"),
+      ...overrides
+    });
+    const parseWith = (document: unknown) => parseMarkdownDocumentAccelerated(
+      "native.md",
+      "input",
+      "native",
+      { binding: { parseMarkdownDocumentJson: () => JSON.stringify(document) } }
+    );
+
+    expect(() => parseWith(parsedDocument({ path: "other.md" }))).toThrow("parsed document path");
+    expect(() => parseWith(parsedDocument({ contentHash: contentHash("other") })))
+      .toThrow("content hash");
+    expect(() => parseWith(parsedDocument({
+      links: [{
+        sourceConceptId: "other",
+        targetRaw: "target.md",
+        kind: "internal",
+        resolved: false,
+        location: { start: { line: 1, column: 1 } }
+      }]
+    }))).toThrow("link source concept ID");
+    expect(() => parseWith(parsedDocument({
+      body: {
+        raw: "",
+        text: "",
+        headings: [{
+          level: 7,
+          title: "Bad",
+          slug: "bad",
+          location: { start: { line: 0, column: 1.5, offset: -1 } }
+        }]
+      }
+    }))).toThrow("heading level");
+    expect(() => parseWith(parsedDocument({
+      body: {
+        raw: "",
+        text: "",
+        headings: [{
+          level: 1,
+          title: "Bad",
+          slug: "bad",
+          location: { start: { line: 0, column: 1 } }
+        }]
+      }
+    }))).toThrow("source line");
+    expect(() => parseWith(parsedDocument({
+      body: {
+        raw: "",
+        text: "",
+        headings: [{
+          level: 1,
+          title: "Bad",
+          slug: "bad",
+          location: {
+            start: { line: 2, column: 1, offset: 2 },
+            end: { line: 1, column: 1, offset: 1 }
+          }
+        }]
+      }
+    }))).toThrow("end precedes");
   });
 
   it("reports asynchronously probed backend status", async () => {
