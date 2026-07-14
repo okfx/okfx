@@ -33,6 +33,7 @@ description: Demo metric.
 
       expect(bundles[0]).toMatchObject({ id: "current", root, conceptCount: 2 });
       expect((await api.searchConcepts("weekly"))[0]).toMatchObject({ id: "metrics/wau" });
+      expect(await api.searchConcepts("constructor")).toEqual([]);
       expect(await api.getBacklinks("metrics/wau")).toEqual(["index"]);
       expect(await api.getNeighbors("metrics/wau")).toMatchObject({ outgoing: ["tables/events"] });
       expect((await api.getDiagnostics()).score).toBeLessThanOrEqual(100);

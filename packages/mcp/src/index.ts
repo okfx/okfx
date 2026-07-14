@@ -139,7 +139,8 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
       const scores = new Map<string, number>();
 
       for (const term of terms) {
-        for (const id of index.terms[term] ?? []) {
+        const ids = Object.hasOwn(index.terms, term) ? index.terms[term]! : [];
+        for (const id of ids) {
           scores.set(id, (scores.get(id) ?? 0) + 1);
         }
       }
