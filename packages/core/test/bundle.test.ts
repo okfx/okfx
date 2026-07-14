@@ -279,6 +279,7 @@ describe("resolveConfig", () => {
   it.each([
     [{ failOn: "never" }, "failOn"],
     [{ include: "**/*.md" }, "include"],
+    [{ presets: Array(1) }, "presets"],
     [{ rules: { "security/private-key": "disabled" } }, "rules.security/private-key"],
     [{ rules: { "custom/rule": ["warning", []] } }, "rules.custom/rule"],
     [{ plugins: [{ package: "" }] }, "plugins[0].package"],

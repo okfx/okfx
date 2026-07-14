@@ -321,7 +321,8 @@ function optionalString(record: Record<string, unknown>, key: string): void {
 
 function optionalStringArray(record: Record<string, unknown>, key: string, path = key): void {
   const value = record[key];
-  if (value !== undefined && (!Array.isArray(value) || value.some((entry) => typeof entry !== "string"))) {
+  if (value !== undefined
+    && (!Array.isArray(value) || Array.from(value).some((entry) => typeof entry !== "string"))) {
     invalidConfig(path, "an array of strings");
   }
 }
