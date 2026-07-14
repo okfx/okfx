@@ -2,7 +2,7 @@ import { BlockList, isIP } from "node:net";
 import { isMap, isScalar, parseDocument } from "yaml";
 
 import { buildStringRanks, compareStrings } from "./compare.js";
-import { conceptIdFromPath } from "./paths.js";
+import { conceptIdFromPath, normalizeRelativePath } from "./paths.js";
 import {
   apiMissingAuthNotesDiagnostics,
   metricMissingSourceDiagnostics,
@@ -463,7 +463,31 @@ function optionalPluginStringField(
   key: "path" | "conceptId" | "docsUrl"
 ): Partial<Pick<DiagnosticIR, typeof key>> {
   const configuredValue = ownProperty(value, key);
-  return configuredValue === undefined ? {} : { [key]: requiredPluginString(configuredValue, key) };
+  if (configuredValue === undefined) {
+    return {};
+  }
+  const normalized = key === "path"
+    ? requiredPluginPath(configuredValue)
+    : requiredPluginString(configuredValue, key);
+  return { [key]: normalized };
+}
+
+function requiredPluginPath(value: unknown): string {
+  const path = requiredPluginString(value, "path");
+  const normalized = normalizeRelativePath(path);
+  if (
+    path.length === 0
+    || normalized !== path
+    || normalized === ".."
+    || normalized.startsWith("../")
+    || path.startsWith("/")
+    || path.includes("\\")
+    || path.includes("\0")
+    || /^[A-Za-z]:/.test(path)
+  ) {
+    throw new TypeError("diagnostic path must be a normalized, portable relative path");
+  }
+  return path;
 }
 
 function requiredPluginString(value: unknown, label: string): string {

@@ -508,6 +508,9 @@ resource:
               },
               "custom/sparse-output": {
                 run: () => new Array(1) as never
+              },
+              "custom/escaped-path": {
+                run: () => [{ message: "Outside", path: "../outside.md" }]
               }
             }
           }]
@@ -515,11 +518,12 @@ resource:
       );
 
       const failures = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin/rule-failed");
-      expect(failures).toHaveLength(3);
+      expect(failures).toHaveLength(4);
       expect(failures.map((diagnostic) => diagnostic.message)).toEqual(expect.arrayContaining([
         expect.stringContaining("diagnostic code must be a string"),
         expect.stringContaining("unsupported default severity"),
-        expect.stringContaining("rule diagnostics must be objects")
+        expect.stringContaining("rule diagnostics must be objects"),
+        expect.stringContaining("diagnostic path must be a normalized, portable relative path")
       ]));
     });
   });
