@@ -58,6 +58,17 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("checks frontmatter order with carriage-return line endings", async () => {
+    await withBundle({
+      "concept.md": "---\rtitle: Example\rtype: Note\r---\r# Example\r"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code))
+        .toContain("style/frontmatter-key-order");
+    });
+  });
+
   it("detects duplicates and circular references", async () => {
     await withBundle({
       "a.md": "---\ntype: Note\ntitle: Shared\nresource: https://example.com/shared\n---\n[A](b.md)\n",

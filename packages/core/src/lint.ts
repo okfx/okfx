@@ -584,7 +584,7 @@ function frontmatterKeyOrderIsStable(concept: ConceptIR, configuredOrder: string
   }
 
   const keys = concept.frontmatterRaw
-    .split(/\r?\n/)
+    .split(/\r\n|\n|\r/)
     .map((line) => /^([A-Za-z_][A-Za-z0-9_-]*):/.exec(line)?.[1])
     .filter((key): key is string => key !== undefined);
   const desired = [...keys].sort((a, b) => frontmatterKeyRank(a, configuredOrder) - frontmatterKeyRank(b, configuredOrder) || compareStrings(a, b));

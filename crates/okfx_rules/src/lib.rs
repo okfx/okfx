@@ -828,7 +828,9 @@ fn frontmatter_key_order_is_stable(raw: Option<&str>, configured_order: &[String
     let Some(raw) = raw else {
         return true;
     };
-    let keys = raw.lines().filter_map(frontmatter_key).collect::<Vec<_>>();
+    let keys = logical_lines(raw)
+        .filter_map(frontmatter_key)
+        .collect::<Vec<_>>();
     let mut desired = keys.clone();
     desired.sort_by(|left, right| {
         frontmatter_key_rank(left, configured_order)
@@ -869,9 +871,7 @@ fn concept_headings(concept: &ConceptRuleInput) -> Vec<String> {
             .collect();
     }
 
-    concept
-        .body_text
-        .lines()
+    logical_lines(&concept.body_text)
         .filter_map(|line| {
             let trimmed = line.trim_start();
             let heading = trimmed.strip_prefix('#')?;
@@ -1036,7 +1036,7 @@ fn contains_token_looking_value(value: &str) -> bool {
 }
 
 fn contains_assigned_secret(value: &str) -> bool {
-    value.lines().any(|line| {
+    logical_lines(value).any(|line| {
         let lower = line.to_lowercase();
         ["api_key", "api-key", "secret", "token"]
             .iter()
@@ -1126,12 +1126,7 @@ fn concept_text_without_resources(concept: &ConceptRuleInput) -> String {
     let mut frontmatter_lines = Vec::new();
     let mut inside_resource = false;
 
-    for line in concept
-        .frontmatter_raw
-        .as_deref()
-        .unwrap_or_default()
-        .lines()
-    {
+    for line in logical_lines(concept.frontmatter_raw.as_deref().unwrap_or_default()) {
         if let Some(key) = top_level_frontmatter_key(line) {
             inside_resource = key.eq_ignore_ascii_case("resource");
         }
@@ -1157,6 +1152,10 @@ fn top_level_frontmatter_key(line: &str) -> Option<&str> {
     chars
         .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
         .then_some(key)
+}
+
+fn logical_lines(value: &str) -> impl Iterator<Item = &str> {
+    value.split(['\r', '\n'])
 }
 
 fn is_email_local_char(ch: char) -> bool {
@@ -1540,6 +1539,29 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert!(codes.contains(&"security/private-url"));
+        assert!(!codes.contains(&"security/internal-url"));
+    }
+
+    #[test]
+    fn scans_rules_across_carriage_return_line_endings() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("carriage-return")
+                    .with_frontmatter(
+                        "title: Example\rtype: Note\rresource:\r  - http://localhost/runbook",
+                    )
+                    .with_body("title: Example\rapi_key = abcdefghijklmnopqrstuvwxyz")
+                    .with_resource("http://localhost/runbook"),
+            ],
+            ..RuleInput::default()
+        });
+        let codes = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(codes.contains(&"style/frontmatter-key-order"));
+        assert!(codes.contains(&"security/token-looking-value"));
         assert!(!codes.contains(&"security/internal-url"));
     }
 
