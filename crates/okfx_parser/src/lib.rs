@@ -795,7 +795,7 @@ fn tagged_scalar_to_serde(
 ) -> Result<serde_yaml::Value, String> {
     let Some(tag) = tag else {
         return if style == ScalarStyle::Plain {
-            scalar_to_serde(Scalar::parse_from_cow(value))
+            resolve_implicit_scalar(value)
         } else {
             Ok(serde_yaml::Value::String(value.into_owned()))
         };
@@ -837,6 +837,22 @@ fn tagged_scalar_to_serde(
         "binary" => Ok(serde_yaml::Value::String(value.into_owned())),
         _ => Err(invalid_explicit_yaml_tag()),
     }
+}
+
+fn resolve_implicit_scalar(value: Cow<'_, str>) -> Result<serde_yaml::Value, String> {
+    if is_core_prefixed_integer(&value) {
+        resolve_explicit_integer(&value)
+    } else {
+        scalar_to_serde(Scalar::parse_from_cow(value))
+    }
+}
+
+fn is_core_prefixed_integer(value: &str) -> bool {
+    value.strip_prefix("0o").is_some_and(|digits| {
+        !digits.is_empty() && digits.bytes().all(|byte| matches!(byte, b'0'..=b'7'))
+    }) || value.strip_prefix("0x").is_some_and(|digits| {
+        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
 }
 
 fn scalar_to_serde(value: Scalar<'_>) -> Result<serde_yaml::Value, String> {
@@ -1979,7 +1995,7 @@ mod tests {
     fn matches_yaml_1_2_implicit_scalar_resolution() {
         let parsed = parse_markdown_document(
             "scalars.md",
-            "---\nzero: 00\ndecimal: 012\nbinary_like: 0b101\noversized: 18446744073709551616\nnel: \u{0085}\nseparator: \u{2028}\nquoted: \"x:\ty\"\nmultiline: \"x\n  z:\tw\"\nliteral: |\n  x:\ty\ntabbed:\tvalue\n---\n",
+            "---\nzero: 00\ndecimal: 012\nbinary_like: 0b101\noversized: 18446744073709551616\nlarge_hex: 0x8000000000000000\nlarge_oct: 0o7777777777777777777777\nnel: \u{0085}\nseparator: \u{2028}\nquoted: \"x:\ty\"\nmultiline: \"x\n  z:\tw\"\nliteral: |\n  x:\ty\ntabbed:\tvalue\n---\n",
             "scalars",
         );
         let frontmatter = parsed.frontmatter.as_ref().unwrap();
@@ -2006,6 +2022,18 @@ mod tests {
                 .get("oversized")
                 .and_then(serde_yaml::Value::as_f64),
             Some(18_446_744_073_709_552_000.0)
+        );
+        assert_eq!(
+            frontmatter
+                .get("large_hex")
+                .and_then(serde_yaml::Value::as_f64),
+            Some(9_223_372_036_854_776_000.0)
+        );
+        assert_eq!(
+            frontmatter
+                .get("large_oct")
+                .and_then(serde_yaml::Value::as_f64),
+            Some(73_786_976_294_838_210_000.0)
         );
         assert_eq!(
             frontmatter.get("nel").and_then(serde_yaml::Value::as_str),
