@@ -168,6 +168,12 @@ fn changed_concept(before: &ConceptSnapshot, after: &ConceptSnapshot) -> Option<
     if body_changed {
         changes.push("body changed".to_string());
     }
+    if resource_changed && !frontmatter_changed.iter().any(|key| key == "resource") {
+        changes.push("resource changed".to_string());
+    }
+    if tags_changed && !frontmatter_changed.iter().any(|key| key == "tags") {
+        changes.push("tags changed".to_string());
+    }
     changes.extend(links_added.iter().map(|link| format!("link added: {link}")));
     changes.extend(
         links_removed
@@ -243,6 +249,25 @@ mod tests {
         assert!(diff.changed_concepts[0].body_changed);
         assert_eq!(diff.changed_concepts[0].links_added, vec!["new.md"]);
         assert_eq!(diff.changed_concepts[0].links_removed, vec!["old.md"]);
+    }
+
+    #[test]
+    fn reports_resource_and_tag_changes_outside_string_frontmatter() {
+        let before = concept("same", "hash-1");
+        let mut after = before.clone();
+        after.content_hash = "hash-2".to_string();
+        after.resource = vec!["https://example.com/catalog".to_string()];
+        after.tags = vec!["analytics".to_string()];
+
+        let diff = diff_concepts(vec![before], vec![after]);
+
+        assert_eq!(diff.stats.changed_count, 1);
+        assert_eq!(
+            diff.changed_concepts[0].changes,
+            vec!["resource changed", "tags changed"]
+        );
+        assert!(diff.changed_concepts[0].resource_changed);
+        assert!(diff.changed_concepts[0].tags_changed);
     }
 
     fn concept(id: &str, hash: &str) -> ConceptSnapshot {
