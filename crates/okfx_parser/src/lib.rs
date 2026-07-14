@@ -1,11 +1,11 @@
 use regex::Regex;
 use saphyr::{LoadableYamlNode, Scalar, Yaml};
-use saphyr::{ScalarStyle, Tag, YamlLoader};
+use saphyr::{ScalarStyle, Tag};
 use saphyr_parser::{Event, EventReceiver, Parser};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 pub const CRATE_NAME: &str = "okfx_parser";
@@ -207,7 +207,19 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
         return Err("Frontmatter contains an invalid explicit YAML tag value.".to_string());
     }
 
-    let mut documents = match load_saphyr_documents(&saphyr_input, explicit_tags.found) {
+    if explicit_tags.found {
+        let mut documents = load_tagged_yaml_documents(&saphyr_input)?;
+        if documents.is_empty() {
+            return Err("Frontmatter must be a YAML mapping.".to_string());
+        }
+        if documents.len() > 1 {
+            return Err("Frontmatter must contain exactly one YAML document.".to_string());
+        }
+        let document = documents.pop().unwrap_or(TaggedYamlNode::BadValue);
+        return finish_frontmatter(tagged_saphyr_document_to_serde(document)?);
+    }
+
+    let mut documents = match Yaml::load_from_str(&saphyr_input) {
         Ok(documents) => documents,
         Err(error) => {
             return match legacy {
@@ -223,12 +235,7 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
         return Err("Frontmatter must contain exactly one YAML document.".to_string());
     }
     let document = documents.pop().unwrap_or(Yaml::BadValue);
-    let value = if explicit_tags.found {
-        tagged_saphyr_document_to_serde(document)?
-    } else {
-        saphyr_to_serde(document)?
-    };
-    finish_frontmatter(value)
+    finish_frontmatter(saphyr_to_serde(document)?)
 }
 
 fn finish_frontmatter(
@@ -286,6 +293,157 @@ impl<'input> EventReceiver<'input> for ExplicitTagDetector {
     }
 }
 
+#[derive(Clone)]
+enum TaggedYamlNode<'input> {
+    Scalar(Cow<'input, str>, ScalarStyle, Option<Cow<'input, Tag>>),
+    Sequence(Vec<Self>, Option<Cow<'input, Tag>>),
+    Mapping(Vec<(Self, Self)>, Option<Cow<'input, Tag>>),
+    BadValue,
+}
+
+enum TaggedYamlContainer<'input> {
+    Sequence {
+        values: Vec<TaggedYamlNode<'input>>,
+        tag: Option<Cow<'input, Tag>>,
+        anchor: usize,
+    },
+    Mapping {
+        entries: Vec<(TaggedYamlNode<'input>, TaggedYamlNode<'input>)>,
+        pending_key: Option<TaggedYamlNode<'input>>,
+        tag: Option<Cow<'input, Tag>>,
+        anchor: usize,
+    },
+}
+
+#[derive(Default)]
+struct TaggedYamlLoader<'input> {
+    documents: Vec<TaggedYamlNode<'input>>,
+    stack: Vec<TaggedYamlContainer<'input>>,
+    root: Option<TaggedYamlNode<'input>>,
+    anchors: BTreeMap<usize, TaggedYamlNode<'input>>,
+    error: Option<String>,
+}
+
+impl<'input> TaggedYamlLoader<'input> {
+    fn insert(&mut self, node: TaggedYamlNode<'input>, anchor: usize) {
+        if anchor > 0 {
+            self.anchors.insert(anchor, node.clone());
+        }
+        match self.stack.last_mut() {
+            Some(TaggedYamlContainer::Sequence { values, .. }) => values.push(node),
+            Some(TaggedYamlContainer::Mapping {
+                entries,
+                pending_key,
+                ..
+            }) => {
+                if let Some(key) = pending_key.take() {
+                    entries.push((key, node));
+                } else {
+                    *pending_key = Some(node);
+                }
+            }
+            None if self.root.is_none() => self.root = Some(node),
+            None => {
+                self.error.get_or_insert_with(|| {
+                    "Frontmatter contains multiple YAML roots in one document.".to_string()
+                });
+            }
+        };
+    }
+
+    fn close_sequence(&mut self) {
+        let Some(TaggedYamlContainer::Sequence {
+            values,
+            tag,
+            anchor,
+        }) = self.stack.pop()
+        else {
+            self.error
+                .get_or_insert_with(|| "Unexpected YAML sequence terminator.".to_string());
+            return;
+        };
+        self.insert(TaggedYamlNode::Sequence(values, tag), anchor);
+    }
+
+    fn close_mapping(&mut self) {
+        let Some(TaggedYamlContainer::Mapping {
+            entries,
+            pending_key,
+            tag,
+            anchor,
+        }) = self.stack.pop()
+        else {
+            self.error
+                .get_or_insert_with(|| "Unexpected YAML mapping terminator.".to_string());
+            return;
+        };
+        if pending_key.is_some() {
+            self.error
+                .get_or_insert_with(|| "YAML mapping is missing a value.".to_string());
+        }
+        self.insert(TaggedYamlNode::Mapping(entries, tag), anchor);
+    }
+
+    fn finish(self) -> Result<Vec<TaggedYamlNode<'input>>, String> {
+        if let Some(error) = self.error {
+            return Err(error);
+        }
+        if !self.stack.is_empty() || self.root.is_some() {
+            return Err("YAML frontmatter ended before the document was complete.".to_string());
+        }
+        Ok(self.documents)
+    }
+}
+
+impl<'input> EventReceiver<'input> for TaggedYamlLoader<'input> {
+    fn on_event(&mut self, event: Event<'input>) {
+        match event {
+            Event::DocumentStart(_) => {
+                self.root = None;
+                self.anchors.clear();
+            }
+            Event::DocumentEnd => {
+                if !self.stack.is_empty() {
+                    self.error.get_or_insert_with(|| {
+                        "YAML frontmatter ended before the document was complete.".to_string()
+                    });
+                }
+                self.documents
+                    .push(self.root.take().unwrap_or(TaggedYamlNode::BadValue));
+            }
+            Event::Scalar(value, style, anchor, tag) => {
+                self.insert(TaggedYamlNode::Scalar(value, style, tag), anchor);
+            }
+            Event::SequenceStart(anchor, tag) => {
+                self.stack.push(TaggedYamlContainer::Sequence {
+                    values: Vec::new(),
+                    tag,
+                    anchor,
+                });
+            }
+            Event::SequenceEnd => self.close_sequence(),
+            Event::MappingStart(anchor, tag) => {
+                self.stack.push(TaggedYamlContainer::Mapping {
+                    entries: Vec::new(),
+                    pending_key: None,
+                    tag,
+                    anchor,
+                });
+            }
+            Event::MappingEnd => self.close_mapping(),
+            Event::Alias(anchor) => {
+                let node = self
+                    .anchors
+                    .get(&anchor)
+                    .cloned()
+                    .unwrap_or(TaggedYamlNode::BadValue);
+                self.insert(node, 0);
+            }
+            Event::Nothing | Event::StreamStart | Event::StreamEnd => {}
+        }
+    }
+}
+
 fn prepare_saphyr_input(raw: &str) -> Result<(String, ExplicitTagDetector), String> {
     let mut input = normalize_yaml_separator_tabs(raw);
     loop {
@@ -301,18 +459,13 @@ fn prepare_saphyr_input(raw: &str) -> Result<(String, ExplicitTagDetector), Stri
     }
 }
 
-fn load_saphyr_documents(raw: &str, preserve_scalar_tags: bool) -> Result<Vec<Yaml<'_>>, String> {
-    if !preserve_scalar_tags {
-        return Yaml::load_from_str(raw).map_err(|error| error.to_string());
-    }
-
+fn load_tagged_yaml_documents(raw: &str) -> Result<Vec<TaggedYamlNode<'_>>, String> {
     let mut parser = Parser::new_from_str(raw);
-    let mut loader = YamlLoader::<Yaml>::default();
-    loader.early_parse(false);
+    let mut loader = TaggedYamlLoader::default();
     parser
         .load(&mut loader, true)
         .map_err(|error| error.to_string())?;
-    Ok(loader.into_documents())
+    loader.finish()
 }
 
 fn normalize_yaml_separator_tabs(raw: &str) -> String {
@@ -559,47 +712,146 @@ fn saphyr_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
     }
 }
 
-fn tagged_saphyr_document_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
-    match value {
-        Yaml::Mapping(mapping) => tagged_saphyr_mapping_to_serde(mapping),
+fn tagged_saphyr_document_to_serde(value: TaggedYamlNode<'_>) -> Result<serde_yaml::Value, String> {
+    let TaggedYamlNode::Mapping(entries, tag) = value else {
+        return Err("Frontmatter must be a YAML mapping.".to_string());
+    };
+    match tag.as_deref() {
+        None => tagged_mapping_entries_to_serde(entries),
+        Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "map" => {
+            tagged_mapping_entries_to_serde(entries)
+        }
+        Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "set" => {
+            tagged_set_to_serde(entries)
+        }
         _ => Err("Frontmatter must be a YAML mapping.".to_string()),
     }
 }
 
-fn tagged_saphyr_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
+fn tagged_saphyr_to_serde(value: TaggedYamlNode<'_>) -> Result<serde_yaml::Value, String> {
     match value {
-        Yaml::Representation(value, style, tag) => {
+        TaggedYamlNode::Scalar(value, style, tag) => {
             tagged_scalar_to_serde(value, style, tag.as_deref())
         }
-        Yaml::Value(value) => scalar_to_serde(value),
-        Yaml::Sequence(sequence) => sequence
-            .into_iter()
-            .map(tagged_saphyr_to_serde)
-            .collect::<Result<Vec<_>, _>>()
-            .map(serde_yaml::Value::Sequence),
-        Yaml::Mapping(mapping) => tagged_saphyr_mapping_to_serde(mapping),
-        Yaml::Tagged(tag, value) => {
-            let value = tagged_saphyr_to_serde(*value)?;
-            Ok(wrap_custom_yaml_tag(&tag, value))
-        }
-        Yaml::Alias(_) | Yaml::BadValue => {
+        TaggedYamlNode::Sequence(values, tag) => match tag.as_deref() {
+            None => tagged_sequence_to_serde(values),
+            Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "seq" => {
+                tagged_sequence_to_serde(values)
+            }
+            Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "omap" => {
+                tagged_pairs_to_serde(values, true)
+            }
+            Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "pairs" => {
+                tagged_pairs_to_serde(values, false)
+            }
+            Some(tag) if !tag.is_yaml_core_schema() => {
+                Ok(wrap_custom_yaml_tag(tag, tagged_sequence_to_serde(values)?))
+            }
+            _ => Err(invalid_explicit_yaml_tag()),
+        },
+        TaggedYamlNode::Mapping(entries, tag) => match tag.as_deref() {
+            None => tagged_mapping_entries_to_serde(entries),
+            Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "map" => {
+                tagged_mapping_entries_to_serde(entries)
+            }
+            Some(tag) if tag.is_yaml_core_schema() && tag.suffix == "set" => {
+                tagged_set_to_serde(entries)
+            }
+            Some(tag) if !tag.is_yaml_core_schema() => Ok(wrap_custom_yaml_tag(
+                tag,
+                tagged_mapping_entries_to_serde(entries)?,
+            )),
+            _ => Err(invalid_explicit_yaml_tag()),
+        },
+        TaggedYamlNode::BadValue => {
             Err("Frontmatter must not contain unresolved YAML aliases.".to_string())
         }
     }
 }
 
-fn tagged_saphyr_mapping_to_serde(
-    mapping: saphyr::Mapping<'_>,
+fn tagged_sequence_to_serde(values: Vec<TaggedYamlNode<'_>>) -> Result<serde_yaml::Value, String> {
+    values
+        .into_iter()
+        .map(tagged_saphyr_to_serde)
+        .collect::<Result<Vec<_>, _>>()
+        .map(serde_yaml::Value::Sequence)
+}
+
+fn tagged_mapping_entries_to_serde(
+    entries: Vec<(TaggedYamlNode<'_>, TaggedYamlNode<'_>)>,
 ) -> Result<serde_yaml::Value, String> {
     let mut converted = serde_yaml::Mapping::new();
-    for (key, value) in mapping {
-        let key = tagged_saphyr_to_serde(key)?;
-        if !matches!(key, serde_yaml::Value::String(_)) {
-            return Err("Frontmatter keys must be strings.".to_string());
+    for (key, value) in entries {
+        let key = serde_yaml::Value::String(tagged_mapping_key_to_string(key)?);
+        if converted.contains_key(&key) {
+            return Err("Frontmatter mapping keys must be unique.".to_string());
         }
         converted.insert(key, tagged_saphyr_to_serde(value)?);
     }
     Ok(serde_yaml::Value::Mapping(converted))
+}
+
+fn tagged_mapping_key_to_string(value: TaggedYamlNode<'_>) -> Result<String, String> {
+    match value {
+        TaggedYamlNode::Scalar(value, _, Some(tag)) if !tag.is_yaml_core_schema() => {
+            Ok(value.into_owned())
+        }
+        value => match tagged_saphyr_to_serde(value)? {
+            serde_yaml::Value::String(value) => Ok(value),
+            _ => Err("Frontmatter keys must be strings.".to_string()),
+        },
+    }
+}
+
+fn tagged_set_to_serde(
+    entries: Vec<(TaggedYamlNode<'_>, TaggedYamlNode<'_>)>,
+) -> Result<serde_yaml::Value, String> {
+    let mut converted = serde_yaml::Mapping::new();
+    for (key, value) in entries {
+        if tagged_saphyr_to_serde(value)? != serde_yaml::Value::Null {
+            return Err("Set items must all have null values.".to_string());
+        }
+        let key = serde_yaml::Value::String(tagged_mapping_key_to_string(key)?);
+        if converted.contains_key(&key) {
+            return Err("Frontmatter mapping keys must be unique.".to_string());
+        }
+        converted.insert(key, serde_yaml::Value::Null);
+    }
+    Ok(serde_yaml::Value::Mapping(converted))
+}
+
+fn tagged_pairs_to_serde(
+    values: Vec<TaggedYamlNode<'_>>,
+    ordered: bool,
+) -> Result<serde_yaml::Value, String> {
+    let mut converted = Vec::with_capacity(values.len());
+    let mut seen = BTreeSet::new();
+
+    for value in values {
+        let (key, value) = match value {
+            TaggedYamlNode::Mapping(mut entries, _) if entries.len() <= 1 => entries
+                .pop()
+                .map(|(key, value)| (key, Some(value)))
+                .unwrap_or((TaggedYamlNode::BadValue, None)),
+            TaggedYamlNode::Mapping(_, _) => {
+                return Err("Each pair must have its own sequence indicator.".to_string());
+            }
+            key => (key, None),
+        };
+        let key = tagged_mapping_key_to_string(key)?;
+        if ordered && !seen.insert(key.clone()) {
+            return Err("Ordered maps must not include duplicate keys.".to_string());
+        }
+        let value = value
+            .map(tagged_saphyr_to_serde)
+            .transpose()?
+            .unwrap_or(serde_yaml::Value::Null);
+        let mut pair = serde_yaml::Mapping::new();
+        pair.insert(serde_yaml::Value::String(key), value);
+        converted.push(serde_yaml::Value::Mapping(pair));
+    }
+
+    Ok(serde_yaml::Value::Sequence(converted))
 }
 
 fn tagged_scalar_to_serde(
@@ -1885,6 +2137,37 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn normalizes_and_validates_yaml_collection_tags() {
+        let parsed = parse_markdown_document(
+            "collections.md",
+            "---\nmetadata:\n  ordered: !!omap [a, {b: 2}]\n  pairs: !!pairs [a, {b: 2}]\n  set: !!set {a: null, b: null}\n---\n",
+            "collections",
+        );
+        assert_eq!(
+            serde_json::to_value(parsed.frontmatter).unwrap(),
+            serde_json::json!({
+                "metadata": {
+                    "ordered": [{"a": null}, {"b": 2}],
+                    "pairs": [{"a": null}, {"b": 2}],
+                    "set": {"a": null, "b": null}
+                }
+            })
+        );
+
+        for value in [
+            "!!set {a: 1}",
+            "!!omap [{a: 1, b: 2}]",
+            "!!omap [{a: 1}, {a: 2}]",
+            "!!pairs [{a: 1, b: 2}]",
+        ] {
+            let content = format!("---\nmetadata: {value}\n---\n");
+            let parsed = parse_markdown_document("bad.md", content, "bad");
+            assert!(parsed.frontmatter.is_none(), "accepted {value}");
+            assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+        }
     }
 
     #[test]
