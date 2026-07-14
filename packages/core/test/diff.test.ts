@@ -134,6 +134,25 @@ type: Note
     }
   });
 
+  it("reports added frontmatter keys that match object prototype names", async () => {
+    const before = await bundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    });
+    const after = await bundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n__proto__: {}\n---\n# Concept\n"
+    });
+
+    try {
+      const diff = diffBundles(before.loaded, after.loaded);
+
+      expect(diff.changedConcepts).toHaveLength(1);
+      expect(diff.changedConcepts[0]?.frontmatterChanged).toEqual(["__proto__"]);
+    } finally {
+      await before.cleanup();
+      await after.cleanup();
+    }
+  });
+
   it("reports resource and tag changes outside frontmatter", async () => {
     const before = await bundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"

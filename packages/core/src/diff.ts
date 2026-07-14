@@ -149,8 +149,15 @@ function changedConcept(before: ConceptIR, after: ConceptIR): ConceptChangeIR | 
 function changedFrontmatterKeys(before: ConceptIR, after: ConceptIR): string[] {
   const keys = new Set([...Object.keys(before.frontmatter), ...Object.keys(after.frontmatter)]);
   return [...keys]
-    .filter((key) => !stableEqual(before.frontmatter[key], after.frontmatter[key]))
+    .filter((key) => !stableEqual(
+      ownFrontmatterValue(before.frontmatter, key),
+      ownFrontmatterValue(after.frontmatter, key)
+    ))
     .sort(compareStrings);
+}
+
+function ownFrontmatterValue(frontmatter: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(frontmatter, key) ? frontmatter[key] : undefined;
 }
 
 function linkSet(concept: ConceptIR): Set<string> {
