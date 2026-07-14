@@ -293,7 +293,7 @@ resource:
   it("detects bracketed private IPv6 URLs in body text", async () => {
     await withBundle({
       "ipv6.md": "---\ntype: Note\ntitle: IPv6\n---\n# IPv6\n\nSee http://[::1]/admin.\n",
-      "mapped.md": "---\ntype: Note\ntitle: Mapped\n---\n# Mapped\n\n[Local](http://[::ffff:127.0.0.1]/admin)\n"
+      "mapped.md": "---\ntype: Note\ntitle: Mapped\n---\n# Mapped\n\n[Local](HTTP://[::ffff:127.0.0.1]/admin)\n"
     }, async (root) => {
       const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
 

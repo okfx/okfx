@@ -516,7 +516,7 @@ function containsInternalUrl(value: string): boolean {
 }
 
 function extractUrls(value: string): string[] {
-  return (value.match(/\bhttps?:\/\/[^\s<>"']+/g) ?? []).map(trimUrlCandidate);
+  return (value.match(/\bhttps?:\/\/[^\s<>"']+/giu) ?? []).map(trimUrlCandidate);
 }
 
 function trimUrlCandidate(value: string): string {
