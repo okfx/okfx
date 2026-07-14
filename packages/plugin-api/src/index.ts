@@ -62,6 +62,19 @@ export function generationTimestamp(now: Date = new Date()): string {
   return now.toISOString();
 }
 
+export function escapeMarkdownText(value: string): string {
+  return value
+    .replace(/\r\n?|\n/g, " ")
+    .replace(/([!-/:-@[-`{-~])/g, "\\$1");
+}
+
+export function markdownCodeSpan(value: string): string {
+  const flattened = value.replace(/\r\n?|\n/g, " ");
+  const longestRun = Math.max(0, ...(flattened.match(/`+/g) ?? []).map((run) => run.length));
+  const delimiter = "`".repeat(longestRun + 1);
+  return `${delimiter} ${flattened} ${delimiter}`;
+}
+
 export function disambiguateGeneratedPaths(
   files: IdentifiedGeneratedFile[]
 ): Array<{ path: string; content: string }> {

@@ -1,7 +1,9 @@
 import {
   definePlugin,
   disambiguateGeneratedPaths,
+  escapeMarkdownText,
   generationTimestamp,
+  markdownCodeSpan,
   type OkfxGenerationOptions
 } from "@okfx/plugin-api";
 
@@ -33,9 +35,9 @@ tags:
 timestamp: ${timestamp}
 ---
 
-# ${entity.name ?? entity.urn}
+# ${escapeMarkdownText(entity.name ?? entity.urn)}
 
-DataHub URN: \`${entity.urn}\`
+DataHub URN: ${markdownCodeSpan(entity.urn)}
 `
   }))).sort((a, b) => a.path.localeCompare(b.path));
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parseMarkdownDocument } from "@okfx/core";
+
 import { produceDataHubOkf } from "../src/index.js";
 
 describe("@okfx/adapter-datahub", () => {
@@ -21,5 +23,14 @@ describe("@okfx/adapter-datahub", () => {
 
     expect(new Set(files.map((file) => file.path))).toHaveLength(2);
     expect(files.every((file) => file.path.startsWith("catalog/orders-"))).toBe(true);
+  });
+
+  it("does not turn imported entity metadata into Markdown links", () => {
+    const [file] = produceDataHubOkf([{
+      urn: "urn:test:` [Injected](evil.md)",
+      name: "[Dataset](other.md)"
+    }]);
+
+    expect(parseMarkdownDocument(file!.path, file!.content, "dataset").links).toEqual([]);
   });
 });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parseMarkdownDocument } from "@okfx/core";
+
 import { produceOpenApiOkf } from "../src/index.js";
 
 describe("@okfx/adapter-openapi", () => {
@@ -46,5 +48,17 @@ describe("@okfx/adapter-openapi", () => {
 
     expect(new Set(files.map((file) => file.path))).toHaveLength(2);
     expect(files.every((file) => file.path.startsWith("apis/list-"))).toBe(true);
+  });
+
+  it("does not turn imported operation metadata into Markdown links", () => {
+    const [file] = produceOpenApiOkf({
+      paths: {
+        "/orders` [Route](evil.md)": {
+          get: { summary: "[Orders](other.md)" }
+        }
+      }
+    });
+
+    expect(parseMarkdownDocument(file!.path, file!.content, "operation").links).toEqual([]);
   });
 });

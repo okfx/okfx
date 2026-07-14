@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { disambiguateGeneratedPaths, generationTimestamp } from "../src/index.js";
+import {
+  disambiguateGeneratedPaths,
+  escapeMarkdownText,
+  generationTimestamp,
+  markdownCodeSpan
+} from "../src/index.js";
 
 describe("generationTimestamp", () => {
   it("serializes an injected generation time", () => {
@@ -35,5 +40,14 @@ describe("disambiguateGeneratedPaths", () => {
       { path: "tables/orders.md", identity: "project.orders", content: "A" },
       { path: "tables/orders.md", identity: "project.orders", content: "B" }
     ])).toThrow("duplicate identity");
+  });
+});
+
+describe("Markdown generation helpers", () => {
+  it("escapes structural text and chooses a safe code delimiter", () => {
+    expect(escapeMarkdownText("Title\n[Injected](evil.md)"))
+      .toBe("Title \\[Injected\\]\\(evil\\.md\\)");
+    expect(markdownCodeSpan("name` [Injected](evil.md)"))
+      .toBe("`` name` [Injected](evil.md) ``");
   });
 });

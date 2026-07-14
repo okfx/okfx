@@ -1,7 +1,9 @@
 import {
   definePlugin,
   disambiguateGeneratedPaths,
+  escapeMarkdownText,
   generationTimestamp,
+  markdownCodeSpan,
   type OkfxGenerationOptions
 } from "@okfx/plugin-api";
 
@@ -30,12 +32,12 @@ export function produceOpenApiOkf(
         path: `apis/${slug(id)}.md`,
         identity: `${method.toLowerCase()} ${route}`,
         content: concept("API", title, operation.description ?? document.info?.description ?? "Imported from OpenAPI.", [
-          `# ${title}`,
+          `# ${escapeMarkdownText(title)}`,
           "",
           "## Usage",
           "",
-          `- Method: \`${method.toUpperCase()}\``,
-          `- Path: \`${route}\``,
+          `- Method: ${markdownCodeSpan(method.toUpperCase())}`,
+          `- Path: ${markdownCodeSpan(route)}`,
           "",
           "## Auth Notes",
           "",

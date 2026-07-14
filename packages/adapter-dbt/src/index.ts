@@ -1,6 +1,7 @@
 import {
   definePlugin,
   disambiguateGeneratedPaths,
+  escapeMarkdownText,
   generationTimestamp,
   type OkfxGenerationOptions
 } from "@okfx/plugin-api";
@@ -52,11 +53,11 @@ tags:
 timestamp: ${timestamp}
 ---
 
-# ${title}
+# ${escapeMarkdownText(title)}
 
 ## Source Tables
 
-${dependsOn.length === 0 ? "No upstream dbt dependencies declared." : dependsOn.map((item) => `- ${item}`).join("\n")}
+${dependsOn.length === 0 ? "No upstream dbt dependencies declared." : dependsOn.map((item) => `- ${escapeMarkdownText(item)}`).join("\n")}
 `;
 }
 

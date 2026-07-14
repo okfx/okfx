@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parseMarkdownDocument } from "@okfx/core";
+
 import { produceBigQueryOkf } from "../src/index.js";
 
 describe("@okfx/adapter-bigquery", () => {
@@ -30,5 +32,19 @@ describe("@okfx/adapter-bigquery", () => {
 
     expect(new Set(files.map((file) => file.path))).toHaveLength(2);
     expect(files.every((file) => file.path.startsWith("tables/sales-orders-"))).toBe(true);
+  });
+
+  it("does not turn imported column metadata into Markdown links", () => {
+    const [file] = produceBigQueryOkf([{
+      project: "p",
+      dataset: "d",
+      table: "orders",
+      columns: [{
+        name: "id` [Injected](evil.md)",
+        description: "[Also injected](other.md)"
+      }]
+    }]);
+
+    expect(parseMarkdownDocument(file!.path, file!.content, "table").links).toEqual([]);
   });
 });

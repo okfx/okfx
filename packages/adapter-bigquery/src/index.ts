@@ -1,7 +1,9 @@
 import {
   definePlugin,
   disambiguateGeneratedPaths,
+  escapeMarkdownText,
   generationTimestamp,
+  markdownCodeSpan,
   type OkfxGenerationOptions
 } from "@okfx/plugin-api";
 
@@ -33,11 +35,11 @@ tags:
 timestamp: ${timestamp}
 ---
 
-# ${table.dataset}.${table.table}
+# ${escapeMarkdownText(`${table.dataset}.${table.table}`)}
 
 ## Columns
 
-${(table.columns ?? []).length === 0 ? "No columns provided." : table.columns!.map((column) => `- \`${column.name}\`${column.type ? ` (${column.type})` : ""}${column.description ? `: ${column.description}` : ""}`).join("\n")}
+${(table.columns ?? []).length === 0 ? "No columns provided." : table.columns!.map((column) => `- ${markdownCodeSpan(column.name)}${column.type ? ` (${escapeMarkdownText(column.type)})` : ""}${column.description ? `: ${escapeMarkdownText(column.description)}` : ""}`).join("\n")}
 `
   }))).sort((a, b) => a.path.localeCompare(b.path));
 }
