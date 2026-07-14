@@ -183,9 +183,9 @@ runs:
           `- Info: ${counts.info ?? 0}`,
           "",
           "### Artifacts",
-          `- Lint JSON: ${markdownCode(process.env.OKF_LINT_JSON)}`,
-          `- Graph JSON: ${markdownCode(process.env.OKF_GRAPH_JSON)}`,
-          fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: ${markdownCode(process.env.OKF_DOCTOR_JSON)}` : undefined
+          lint ? `- Lint JSON: ${markdownCode(process.env.OKF_LINT_JSON)}` : undefined,
+          graph ? `- Graph JSON: ${markdownCode(process.env.OKF_GRAPH_JSON)}` : undefined,
+          doctor ? `- Doctor JSON: ${markdownCode(process.env.OKF_DOCTOR_JSON)}` : undefined
         ].filter(Boolean).join("\n") + "\n";
         fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines);
         NODE
@@ -247,9 +247,9 @@ runs:
             `- Info: ${counts.info ?? 0}`,
             "",
             "### Artifacts",
-            `- Lint JSON: ${markdownCode(process.env.OKF_LINT_JSON)}`,
-            `- Graph JSON: ${markdownCode(process.env.OKF_GRAPH_JSON)}`,
-            fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: ${markdownCode(process.env.OKF_DOCTOR_JSON)}` : undefined
+            lint ? `- Lint JSON: ${markdownCode(process.env.OKF_LINT_JSON)}` : undefined,
+            graph ? `- Graph JSON: ${markdownCode(process.env.OKF_GRAPH_JSON)}` : undefined,
+            doctor ? `- Doctor JSON: ${markdownCode(process.env.OKF_DOCTOR_JSON)}` : undefined
           ].filter(Boolean).join("\n");
           const issue = {
             owner: context.repo.owner,
