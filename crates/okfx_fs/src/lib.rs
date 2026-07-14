@@ -394,40 +394,51 @@ fn glob_matches(pattern: &str, path: &str) -> bool {
 }
 
 fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
-    match (pattern.split_first(), path.split_first()) {
-        (None, None) => true,
-        (None, Some(_)) => false,
-        (Some((head, rest)), _) if *head == "**" => {
-            match_segments(rest, path) || (!path.is_empty() && match_segments(pattern, &path[1..]))
+    let mut previous = vec![false; path.len() + 1];
+    previous[0] = true;
+
+    for pattern_segment in pattern {
+        let mut current = vec![false; path.len() + 1];
+        if *pattern_segment == "**" {
+            current[0] = previous[0];
+            for path_index in 1..=path.len() {
+                current[path_index] = previous[path_index] || current[path_index - 1];
+            }
+        } else {
+            for path_index in 1..=path.len() {
+                current[path_index] = previous[path_index - 1]
+                    && segment_matches(pattern_segment, path[path_index - 1]);
+            }
         }
-        (Some((head, rest)), Some((path_head, path_rest))) => {
-            segment_matches(head, path_head) && match_segments(rest, path_rest)
-        }
-        (Some(_), None) => false,
+        previous = current;
     }
+
+    previous[path.len()]
 }
 
 fn segment_matches(pattern: &str, value: &str) -> bool {
-    segment_matches_inner(
-        &pattern.chars().collect::<Vec<_>>(),
-        &value.chars().collect::<Vec<_>>(),
-    )
-}
+    let pattern = pattern.chars().collect::<Vec<_>>();
+    let value = value.chars().collect::<Vec<_>>();
+    let mut previous = vec![false; value.len() + 1];
+    previous[0] = true;
 
-fn segment_matches_inner(pattern: &[char], value: &[char]) -> bool {
-    match (pattern.split_first(), value.split_first()) {
-        (None, None) => true,
-        (None, Some(_)) => false,
-        (Some(('*', rest)), _) => {
-            segment_matches_inner(rest, value)
-                || (!value.is_empty() && segment_matches_inner(pattern, &value[1..]))
+    for pattern_character in pattern {
+        let mut current = vec![false; value.len() + 1];
+        if pattern_character == '*' {
+            current[0] = previous[0];
+            for value_index in 1..=value.len() {
+                current[value_index] = previous[value_index] || current[value_index - 1];
+            }
+        } else {
+            for value_index in 1..=value.len() {
+                current[value_index] = previous[value_index - 1]
+                    && (pattern_character == '?' || pattern_character == value[value_index - 1]);
+            }
         }
-        (Some(('?', rest)), Some((_, value_rest))) => segment_matches_inner(rest, value_rest),
-        (Some((pattern_head, rest)), Some((value_head, value_rest))) => {
-            pattern_head == value_head && segment_matches_inner(rest, value_rest)
-        }
-        (Some(_), None) => false,
+        previous = current;
     }
+
+    previous[value.len()]
 }
 
 fn split_segments(value: &str) -> Vec<&str> {
@@ -572,6 +583,17 @@ mod tests {
         assert_eq!(files, vec!["concepts/active/a.md"]);
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn evaluates_adversarial_globs_without_exponential_backtracking() {
+        let segment_pattern = format!("{}b.md", "*a".repeat(64));
+        let segment_path = format!("{}c.md", "a".repeat(64));
+        assert!(!glob_matches(&segment_pattern, &segment_path));
+
+        let path_pattern = format!("{}target.md", "**/".repeat(64));
+        let path = format!("{}other.md", "segment/".repeat(64));
+        assert!(!glob_matches(&path_pattern, &path));
     }
 
     #[cfg(unix)]
