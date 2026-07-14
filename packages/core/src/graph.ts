@@ -1,5 +1,6 @@
 import { compareStrings } from "./compare.js";
 import { conceptIdFromPath } from "./paths.js";
+import { parseIsoUtcTimestamp } from "./timestamp.js";
 import type { BundleIR, ConceptIR, GraphEdgeIR, GraphIR, GraphNodeIR, IndexFileIR, LinkIR, LogFileIR } from "./types.js";
 
 export interface GraphAnalysisIR {
@@ -522,8 +523,10 @@ function findStaleSubgraphs(
       .map((id) => conceptsById.get(id))
       .map((concept) => concept?.timestamp)
       .filter((timestamp): timestamp is string => timestamp !== undefined)
-      .map((timestamp) => ({ timestamp, parsed: Date.parse(timestamp) }))
-      .filter((entry) => !Number.isNaN(entry.parsed));
+      .flatMap((timestamp) => {
+        const parsed = parseIsoUtcTimestamp(timestamp);
+        return parsed === undefined ? [] : [{ timestamp, parsed }];
+      });
     if (timestamped.length === 0) {
       return [];
     }

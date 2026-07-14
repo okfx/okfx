@@ -119,7 +119,8 @@ describe("buildGraph", () => {
       "a.md": "---\ntype: Note\ntitle: A\n---\n# A\n",
       "b.md": "---\ntype: Note\ntitle: B\n---\n# B\n",
       "old-a.md": "---\ntype: Note\ntitle: Old A\ntimestamp: 2025-01-01T00:00:00.000Z\n---\n[Old B](old-b.md)\n",
-      "old-b.md": "---\ntype: Note\ntitle: Old B\ntimestamp: 2025-01-02T00:00:00.000Z\n---\n# Old B\n"
+      "old-b.md": "---\ntype: Note\ntitle: Old B\ntimestamp: 2025-01-02T00:00:00.000Z\n---\n# Old B\n",
+      "ambiguous.md": "---\ntype: Note\ntitle: Ambiguous\ntimestamp: 2000-01-01T00:00:00\n---\n# Ambiguous\n"
     }, async (root) => {
       const graph = buildGraph(await loadBundle(root, { loadConfigFile: false }), {
         highDegreeThreshold: 2,

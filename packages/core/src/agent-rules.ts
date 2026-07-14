@@ -1,3 +1,4 @@
+import { parseIsoUtcTimestamp } from "./timestamp.js";
 import type { BundleIR, ConceptIR, DiagnosticIR, DiagnosticSeverity } from "./types.js";
 
 export function missingOwnerDiagnostics(bundle: BundleIR): DiagnosticIR[] {
@@ -92,8 +93,8 @@ function linksToType(concept: ConceptIR, bundle: BundleIR, targetType: string): 
 }
 
 function timestampIsStale(timestamp: string, now: Date): boolean {
-  const parsed = Date.parse(timestamp);
-  if (Number.isNaN(parsed)) {
+  const parsed = parseIsoUtcTimestamp(timestamp);
+  if (parsed === undefined) {
     return false;
   }
   return now.getTime() - parsed > 180 * 24 * 60 * 60 * 1000;

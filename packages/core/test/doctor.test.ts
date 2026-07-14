@@ -70,6 +70,22 @@ description: Weekly active users.
     });
   });
 
+  it("ignores non-UTC timestamps in stale analysis", async () => {
+    await withBundle({
+      "ambiguous.md": "---\ntype: Note\ntimestamp: 2000-01-01T00:00:00\n---\n# Ambiguous\n",
+      "valid.md": "---\ntype: Note\ntimestamp: 2000-01-01T00:00:00Z\n---\n# Valid\n"
+    }, async (root) => {
+      const result = doctorBundle(await loadBundle(root, { loadConfigFile: false }), {
+        now: new Date("2026-07-07T00:00:00Z")
+      });
+      const stalePaths = result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "agent/stale-timestamp")
+        .map((diagnostic) => diagnostic.path);
+
+      expect(stalePaths).toEqual(["valid.md"]);
+    });
+  });
+
   it("uses failOn from config", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\n---\n# Concept\n"
