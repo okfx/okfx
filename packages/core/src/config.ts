@@ -177,7 +177,7 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
       keyOrder: config.frontmatter?.keyOrder ?? [...defaultConfig.frontmatter.keyOrder]
     },
     resourcePolicy: {
-      allowHosts: config.resourcePolicy?.allowHosts ?? []
+      allowHosts: (config.resourcePolicy?.allowHosts ?? []).map(normalizeConfiguredHost)
     },
     mcp: {
       readonly: config.mcp?.readonly ?? defaultConfig.mcp.readonly,
@@ -186,6 +186,14 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
     },
     configPath
   };
+}
+
+function normalizeConfiguredHost(value: string): string {
+  const withoutTrailingDot = value.trim().replace(/\.+$/u, "");
+  const withoutBrackets = withoutTrailingDot.startsWith("[") && withoutTrailingDot.endsWith("]")
+    ? withoutTrailingDot.slice(1, -1)
+    : withoutTrailingDot;
+  return withoutBrackets.toLowerCase();
 }
 
 export function mergeConfig(
@@ -213,7 +221,9 @@ export function mergeConfig(
       keyOrder: override.frontmatter?.keyOrder ?? base.frontmatter.keyOrder
     },
     resourcePolicy: {
-      allowHosts: override.resourcePolicy?.allowHosts ?? base.resourcePolicy.allowHosts
+      allowHosts: override.resourcePolicy?.allowHosts !== undefined
+        ? resolvedOverride.resourcePolicy.allowHosts
+        : base.resourcePolicy.allowHosts
     },
     mcp: {
       readonly: override.mcp?.readonly ?? base.mcp.readonly,

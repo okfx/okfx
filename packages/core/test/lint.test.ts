@@ -224,6 +224,23 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("normalizes configured resource hosts", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\ndescription: Demo\nresource: https://DOCS.Example.com./doc\n---\n# Concept\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: {
+          resourcePolicy: {
+            allowHosts: ["  Docs.Example.COM.  "]
+          }
+        }
+      });
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code))
+        .not.toContain("security/non-allowlisted-resource");
+    });
+  });
+
   it("does not report a private resource as an internal URL outside resources", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\nresource: http://localhost/runbook\n---\n# Concept\n\nPublic documentation.\n"

@@ -551,7 +551,7 @@ fn security_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
         .options
         .resource_allow_hosts
         .iter()
-        .map(|host| host.to_lowercase())
+        .map(|host| normalize_configured_host(host))
         .collect::<BTreeSet<_>>();
 
     for concept in context.concepts {
@@ -1169,6 +1169,15 @@ fn resource_host(value: &str) -> Option<String> {
     (!host.is_empty()).then_some(host)
 }
 
+fn normalize_configured_host(value: &str) -> String {
+    let without_trailing_dot = value.trim().trim_end_matches('.');
+    without_trailing_dot
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(without_trailing_dot)
+        .to_lowercase()
+}
+
 fn default_frontmatter_key_order() -> Vec<String> {
     [
         "type",
@@ -1351,6 +1360,24 @@ mod tests {
         assert_eq!(paths_for("agent/missing-summary"), vec!["author.md"]);
         assert_eq!(paths_for("agent/api-missing-auth-notes"), vec!["author.md"]);
         assert!(paths_for("agent/missing-usage").is_empty());
+    }
+
+    #[test]
+    fn normalizes_configured_resource_hosts() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![concept("docs").with_resource("https://DOCS.Example.com./guide")],
+            options: RuleOptions {
+                resource_allow_hosts: vec!["  Docs.Example.COM.  ".to_string()],
+                ..RuleOptions::default()
+            },
+            ..RuleInput::default()
+        });
+
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "security/non-allowlisted-resource")
+        );
     }
 
     #[test]

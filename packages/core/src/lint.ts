@@ -537,7 +537,7 @@ function resourceHost(value: string): string | undefined {
   try {
     return new URL(value).hostname
       .replace(/^\[|\]$/g, "")
-      .replace(/\.$/, "")
+      .replace(/\.+$/u, "")
       .toLowerCase();
   } catch {
     return undefined;
