@@ -21,10 +21,12 @@ import {
 } from "@okfx/core";
 
 import { markdownTargetAtDocument, resolveDefinitionTarget } from "./markdown-target.js";
+import { LatestRunTracker } from "./latest-run.js";
 
 let diagnostics: vscode.DiagnosticCollection | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
 const diagnosticPathsByRoot = new Map<string, Set<string>>();
+const diagnosticRuns = new LatestRunTracker();
 
 type DiagnosticMode = "validate" | "lint" | "doctor";
 
@@ -111,27 +113,37 @@ async function runDiagnostics(
     return;
   }
 
+  const isCurrentRun = diagnosticRuns.begin(root);
   status("OKF: checking...");
-  const okfxConfig = await loadConfig(root);
-  const bundle = await loadBundle(root, { config: okfxConfig, loadConfigFile: false });
-  let result: { diagnostics: DiagnosticIR[] };
-  if (mode === "validate") {
-    result = validateBundle(bundle);
-  } else if (mode === "lint") {
-    const pluginLoad = await loadConfiguredPlugins(root, okfxConfig);
-    result = await lintBundleWithPlugins(bundle, {
-      config: okfxConfig,
-      plugins: pluginLoad.plugins,
-      pluginDiagnostics: pluginLoad.diagnostics
-    });
-  } else {
-    result = doctorBundle(bundle, { config: okfxConfig });
-  }
-  publishDiagnostics(root, result.diagnostics);
-  status(`OKF: ${result.diagnostics.length} diagnostics`);
+  try {
+    const okfxConfig = await loadConfig(root);
+    const bundle = await loadBundle(root, { config: okfxConfig, loadConfigFile: false });
+    let result: { diagnostics: DiagnosticIR[] };
+    if (mode === "validate") {
+      result = validateBundle(bundle);
+    } else if (mode === "lint") {
+      const pluginLoad = await loadConfiguredPlugins(root, okfxConfig);
+      result = await lintBundleWithPlugins(bundle, {
+        config: okfxConfig,
+        plugins: pluginLoad.plugins,
+        pluginDiagnostics: pluginLoad.diagnostics
+      });
+    } else {
+      result = doctorBundle(bundle, { config: okfxConfig });
+    }
+    if (!isCurrentRun()) {
+      return;
+    }
+    publishDiagnostics(root, result.diagnostics);
+    status(`OKF: ${result.diagnostics.length} diagnostics`);
 
-  if (!silent) {
-    await vscode.window.showInformationMessage(`OKF ${mode} completed: ${result.diagnostics.length} diagnostics.`);
+    if (!silent) {
+      await vscode.window.showInformationMessage(`OKF ${mode} completed: ${result.diagnostics.length} diagnostics.`);
+    }
+  } catch (error) {
+    if (isCurrentRun()) {
+      throw error;
+    }
   }
 }
 
