@@ -66,6 +66,23 @@ describe("packBundle", () => {
     }
   });
 
+  it("uses the portable manifest content hash algorithm", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-hash-"));
+    const out = join(root, "..", "hash.okf.tar.gz");
+    try {
+      await writeFile(join(root, "a.md"), "a", "utf8");
+      await writeFile(join(root, "b.md"), "b", "utf8");
+
+      const result = await packBundle(root, { out, writeMetadata: false });
+
+      expect(result.manifest.content_hash)
+        .toBe("58657a1c026e23ab8fa445d46d482b1fa234d4571859961b08b0c1cf4c1ac5af");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(out, { force: true });
+    }
+  });
+
   it("preserves file config when applying runtime overrides", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-pack-config-"));
     const out = join(root, "..", "configured.okf.tar.gz");

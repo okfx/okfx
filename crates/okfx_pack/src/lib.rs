@@ -192,6 +192,9 @@ mod tests {
         assert_eq!(metadata.checksums.algorithm, "sha256");
         assert_eq!(metadata.checksums.files.len(), 2);
         assert_eq!(metadata.provenance.created_by, "okfx");
-        assert_eq!(metadata.manifest.content_hash.len(), 64);
+        assert_eq!(
+            metadata.manifest.content_hash,
+            "58657a1c026e23ab8fa445d46d482b1fa234d4571859961b08b0c1cf4c1ac5af"
+        );
     }
 }

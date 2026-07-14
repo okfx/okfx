@@ -126,7 +126,7 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
       created_at: createdAt,
       concept_count: manifestFiles.filter((file) => file.concept_id !== undefined).length,
       file_count: manifestFiles.length,
-      content_hash: sha256Hex(JSON.stringify(manifestFiles.map((file) => [file.path, file.sha256]))),
+      content_hash: packContentHash(manifestFiles),
       source,
       files: manifestFiles
     };
@@ -169,6 +169,14 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
       await rm(archiveStagingDir, { recursive: true, force: true });
     }
   }
+}
+
+function packContentHash(files: PackFileManifestEntry[]): string {
+  const canonical = [
+    "okfx-manifest-v1\n",
+    ...files.map((file) => `${file.path}\0${file.sha256}\0${file.concept_id ?? ""}\n`)
+  ].join("");
+  return sha256Hex(canonical);
 }
 
 async function stagePackFile(
