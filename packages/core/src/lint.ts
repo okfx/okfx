@@ -351,7 +351,7 @@ async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext)
         if (!Array.isArray(ruleDiagnostics)) {
           throw new TypeError("rule result must be an array of diagnostics");
         }
-        diagnostics.push(...ruleDiagnostics.map((diagnostic) => normalizePluginDiagnostic(
+        diagnostics.push(...Array.from(ruleDiagnostics, (diagnostic) => normalizePluginDiagnostic(
           diagnostic,
           ruleId,
           severity

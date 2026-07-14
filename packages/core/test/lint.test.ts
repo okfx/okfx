@@ -505,6 +505,9 @@ resource:
               "custom/bad-meta": {
                 meta: { defaultSeverity: "fatal" as never },
                 run: () => []
+              },
+              "custom/sparse-output": {
+                run: () => new Array(1) as never
               }
             }
           }]
@@ -512,10 +515,11 @@ resource:
       );
 
       const failures = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin/rule-failed");
-      expect(failures).toHaveLength(2);
+      expect(failures).toHaveLength(3);
       expect(failures.map((diagnostic) => diagnostic.message)).toEqual(expect.arrayContaining([
         expect.stringContaining("diagnostic code must be a string"),
-        expect.stringContaining("unsupported default severity")
+        expect.stringContaining("unsupported default severity"),
+        expect.stringContaining("rule diagnostics must be objects")
       ]));
     });
   });
