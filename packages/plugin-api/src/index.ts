@@ -82,17 +82,18 @@ export function disambiguateGeneratedPaths(
 ): Array<{ path: string; content: string }> {
   const indexesByPath = new Map<string, number[]>();
   for (const [index, file] of files.entries()) {
-    indexesByPath.set(file.path, [...(indexesByPath.get(file.path) ?? []), index]);
+    const pathKey = portablePathKey(file.path);
+    indexesByPath.set(pathKey, [...(indexesByPath.get(pathKey) ?? []), index]);
   }
 
   const assignedPaths = files.map((file) => file.path);
-  const usedPaths = new Set(
+  const usedPathKeys = new Set(
     [...indexesByPath]
       .filter(([, indexes]) => indexes.length === 1)
-      .map(([path]) => path)
+      .map(([pathKey]) => pathKey)
   );
 
-  for (const [basePath, indexes] of [...indexesByPath].sort(([left], [right]) => compareStrings(left, right))) {
+  for (const [, indexes] of [...indexesByPath].sort(([left], [right]) => compareStrings(left, right))) {
     if (indexes.length === 1) {
       continue;
     }
@@ -103,20 +104,21 @@ export function disambiguateGeneratedPaths(
     for (let index = 1; index < sortedIndexes.length; index += 1) {
       if (files[sortedIndexes[index - 1]!]!.identity === files[sortedIndexes[index]!]!.identity) {
         throw new Error(
-          `Generated files share path ${JSON.stringify(basePath)} and duplicate identity ${JSON.stringify(files[sortedIndexes[index]!]!.identity)}.`
+          `Generated files share portable path ${JSON.stringify(files[sortedIndexes[index]!]!.path)} and duplicate identity ${JSON.stringify(files[sortedIndexes[index]!]!.identity)}.`
         );
       }
     }
 
     for (const fileIndex of sortedIndexes) {
       const suffix = stableIdentityHash(files[fileIndex]!.identity);
+      const basePath = files[fileIndex]!.path;
       let candidate = appendPathSuffix(basePath, suffix);
       let attempt = 2;
-      while (usedPaths.has(candidate)) {
+      while (usedPathKeys.has(portablePathKey(candidate))) {
         candidate = appendPathSuffix(basePath, `${suffix}-${attempt}`);
         attempt += 1;
       }
-      usedPaths.add(candidate);
+      usedPathKeys.add(portablePathKey(candidate));
       assignedPaths[fileIndex] = candidate;
     }
   }
@@ -125,6 +127,10 @@ export function disambiguateGeneratedPaths(
     path: assignedPaths[index]!,
     content: file.content
   }));
+}
+
+function portablePathKey(path: string): string {
+  return path.normalize("NFC").toLowerCase();
 }
 
 function appendPathSuffix(path: string, suffix: string): string {

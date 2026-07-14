@@ -35,6 +35,17 @@ describe("disambiguateGeneratedPaths", () => {
       .toEqual(Object.fromEntries(reversed.map((file) => [file.content, file.path])));
   });
 
+  it("disambiguates paths that collide after portable normalization", () => {
+    const files = disambiguateGeneratedPaths([
+      { path: "Notes/Caf\u00e9.md", identity: "composed", content: "A" },
+      { path: "notes/cafe\u0301.md", identity: "decomposed", content: "B" }
+    ]);
+
+    expect(new Set(files.map((file) => file.path.normalize("NFC").toLowerCase())))
+      .toHaveLength(2);
+    expect(files.every((file) => /-[a-z0-9]{7}\.md$/u.test(file.path))).toBe(true);
+  });
+
   it("rejects duplicate identities at the same output path", () => {
     expect(() => disambiguateGeneratedPaths([
       { path: "tables/orders.md", identity: "project.orders", content: "A" },
