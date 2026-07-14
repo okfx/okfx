@@ -1,3 +1,4 @@
+import { compareStrings } from "./compare.js";
 import { doctorBundle, type DoctorOptions } from "./doctor.js";
 import type { BundleIR, ConceptIR } from "./types.js";
 
@@ -51,13 +52,13 @@ export function diffBundles(before: BundleIR, after: BundleIR, options: DiffOpti
   const renamed = detectRenames(removed, added);
   const renamedFrom = new Set(renamed.map((entry) => entry.from));
   const renamedTo = new Set(renamed.map((entry) => entry.to));
-  const addedConcepts = added.map((concept) => concept.id).filter((id) => !renamedTo.has(id)).sort();
-  const removedConcepts = removed.map((concept) => concept.id).filter((id) => !renamedFrom.has(id)).sort();
+  const addedConcepts = added.map((concept) => concept.id).filter((id) => !renamedTo.has(id)).sort(compareStrings);
+  const removedConcepts = removed.map((concept) => concept.id).filter((id) => !renamedFrom.has(id)).sort(compareStrings);
   const changedConcepts = [...afterById.entries()]
     .filter(([id]) => beforeById.has(id))
     .map(([id, afterConcept]) => changedConcept(beforeById.get(id)!, afterConcept))
     .filter((change): change is ConceptChangeIR => change !== undefined)
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort((a, b) => compareStrings(a.id, b.id));
   const beforeReadiness = doctorBundle(before, options.doctor);
   const afterReadiness = doctorBundle(after, options.doctor);
   const readinessDelta = afterReadiness.score - beforeReadiness.score;
@@ -103,15 +104,15 @@ function detectRenames(removed: ConceptIR[], added: ConceptIR[]): ConceptRenameI
     });
   }
 
-  return renames.sort((a, b) => a.from.localeCompare(b.from));
+  return renames.sort((a, b) => compareStrings(a.from, b.from));
 }
 
 function changedConcept(before: ConceptIR, after: ConceptIR): ConceptChangeIR | undefined {
   const frontmatterChanged = changedFrontmatterKeys(before, after);
   const beforeLinks = linkSet(before);
   const afterLinks = linkSet(after);
-  const linksAdded = [...afterLinks].filter((link) => !beforeLinks.has(link)).sort();
-  const linksRemoved = [...beforeLinks].filter((link) => !afterLinks.has(link)).sort();
+  const linksAdded = [...afterLinks].filter((link) => !beforeLinks.has(link)).sort(compareStrings);
+  const linksRemoved = [...beforeLinks].filter((link) => !afterLinks.has(link)).sort(compareStrings);
   const bodyChanged = before.body.raw !== after.body.raw;
   const resourceChanged = !stableEqual(before.resource, after.resource);
   const tagsChanged = !stableEqual(before.tags, after.tags);
@@ -143,7 +144,7 @@ function changedFrontmatterKeys(before: ConceptIR, after: ConceptIR): string[] {
   const keys = new Set([...Object.keys(before.frontmatter), ...Object.keys(after.frontmatter)]);
   return [...keys]
     .filter((key) => !stableEqual(before.frontmatter[key], after.frontmatter[key]))
-    .sort();
+    .sort(compareStrings);
 }
 
 function linkSet(concept: ConceptIR): Set<string> {
@@ -164,8 +165,8 @@ function stableEqual(left: unknown, right: unknown): boolean {
     return false;
   }
 
-  const leftKeys = Object.keys(left).sort();
-  const rightKeys = Object.keys(right).sort();
+  const leftKeys = Object.keys(left).sort(compareStrings);
+  const rightKeys = Object.keys(right).sort(compareStrings);
   return leftKeys.length === rightKeys.length
     && leftKeys.every((key, index) => key === rightKeys[index] && stableEqual(left[key], right[key]));
 }

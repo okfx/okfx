@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  compareStrings,
   disambiguateGeneratedPaths,
   escapeMarkdownText,
   generationTimestamp,
@@ -39,7 +40,7 @@ timestamp: ${timestamp}
 
 DataHub URN: ${markdownCodeSpan(entity.urn)}
 `
-  }))).sort((a, b) => a.path.localeCompare(b.path));
+  }))).sort((a, b) => compareStrings(a.path, b.path));
 }
 
 export default definePlugin({

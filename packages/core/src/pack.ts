@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import fg from "fast-glob";
 import * as tar from "tar";
 
+import { compareStrings } from "./compare.js";
 import {
   defaultConfig,
   loadConfig,
@@ -250,7 +251,7 @@ async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: 
   const paths = entries
     .filter((entry) => resolve(entry) !== out)
     .map((entry) => relativePosixPath(root, entry))
-    .sort((a, b) => a.localeCompare(b));
+    .sort(compareStrings);
   return paths.filter((path) => !isSensitivePackPath(path));
 }
 

@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { Command, InvalidArgumentError } from "commander";
 
 import {
+  compareStrings,
   lintBundleWithPlugins,
   loadConfiguredPlugins,
   loadBundle,
@@ -118,7 +119,7 @@ function toSarif(result: LintResult, bundle: BundleIR): unknown {
         driver: {
           name: "okfx",
           informationUri: "https://github.com/okfx/okfx",
-          rules: [...new Set(result.diagnostics.map((diagnostic) => diagnostic.code))].sort().map((code) => ({
+          rules: [...new Set(result.diagnostics.map((diagnostic) => diagnostic.code))].sort(compareStrings).map((code) => ({
             id: code,
             name: code,
             shortDescription: {

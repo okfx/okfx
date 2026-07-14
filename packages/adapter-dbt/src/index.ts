@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  compareStrings,
   disambiguateGeneratedPaths,
   escapeMarkdownText,
   generationTimestamp,
@@ -28,7 +29,7 @@ export function produceDbtOkf(
         timestamp
       )
     })))
-    .sort((a, b) => a.path.localeCompare(b.path));
+    .sort((a, b) => compareStrings(a.path, b.path));
 }
 
 export default definePlugin({

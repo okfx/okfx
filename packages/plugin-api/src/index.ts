@@ -1,4 +1,6 @@
-import type { BundleIR, DiagnosticIR, OkfxGraphIR, ResolvedOkfxConfig } from "@okfx/core";
+import { compareStrings, type BundleIR, type DiagnosticIR, type OkfxGraphIR, type ResolvedOkfxConfig } from "@okfx/core";
+
+export { compareStrings };
 
 export interface OkfxRuleContext {
   bundle: BundleIR;
@@ -90,13 +92,13 @@ export function disambiguateGeneratedPaths(
       .map(([path]) => path)
   );
 
-  for (const [basePath, indexes] of [...indexesByPath].sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [basePath, indexes] of [...indexesByPath].sort(([left], [right]) => compareStrings(left, right))) {
     if (indexes.length === 1) {
       continue;
     }
 
     const sortedIndexes = [...indexes].sort((left, right) =>
-      files[left]!.identity.localeCompare(files[right]!.identity) || left - right
+      compareStrings(files[left]!.identity, files[right]!.identity) || left - right
     );
     for (let index = 1; index < sortedIndexes.length; index += 1) {
       if (files[sortedIndexes[index - 1]!]!.identity === files[sortedIndexes[index]!]!.identity) {

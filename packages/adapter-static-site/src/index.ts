@@ -1,7 +1,7 @@
 import { posix } from "node:path";
 
 import { definePlugin } from "@okfx/plugin-api";
-import type { BundleIR, ConceptIR, OkfxGraphIR } from "@okfx/core";
+import { compareStrings, type BundleIR, type ConceptIR, type OkfxGraphIR } from "@okfx/core";
 
 export interface StaticSiteFile {
   path: string;
@@ -44,7 +44,7 @@ export default definePlugin({
 });
 
 function indexPage(bundle: BundleIR, title: string): string {
-  const concepts = [...bundle.concepts].sort((a, b) => a.id.localeCompare(b.id));
+  const concepts = [...bundle.concepts].sort((a, b) => compareStrings(a.id, b.id));
   return html(title, `
     <main>
       <h1>${escapeHtml(title)}</h1>
@@ -114,7 +114,7 @@ function relativeHref(fromPage: string, toPage: string): string {
 }
 
 function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+  return [...new Set(values)].sort(compareStrings);
 }
 
 function html(title: string, body: string): string {

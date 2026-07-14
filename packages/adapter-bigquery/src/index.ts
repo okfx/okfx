@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  compareStrings,
   disambiguateGeneratedPaths,
   escapeMarkdownText,
   generationTimestamp,
@@ -41,7 +42,7 @@ timestamp: ${timestamp}
 
 ${(table.columns ?? []).length === 0 ? "No columns provided." : table.columns!.map((column) => `- ${markdownCodeSpan(column.name)}${column.type ? ` (${escapeMarkdownText(column.type)})` : ""}${column.description ? `: ${escapeMarkdownText(column.description)}` : ""}`).join("\n")}
 `
-  }))).sort((a, b) => a.path.localeCompare(b.path));
+  }))).sort((a, b) => compareStrings(a.path, b.path));
 }
 
 export default definePlugin({

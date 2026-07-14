@@ -3,6 +3,7 @@ import { isAbsolute, join, relative, sep } from "node:path";
 
 import fg from "fast-glob";
 
+import { compareStrings } from "./compare.js";
 import { loadConfig, mergeConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { parseMarkdownDocument } from "./parser.js";
 import {
@@ -43,7 +44,7 @@ export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxCo
       throw new Error(`Discovered Markdown file escapes the OKF bundle root: ${entry}`);
     }
     return relativePosixPath(root, entry);
-  }).sort((a, b) => a.localeCompare(b));
+  }).sort(compareStrings);
 }
 
 export async function loadBundle(rootInput: string, options: LoadBundleOptions = {}): Promise<BundleIR> {

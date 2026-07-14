@@ -1,3 +1,4 @@
+import { compareStrings } from "./compare.js";
 import type { DiagnosticIR, DiagnosticSeverity } from "./types.js";
 
 const severityRank: Record<DiagnosticSeverity, number> = {
@@ -45,9 +46,9 @@ export function sortDiagnostics(diagnostics: DiagnosticIR[]): DiagnosticIR[] {
     }
 
     return [
-      (a.path ?? "").localeCompare(b.path ?? ""),
-      a.code.localeCompare(b.code),
-      a.message.localeCompare(b.message)
+      compareStrings(a.path ?? "", b.path ?? ""),
+      compareStrings(a.code, b.code),
+      compareStrings(a.message, b.message)
     ].find((value) => value !== 0) ?? 0;
   });
 }

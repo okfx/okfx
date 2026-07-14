@@ -1,3 +1,4 @@
+import { compareStrings } from "./compare.js";
 import { buildGraph } from "./graph.js";
 import type { BundleIR } from "./types.js";
 
@@ -36,7 +37,7 @@ export function buildSearchIndex(bundle: BundleIR): SearchIndexIR {
     headings: concept.body.headings.map((heading) => heading.title),
     body: concept.body.text,
     backlinks: graph.analysis.backlinks[concept.id] ?? []
-  })).sort((a, b) => a.id.localeCompare(b.id));
+  })).sort((a, b) => compareStrings(a.id, b.id));
   const terms = buildTermMap(documents);
 
   return {
@@ -71,8 +72,8 @@ function buildTermMap(documents: SearchIndexDocumentIR[]): Record<string, string
   }
 
   return Object.fromEntries([...idsByTerm.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([term, ids]) => [term, [...ids].sort()]));
+    .sort(([a], [b]) => compareStrings(a, b))
+    .map(([term, ids]) => [term, [...ids].sort(compareStrings)]));
 }
 
 export function tokenizeSearchText(value: string): string[] {

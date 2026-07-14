@@ -1,5 +1,6 @@
 import { BlockList, isIP } from "node:net";
 
+import { compareStrings } from "./compare.js";
 import { conceptIdFromPath } from "./paths.js";
 import {
   apiMissingAuthNotesDiagnostics,
@@ -480,7 +481,7 @@ function frontmatterKeyOrderIsStable(concept: ConceptIR, configuredOrder: string
     .split(/\r?\n/)
     .map((line) => /^([A-Za-z_][A-Za-z0-9_-]*):/.exec(line)?.[1])
     .filter((key): key is string => key !== undefined);
-  const desired = [...keys].sort((a, b) => frontmatterKeyRank(a, configuredOrder) - frontmatterKeyRank(b, configuredOrder) || a.localeCompare(b));
+  const desired = [...keys].sort((a, b) => frontmatterKeyRank(a, configuredOrder) - frontmatterKeyRank(b, configuredOrder) || compareStrings(a, b));
   return keys.join("\0") === desired.join("\0");
 }
 

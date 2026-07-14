@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  compareStrings,
   disambiguateGeneratedPaths,
   escapeMarkdownText,
   generationTimestamp,
@@ -46,7 +47,7 @@ export function produceOpenApiOkf(
       });
     }
   }
-  return disambiguateGeneratedPaths(files).sort((a, b) => a.path.localeCompare(b.path));
+  return disambiguateGeneratedPaths(files).sort((a, b) => compareStrings(a.path, b.path));
 }
 
 export default definePlugin({

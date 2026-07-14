@@ -1,4 +1,5 @@
 export * from "./bundle.js";
+export * from "./compare.js";
 export * from "./config.js";
 export * from "./diagnostics.js";
 export * from "./diff.js";

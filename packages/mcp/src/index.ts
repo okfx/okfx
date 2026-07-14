@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   buildGraph,
   buildSearchIndex,
+  compareStrings,
   diffBundles,
   doctorBundle,
   lintBundleWithPlugins,
@@ -161,7 +162,7 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
           type: concept.type,
           score
         }))
-        .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+        .sort((a, b) => b.score - a.score || compareStrings(a.id, b.id))
         .slice(0, limit);
     },
     async getConcept(id) {
@@ -174,7 +175,7 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
         outgoing: graph.edges
           .filter((edge) => edge.resolved && edge.source === id)
           .map((edge) => edge.target)
-          .sort(),
+          .sort(compareStrings),
         incoming: graph.analysis.backlinks[id] ?? []
       };
     },

@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument, type Pair, type YAMLMap } from "yaml";
 
+import { compareStrings } from "./compare.js";
 import { loadConfig, mergeConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { discoverMarkdownFiles } from "./bundle.js";
 import { resolveBundleRoot } from "./paths.js";
@@ -188,7 +189,7 @@ function compareFrontmatterEntries(
   if (a.key === undefined || b.key === undefined) {
     return a.key === undefined ? (b.key === undefined ? a.index - b.index : 1) : -1;
   }
-  return keyRank(a.key, keyOrder) - keyRank(b.key, keyOrder) || a.key.localeCompare(b.key) || a.index - b.index;
+  return keyRank(a.key, keyOrder) - keyRank(b.key, keyOrder) || compareStrings(a.key, b.key) || a.index - b.index;
 }
 
 function scalarString(value: unknown): string | undefined {

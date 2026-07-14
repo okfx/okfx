@@ -1,3 +1,4 @@
+import { compareStrings } from "./compare.js";
 import { conceptIdFromPath } from "./paths.js";
 import type { BundleIR, ConceptIR, GraphEdgeIR, GraphIR, GraphNodeIR, IndexFileIR, LinkIR, LogFileIR } from "./types.js";
 
@@ -192,7 +193,7 @@ export function graphToCytoscape(graph: OkfxGraphIR): CytoscapeGraphIR {
 
   return {
     elements: {
-      nodes: [...nodesById.values()].sort((a, b) => a.data.id.localeCompare(b.data.id)),
+      nodes: [...nodesById.values()].sort((a, b) => compareStrings(a.data.id, b.data.id)),
       edges: graph.edges.map((edge, index) => ({
         data: {
           id: `${edge.source}->${edge.target}:${edge.kind}:${index}`,
@@ -310,16 +311,16 @@ function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[], options: GraphOpti
     }
   }
 
-  const backlinks = Object.fromEntries([...conceptIds].map((id) => [id, [...(incoming.get(id) ?? new Set<string>())].sort()]));
+  const backlinks = Object.fromEntries([...conceptIds].map((id) => [id, [...(incoming.get(id) ?? new Set<string>())].sort(compareStrings)]));
   const orphanConceptIds = [...conceptIds]
     .filter((id) => (incoming.get(id)?.size ?? 0) === 0 && (outgoing.get(id)?.size ?? 0) === 0)
-    .sort();
+    .sort(compareStrings);
   const clusters = connectedConceptClusters(conceptIds, outgoing, incoming);
   const cycles = findCycles(conceptIds, outgoing);
   const highDegreeHubs = findHighDegreeHubs(conceptIds, incoming, outgoing, options.highDegreeThreshold ?? 25);
   const topReferencedConcepts = [...incoming.entries()]
     .map(([id, sources]) => ({ id, count: sources.size }))
-    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id))
+    .sort((a, b) => b.count - a.count || compareStrings(a.id, b.id))
     .slice(0, 10);
 
   return {
@@ -356,7 +357,7 @@ function findCycles(conceptIds: Set<string>, adjacency: Map<string, Set<string>>
 
   const finishOrder: string[] = [];
   const visited = new Set<string>();
-  for (const start of [...conceptIds].sort()) {
+  for (const start of [...conceptIds].sort(compareStrings)) {
     if (visited.has(start)) {
       continue;
     }
@@ -377,7 +378,7 @@ function findCycles(conceptIds: Set<string>, adjacency: Map<string, Set<string>>
       stack.push({ id: current.id, expanded: true });
       const neighbors = [...(adjacency.get(current.id) ?? [])]
         .filter((id) => conceptIds.has(id))
-        .sort()
+        .sort(compareStrings)
         .reverse();
       for (const neighbor of neighbors) {
         if (!visited.has(neighbor)) {
@@ -409,13 +410,13 @@ function findCycles(conceptIds: Set<string>, adjacency: Map<string, Set<string>>
         }
       }
     }
-    components.push(component.sort());
+    components.push(component.sort(compareStrings));
   }
 
   return components
     .filter((component) => component.length > 1 || adjacency.get(component[0])?.has(component[0]))
     .map((component) => representativeCycle(component, adjacency))
-    .sort((a, b) => a.join(">").localeCompare(b.join(">")));
+    .sort((a, b) => compareStrings(a.join(">"), b.join(">")));
 }
 
 function representativeCycle(component: string[], adjacency: Map<string, Set<string>>): string[] {
@@ -427,7 +428,7 @@ function representativeCycle(component: string[], adjacency: Map<string, Set<str
 
   const firstSteps = [...(adjacency.get(start) ?? [])]
     .filter((id) => id !== start && members.has(id))
-    .sort();
+    .sort(compareStrings);
   for (const firstStep of firstSteps) {
     const path = findPath(firstStep, start, members, adjacency);
     if (path) {
@@ -456,7 +457,7 @@ function findPath(
       }
       return path.reverse();
     }
-    for (const neighbor of [...(adjacency.get(current) ?? [])].filter((id) => members.has(id)).sort()) {
+    for (const neighbor of [...(adjacency.get(current) ?? [])].filter((id) => members.has(id)).sort(compareStrings)) {
       if (!parents.has(neighbor)) {
         parents.set(neighbor, current);
         queue.push(neighbor);
@@ -488,7 +489,7 @@ function findHighDegreeHubs(
       };
     })
     .filter((hub) => hub.degree >= threshold)
-    .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id));
+    .sort((a, b) => b.degree - a.degree || compareStrings(a.id, b.id));
 }
 
 function findMissingIndexSuggestions(bundle: BundleIR): GraphAnalysisIR["missingIndexSuggestions"] {
@@ -500,7 +501,7 @@ function findMissingIndexSuggestions(bundle: BundleIR): GraphAnalysisIR["missing
   const indexDirs = new Set(bundle.indexes.map((index) => pathDir(index.path)));
   return [...conceptDirs]
     .filter((dir) => !indexDirs.has(dir))
-    .sort()
+    .sort(compareStrings)
     .map((dir) => ({
       path: indexPathForDir(dir),
       reason: "Directory has concepts but no index.md entrypoint."
@@ -549,7 +550,7 @@ function connectedConceptClusters(
   const visited = new Set<string>();
   const clusters: string[][] = [];
 
-  for (const id of [...conceptIds].sort()) {
+  for (const id of [...conceptIds].sort(compareStrings)) {
     if (visited.has(id)) {
       continue;
     }
@@ -569,7 +570,7 @@ function connectedConceptClusters(
         queue.push(next);
       }
     }
-    clusters.push(cluster.sort());
+    clusters.push(cluster.sort(compareStrings));
   }
 
   return clusters;

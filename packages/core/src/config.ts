@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import { createJiti } from "jiti";
 
+import { compareStrings } from "./compare.js";
 import type { DiagnosticSeverity } from "./types.js";
 
 export type RuleLevel = DiagnosticSeverity | "off";
@@ -362,7 +363,7 @@ function normalizePluginReferences(plugins: OkfxPluginReference[]): ResolvedOkfx
 function resolvePreset(name: string): OkfxConfig {
   const preset = builtinPresets[normalizePresetName(name)];
   if (!preset) {
-    throw new Error(`Unknown okfx preset "${name}". Available presets: ${Object.keys(builtinPresets).sort().join(", ")}.`);
+    throw new Error(`Unknown okfx preset "${name}". Available presets: ${Object.keys(builtinPresets).sort(compareStrings).join(", ")}.`);
   }
   return preset;
 }
