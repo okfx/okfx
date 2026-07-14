@@ -681,28 +681,33 @@ function extractUrls(value: string): string[] {
 }
 
 function trimUrlCandidate(value: string): string {
-  let trimmed = value;
-  while (trimmed.length > 0) {
-    const withoutSentencePunctuation = trimmed.replace(/[.,;:!?]+$/u, "");
-    if (withoutSentencePunctuation !== trimmed) {
-      trimmed = withoutSentencePunctuation;
-      continue;
-    }
-    if (trimmed.endsWith(")") && countCharacter(trimmed, ")") > countCharacter(trimmed, "(")) {
-      trimmed = trimmed.slice(0, -1);
-      continue;
-    }
-    if (trimmed.endsWith("]") && countCharacter(trimmed, "]") > countCharacter(trimmed, "[")) {
-      trimmed = trimmed.slice(0, -1);
-      continue;
-    }
-    break;
+  let openParentheses = 0;
+  let closeParentheses = 0;
+  let openBrackets = 0;
+  let closeBrackets = 0;
+  for (const character of value) {
+    openParentheses += Number(character === "(");
+    closeParentheses += Number(character === ")");
+    openBrackets += Number(character === "[");
+    closeBrackets += Number(character === "]");
   }
-  return trimmed;
-}
 
-function countCharacter(value: string, character: string): number {
-  return [...value].filter((candidate) => candidate === character).length;
+  let end = value.length;
+  while (end > 0) {
+    const character = value[end - 1];
+    if (character && ".,;:!?".includes(character)) {
+      end -= 1;
+    } else if (character === ")" && closeParentheses > openParentheses) {
+      closeParentheses -= 1;
+      end -= 1;
+    } else if (character === "]" && closeBrackets > openBrackets) {
+      closeBrackets -= 1;
+      end -= 1;
+    } else {
+      break;
+    }
+  }
+  return value.slice(0, end);
 }
 
 function isPrivateUrl(value: string): boolean {

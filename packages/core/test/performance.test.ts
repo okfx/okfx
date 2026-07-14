@@ -230,6 +230,29 @@ describe("performance baselines", () => {
     expect(result.formatted).toContain("key00001: value\nkey00002: value");
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
+
+  it("trims long URL punctuation suffixes in linear time", () => {
+    const suffixLength = 50_000;
+    const concept: ConceptIR = {
+      id: "internal-url",
+      path: "internal-url.md",
+      type: "Note",
+      title: "Internal URL",
+      description: "Performance fixture",
+      frontmatter: { type: "Note", title: "Internal URL", description: "Performance fixture" },
+      frontmatterRaw: "type: Note\ntitle: Internal URL\ndescription: Performance fixture",
+      body: { raw: `http://127.0.0.1/${")".repeat(suffixLength)}`, text: "", headings: [] },
+      links: [],
+      contentHash: ""
+    };
+    const started = performance.now();
+
+    const result = lintBundle(bundleWithConcepts([concept]));
+    const elapsedMs = performance.now() - started;
+
+    expect(result.diagnostics.some((diagnostic) => diagnostic.code === "security/internal-url")).toBe(true);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
 });
 
 async function makeLargeBundle(count: number): Promise<string> {

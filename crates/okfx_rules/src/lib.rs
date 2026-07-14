@@ -1132,25 +1132,34 @@ fn contains_internal_url(value: &str) -> bool {
     })
 }
 
-fn trim_url_candidate(mut value: &str) -> &str {
-    loop {
-        let without_sentence_punctuation = value.trim_end_matches(|character: char| {
-            matches!(character, '.' | ',' | ';' | ':' | '!' | '?')
-        });
-        if without_sentence_punctuation.len() != value.len() {
-            value = without_sentence_punctuation;
-            continue;
-        }
-        if value.ends_with(')') && value.matches(')').count() > value.matches('(').count() {
-            value = &value[..value.len() - 1];
-            continue;
-        }
-        if value.ends_with(']') && value.matches(']').count() > value.matches('[').count() {
-            value = &value[..value.len() - 1];
-            continue;
-        }
-        return value;
+fn trim_url_candidate(value: &str) -> &str {
+    let mut open_parentheses = 0;
+    let mut close_parentheses = 0;
+    let mut open_brackets = 0;
+    let mut close_brackets = 0;
+    for byte in value.bytes() {
+        open_parentheses += usize::from(byte == b'(');
+        close_parentheses += usize::from(byte == b')');
+        open_brackets += usize::from(byte == b'[');
+        close_brackets += usize::from(byte == b']');
     }
+
+    let mut end = value.len();
+    while end > 0 {
+        match value.as_bytes()[end - 1] {
+            b'.' | b',' | b';' | b':' | b'!' | b'?' => end -= 1,
+            b')' if close_parentheses > open_parentheses => {
+                close_parentheses -= 1;
+                end -= 1;
+            }
+            b']' if close_brackets > open_brackets => {
+                close_brackets -= 1;
+                end -= 1;
+            }
+            _ => break,
+        }
+    }
+    &value[..end]
 }
 
 fn concept_text_without_resources(concept: &ConceptRuleInput) -> String {
@@ -1916,6 +1925,15 @@ mod tests {
         assert!(!contains_internal_url(
             "See [Public](https://[2001:db8::1]/guide)."
         ));
+    }
+
+    #[test]
+    fn trims_long_url_suffixes_without_recounting_candidates() {
+        let candidate = format!("http://127.0.0.1/{}", ")".repeat(50_000));
+        let started = std::time::Instant::now();
+
+        assert_eq!(trim_url_candidate(&candidate), "http://127.0.0.1/");
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
     #[test]
