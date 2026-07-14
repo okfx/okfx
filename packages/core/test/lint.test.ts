@@ -511,6 +511,18 @@ resource:
               },
               "custom/escaped-path": {
                 run: () => [{ message: "Outside", path: "../outside.md" }]
+              },
+              "custom/unsafe-location": {
+                run: () => [{
+                  message: "Unsafe location",
+                  location: { start: { line: Number.MAX_SAFE_INTEGER + 1, column: 1 } }
+                }]
+              },
+              "custom/reversed-location": {
+                run: () => [{
+                  message: "Reversed location",
+                  location: { start: { line: 2, column: 1 }, end: { line: 1, column: 1 } }
+                }]
               }
             }
           }]
@@ -518,12 +530,14 @@ resource:
       );
 
       const failures = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin/rule-failed");
-      expect(failures).toHaveLength(4);
+      expect(failures).toHaveLength(6);
       expect(failures.map((diagnostic) => diagnostic.message)).toEqual(expect.arrayContaining([
         expect.stringContaining("diagnostic code must be a string"),
         expect.stringContaining("unsupported default severity"),
         expect.stringContaining("rule diagnostics must be objects"),
-        expect.stringContaining("diagnostic path must be a normalized, portable relative path")
+        expect.stringContaining("diagnostic path must be a normalized, portable relative path"),
+        expect.stringContaining("diagnostic location.start.line must be a safe integer"),
+        expect.stringContaining("diagnostic location end must not precede its start")
       ]));
     });
   });

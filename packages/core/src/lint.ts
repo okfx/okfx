@@ -423,6 +423,16 @@ function normalizePluginLocation(value: unknown): Pick<DiagnosticIR, "location">
   const end = configuredEnd === undefined
     ? undefined
     : normalizePluginSourceLocation(configuredEnd, "location.end");
+  if (
+    end
+    && (
+      end.line < start.line
+      || (end.line === start.line && end.column < start.column)
+      || (end.offset !== undefined && start.offset !== undefined && end.offset < start.offset)
+    )
+  ) {
+    throw new TypeError("diagnostic location end must not precede its start");
+  }
   return { location: { start, ...(end ? { end } : {}) } };
 }
 
@@ -498,8 +508,8 @@ function requiredPluginString(value: unknown, label: string): string {
 }
 
 function requiredPluginInteger(value: unknown, label: string, minimum: number): number {
-  if (!Number.isInteger(value) || (value as number) < minimum) {
-    throw new TypeError(`diagnostic ${label} must be an integer greater than or equal to ${minimum}`);
+  if (!Number.isSafeInteger(value) || (value as number) < minimum) {
+    throw new TypeError(`diagnostic ${label} must be a safe integer greater than or equal to ${minimum}`);
   }
   return value as number;
 }
