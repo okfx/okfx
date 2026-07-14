@@ -1,4 +1,5 @@
 import { BlockList, isIP } from "node:net";
+import { isMap, isScalar, parseDocument } from "yaml";
 
 import { compareStrings } from "./compare.js";
 import { conceptIdFromPath } from "./paths.js";
@@ -605,12 +606,44 @@ function frontmatterKeyOrderIsStable(concept: ConceptIR, configuredOrder: string
     return true;
   }
 
-  const keys = concept.frontmatterRaw
-    .split(/\r\n|\n|\r/)
-    .map((line) => /^([A-Za-z_][A-Za-z0-9_-]*):/.exec(line)?.[1])
-    .filter((key): key is string => key !== undefined);
+  const keys = frontmatterKeys(concept.frontmatterRaw);
   const desired = [...keys].sort((a, b) => frontmatterKeyRank(a, configuredOrder) - frontmatterKeyRank(b, configuredOrder) || compareStrings(a, b));
   return keys.join("\0") === desired.join("\0");
+}
+
+function frontmatterKeys(raw: string): string[] {
+  const keys: string[] = [];
+  let requiresYamlParsing = false;
+  for (const line of raw.split(/\r\n|\n|\r/)) {
+    if (line.trim().length === 0
+      || line.trimStart().startsWith("#")
+      || line.startsWith(" ")
+      || line.startsWith("\t")) {
+      continue;
+    }
+    const key = /^([A-Za-z_][A-Za-z0-9_-]*):/.exec(line)?.[1];
+    if (key) {
+      keys.push(key);
+    } else {
+      requiresYamlParsing = true;
+      break;
+    }
+  }
+  if (!requiresYamlParsing) {
+    return keys;
+  }
+
+  try {
+    const document = parseDocument(raw.replace(/\r\n?/g, "\n"), { prettyErrors: false });
+    if (document.errors.length === 0 && isMap(document.contents)) {
+      return document.contents.items.flatMap((pair) => (
+        isScalar(pair.key) && typeof pair.key.value === "string" ? [pair.key.value] : []
+      ));
+    }
+  } catch {
+    // Invalid frontmatter is reported separately; retain the best-effort key scan here.
+  }
+  return keys;
 }
 
 function frontmatterKeyRank(key: string, configuredOrder: string[]): number {

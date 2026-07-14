@@ -843,9 +843,15 @@ fn frontmatter_key_order_is_stable(raw: Option<&str>, configured_order: &[String
     let Some(raw) = raw else {
         return true;
     };
-    let keys = logical_lines(raw)
-        .filter_map(frontmatter_key)
-        .collect::<Vec<_>>();
+    let keys = match serde_yaml::from_str::<serde_yaml::Value>(raw) {
+        Ok(serde_yaml::Value::Mapping(mapping)) => mapping
+            .keys()
+            .filter_map(|key| key.as_str().map(str::to_string))
+            .collect::<Vec<_>>(),
+        _ => logical_lines(raw)
+            .filter_map(frontmatter_key)
+            .collect::<Vec<_>>(),
+    };
     let mut desired = keys.clone();
     desired.sort_by(|left, right| {
         frontmatter_key_rank(left, configured_order)
@@ -1791,6 +1797,25 @@ mod tests {
         assert!(codes.contains(&"style/frontmatter-key-order"));
         assert!(codes.contains(&"security/token-looking-value"));
         assert!(!codes.contains(&"security/internal-url"));
+    }
+
+    #[test]
+    fn checks_frontmatter_order_across_valid_yaml_mapping_styles() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("quoted").with_frontmatter("\"title\": Quoted\ntype: Note"),
+                concept("flow").with_frontmatter("{title: Flow, type: Note}"),
+                concept("numeric").with_frontmatter("type: Note\n\"1\": custom"),
+            ],
+            ..RuleInput::default()
+        });
+
+        let paths = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == "style/frontmatter-key-order")
+            .filter_map(|diagnostic| diagnostic.path.as_deref())
+            .collect::<Vec<_>>();
+        assert_eq!(paths, vec!["flow.md", "quoted.md"]);
     }
 
     #[test]

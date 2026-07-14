@@ -69,6 +69,21 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("checks frontmatter order across valid YAML mapping styles", async () => {
+    await withBundle({
+      "flow.md": "---\n{title: Flow, type: Note}\n---\n# Flow\n",
+      "numeric.md": "---\ntype: Note\n\"1\": custom\n---\n# Numeric key\n",
+      "quoted.md": "---\n\"title\": Quoted\ntype: Note\n---\n# Quoted\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "style/frontmatter-key-order")
+        .map((diagnostic) => diagnostic.path))
+        .toEqual(["flow.md", "quoted.md"]);
+    });
+  });
+
   it("detects duplicates and circular references", async () => {
     await withBundle({
       "a.md": "---\ntype: Note\ntitle: Shared\nresource: https://example.com/shared\n---\n[A](b.md)\n",
