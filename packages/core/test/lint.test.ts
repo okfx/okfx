@@ -171,6 +171,22 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("rejects impossible calendar dates in ISO timestamps", async () => {
+    await withBundle({
+      "invalid.md": "---\ntype: Note\ntitle: Invalid\ntimestamp: 2025-02-29T00:00:00Z\n---\n# Invalid\n",
+      "leap.md": "---\ntype: Note\ntitle: Leap\ntimestamp: 2024-02-29T23:59:59.000Z\n---\n# Leap\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: { rules: { "style/timestamp-format": "warning" } }
+      });
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "style/timestamp-format")
+        .map((diagnostic) => diagnostic.path))
+        .toEqual(["invalid.md"]);
+    });
+  });
+
   it("runs agent readiness rules only when configured and honors their severity", async () => {
     await withBundle({
       "metric.md": "---\ntype: Metric\ntitle: Metric\n---\n# Metric\n"

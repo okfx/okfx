@@ -968,14 +968,27 @@ fn is_iso_timestamp(value: &str) -> bool {
 
     let month = number(value, 5, 7);
     let day = number(value, 8, 10);
+    let year = number(value, 0, 4);
     let hour = number(value, 11, 13);
     let minute = number(value, 14, 16);
     let second = number(value, 17, 19);
     (1..=12).contains(&month)
-        && (1..=31).contains(&day)
+        && day >= 1
+        && day <= days_in_month(year, month)
         && hour <= 23
         && minute <= 59
         && second <= 59
+}
+
+fn days_in_month(year: u32, month: u32) -> u32 {
+    match month {
+        2 if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) => {
+            29
+        }
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
 }
 
 fn number(value: &str, start: usize, end: usize) -> u32 {
@@ -1464,6 +1477,13 @@ mod tests {
                 .iter()
                 .all(|diagnostic| diagnostic.code != "security/non-allowlisted-resource")
         );
+    }
+
+    #[test]
+    fn validates_calendar_dates_in_iso_timestamps() {
+        assert!(is_iso_timestamp("2024-02-29T23:59:59.000Z"));
+        assert!(!is_iso_timestamp("2025-02-29T00:00:00Z"));
+        assert!(!is_iso_timestamp("2024-04-31T00:00:00Z"));
     }
 
     #[test]
