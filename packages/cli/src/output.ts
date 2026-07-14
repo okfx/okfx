@@ -33,7 +33,12 @@ export async function writeOutput(text: string, outPath: string | undefined, io:
 export function formatDiagnosticGroups(diagnostics: DiagnosticIR[]): string {
   const groups = new Map<string, DiagnosticIR[]>();
   for (const diagnostic of diagnostics) {
-    groups.set(diagnostic.severity, [...(groups.get(diagnostic.severity) ?? []), diagnostic]);
+    const group = groups.get(diagnostic.severity);
+    if (group) {
+      group.push(diagnostic);
+    } else {
+      groups.set(diagnostic.severity, [diagnostic]);
+    }
   }
 
   return [...groups.entries()]

@@ -1,10 +1,11 @@
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { performance } from "node:perf_hooks";
 
 import { describe, expect, it } from "vitest";
 
-import { writeOutput } from "../src/output.js";
+import { formatDiagnosticGroups, writeOutput } from "../src/output.js";
 import type { CliIO } from "../src/program.js";
 
 const io: CliIO = {
@@ -27,4 +28,21 @@ describe("writeOutput", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("groups large diagnostic sets without repeated array copies", () => {
+    const count = 40_000;
+    const diagnostics = Array.from({ length: count }, (_, index) => ({
+      code: `test/${index}`,
+      severity: "warning" as const,
+      message: "message",
+      path: "concept.md"
+    }));
+    const started = performance.now();
+
+    const formatted = formatDiagnosticGroups(diagnostics);
+    const elapsedMs = performance.now() - started;
+
+    expect(formatted.match(/test\//g)).toHaveLength(count);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
 });
