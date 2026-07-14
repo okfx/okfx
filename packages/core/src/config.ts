@@ -362,7 +362,10 @@ function normalizePluginReferences(plugins: OkfxPluginReference[]): ResolvedOkfx
 }
 
 function resolvePreset(name: string): OkfxConfig {
-  const preset = builtinPresets[normalizePresetName(name)];
+  const normalizedName = normalizePresetName(name);
+  const preset = Object.hasOwn(builtinPresets, normalizedName)
+    ? builtinPresets[normalizedName]
+    : undefined;
   if (!preset) {
     throw new Error(`Unknown okfx preset "${name}". Available presets: ${Object.keys(builtinPresets).sort(compareStrings).join(", ")}.`);
   }

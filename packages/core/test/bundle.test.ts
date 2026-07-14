@@ -272,9 +272,13 @@ describe("resolveConfig", () => {
     ]);
   });
 
-  it("rejects unknown presets instead of silently ignoring them", () => {
-    expect(() => resolveConfig({ presets: ["recomended"] })).toThrow('Unknown okfx preset "recomended"');
-  });
+  it.each(["recomended", "toString", "constructor", "__proto__"])(
+    "rejects unknown preset %j instead of reading inherited properties",
+    (preset) => {
+      expect(() => resolveConfig({ presets: [preset] }))
+        .toThrow(`Unknown okfx preset "${preset}"`);
+    }
+  );
 
   it.each([
     [{ failOn: "never" }, "failOn"],
