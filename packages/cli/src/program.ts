@@ -115,8 +115,9 @@ export async function runProgram(
   runtime: CliRuntime = defaultRuntime
 ): Promise<number> {
   let exitCode = 0;
+  const safeIo = terminalSafeIo(io);
   const program = createProgram({
-    io,
+    io: safeIo,
     setExitCode(code) {
       exitCode = code;
     }
@@ -131,11 +132,28 @@ export async function runProgram(
     }
 
     if (error instanceof InvalidArgumentError) {
-      io.stderr.write(`${error.message}\n`);
+      safeIo.stderr.write(`${error.message}\n`);
       return 2;
     }
 
-    io.stderr.write(error instanceof Error ? `${error.message}\n` : "unknown error\n");
+    safeIo.stderr.write(error instanceof Error ? `${error.message}\n` : "unknown error\n");
     return 2;
   }
+}
+
+export function sanitizeTerminalOutput(text: string): string {
+  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/gu, (character) =>
+    `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+  );
+}
+
+function terminalSafeIo(io: CliIO): CliIO {
+  return {
+    stdout: {
+      write: (text) => io.stdout.write(sanitizeTerminalOutput(text))
+    },
+    stderr: {
+      write: (text) => io.stderr.write(sanitizeTerminalOutput(text))
+    }
+  };
 }

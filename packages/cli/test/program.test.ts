@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { main } from "../src/index.js";
-import { plannedCommands, type CliIO } from "../src/program.js";
+import { plannedCommands, sanitizeTerminalOutput, type CliIO } from "../src/program.js";
 
 function capture(): { io: CliIO; stdout: () => string; stderr: () => string } {
   let stdout = "";
@@ -52,5 +52,17 @@ describe("@okfx/cli command shell", () => {
 
     expect(code).toBe(1);
     expect(output.stderr()).toContain("error: unknown command 'unknown'");
+  });
+
+  it("escapes terminal control sequences in command output", async () => {
+    const output = capture();
+    const command = `bad\u001b]52;c;clipboard\u0007\u009b31m`;
+
+    const code = await main([command], output.io);
+
+    expect(code).toBe(1);
+    expect(output.stderr()).not.toMatch(/[\u0007\u001b\u009b]/u);
+    expect(output.stderr()).toContain("bad\\u001b]52;c;clipboard\\u0007\\u009b31m");
+    expect(sanitizeTerminalOutput("line one\n\tline two")).toBe("line one\n\tline two");
   });
 });
