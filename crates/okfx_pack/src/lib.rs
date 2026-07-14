@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 pub const CRATE_NAME: &str = "okfx_pack";
 
@@ -60,6 +61,33 @@ pub struct PackMetadata {
     pub provenance: Provenance,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PackError {
+    InvalidPath { path: String },
+    DuplicatePath { path: String },
+}
+
+impl fmt::Display for PackError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PackError::InvalidPath { path } => {
+                write!(
+                    formatter,
+                    "pack input path is not a safe relative path: {path:?}"
+                )
+            }
+            PackError::DuplicatePath { path } => {
+                write!(
+                    formatter,
+                    "pack input path is duplicated after normalization: {path:?}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for PackError {}
+
 pub fn crate_name() -> &'static str {
     CRATE_NAME
 }
@@ -71,17 +99,22 @@ pub fn build_pack_metadata(
     bundle_name: impl Into<String>,
     created_at: impl Into<String>,
     source: ManifestSource,
-) -> PackMetadata {
+) -> Result<PackMetadata, PackError> {
     let okfx_version = okfx_version.into();
     let created_at = created_at.into();
-    let mut manifest_files = files
-        .into_iter()
-        .map(|file| ManifestFile {
-            path: normalize_path(&file.path),
+    let mut seen_paths = BTreeSet::new();
+    let mut manifest_files = Vec::with_capacity(files.len());
+    for file in files {
+        let path = normalize_path(&file.path)?;
+        if !seen_paths.insert(path.clone()) {
+            return Err(PackError::DuplicatePath { path });
+        }
+        manifest_files.push(ManifestFile {
+            path,
             sha256: sha256_hex(&file.content),
             concept_id: file.concept_id,
-        })
-        .collect::<Vec<_>>();
+        });
+    }
     manifest_files.sort_by(|left, right| left.path.cmp(&right.path));
 
     let checksums = Checksums {
@@ -114,11 +147,11 @@ pub fn build_pack_metadata(
         source,
     };
 
-    PackMetadata {
+    Ok(PackMetadata {
         manifest,
         checksums,
         provenance,
-    }
+    })
 }
 
 fn content_hash(files: &[ManifestFile]) -> String {
@@ -147,8 +180,24 @@ fn hex_digest(input: &[u8]) -> String {
     input.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn normalize_path(path: &str) -> String {
-    path.replace('\\', "/").trim_start_matches("./").to_string()
+fn normalize_path(path: &str) -> Result<String, PackError> {
+    let normalized = path.replace('\\', "/").trim_start_matches("./").to_string();
+    let bytes = normalized.as_bytes();
+    let has_windows_drive_prefix =
+        bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+    if normalized.is_empty()
+        || normalized.starts_with('/')
+        || normalized.contains('\0')
+        || has_windows_drive_prefix
+        || normalized
+            .split('/')
+            .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
+    {
+        return Err(PackError::InvalidPath {
+            path: path.to_string(),
+        });
+    }
+    Ok(normalized)
 }
 
 #[cfg(test)]
@@ -184,7 +233,8 @@ mod tests {
                 git_remote: None,
                 dirty: Some(false),
             },
-        );
+        )
+        .unwrap();
 
         assert_eq!(metadata.manifest.file_count, 2);
         assert_eq!(metadata.manifest.concept_count, 2);
@@ -195,6 +245,51 @@ mod tests {
         assert_eq!(
             metadata.manifest.content_hash,
             "58657a1c026e23ab8fa445d46d482b1fa234d4571859961b08b0c1cf4c1ac5af"
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_and_duplicate_normalized_paths() {
+        let metadata_for = |paths: &[&str]| {
+            build_pack_metadata(
+                paths
+                    .iter()
+                    .map(|path| PackInputFile {
+                        path: (*path).to_string(),
+                        content: Vec::new(),
+                        concept_id: None,
+                    })
+                    .collect(),
+                "0.1.0",
+                "0.1",
+                "knowledge",
+                "2026-07-07T00:00:00Z",
+                ManifestSource {
+                    git_commit: None,
+                    git_remote: None,
+                    dirty: None,
+                },
+            )
+        };
+
+        for path in [
+            "",
+            "../outside.md",
+            "/absolute.md",
+            "C:/absolute.md",
+            "a/./b.md",
+            "a\0b.md",
+        ] {
+            assert!(matches!(
+                metadata_for(&[path]),
+                Err(PackError::InvalidPath { .. })
+            ));
+        }
+        assert_eq!(
+            metadata_for(&["a.md", ".\\a.md"]),
+            Err(PackError::DuplicatePath {
+                path: "a.md".to_string()
+            })
         );
     }
 }

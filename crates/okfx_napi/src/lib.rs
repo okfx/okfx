@@ -148,14 +148,16 @@ pub fn build_pack_metadata_json(request_json: String) -> Result<String> {
             concept_id: file.concept_id,
         })
         .collect::<Vec<_>>();
-    to_json(&okfx_pack::build_pack_metadata(
+    let metadata = okfx_pack::build_pack_metadata(
         files,
         request.okfx_version,
         request.okf_version,
         request.bundle_name,
         request.created_at,
         request.source,
-    ))
+    )
+    .map_err(|error| Error::from_reason(error.to_string()))?;
+    to_json(&metadata)
 }
 
 #[napi]
