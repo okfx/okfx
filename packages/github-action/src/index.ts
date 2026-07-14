@@ -30,7 +30,7 @@ export function formatOkfSummary(input: OkfActionSummaryInput): string {
   const lines = [
     "## OKF Summary",
     "",
-    input.root ? `Bundle: \`${input.root}\`` : undefined,
+    input.root ? `Bundle: ${markdownCode(input.root)}` : undefined,
     input.score === undefined ? undefined : `Agent readiness: **${input.score}/100**`,
     "",
     "### Concepts",
@@ -47,12 +47,20 @@ export function formatOkfSummary(input: OkfActionSummaryInput): string {
     `- Info: ${counts.info ?? 0}`,
     "",
     "### Artifacts",
-    artifacts.lint ? `- Lint JSON: \`${artifacts.lint}\`` : undefined,
-    artifacts.graph ? `- Graph JSON: \`${artifacts.graph}\`` : undefined,
-    artifacts.doctor ? `- Doctor JSON: \`${artifacts.doctor}\`` : undefined
+    artifacts.lint ? `- Lint JSON: ${markdownCode(artifacts.lint)}` : undefined,
+    artifacts.graph ? `- Graph JSON: ${markdownCode(artifacts.graph)}` : undefined,
+    artifacts.doctor ? `- Doctor JSON: ${markdownCode(artifacts.doctor)}` : undefined
   ].filter((line): line is string => line !== undefined);
 
   return `${lines.join("\n")}\n`;
+}
+
+function markdownCode(value: string): string {
+  const visibleValue = value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+  const longestFence = Math.max(0, ...[...visibleValue.matchAll(/`+/g)].map((match) => match[0].length));
+  const fence = "`".repeat(longestFence + 1);
+  const padding = /^[ `]|[ `]$/.test(visibleValue) ? " " : "";
+  return `${fence}${padding}${visibleValue}${padding}${fence}`;
 }
 
 export const exampleWorkflow = `name: OKF

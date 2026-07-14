@@ -26,6 +26,7 @@ describe("@okfx/github-action", () => {
     expect(action.match(/\[ ! -L "\$OKF_(?:LINT|GRAPH|DOCTOR)_JSON" \]/g)).toHaveLength(3);
     expect(action.match(/fs\.lstatSync\(path\)/g)).toHaveLength(2);
     expect(action.match(/catch \{/g)).toHaveLength(2);
+    expect(action.match(/const markdownCode = \(value\) =>/g)).toHaveLength(2);
     expect(action).toContain('default: "0.1.0"');
     expect(action).not.toContain('@okfx/cli":"latest"');
     expect(runBlockLines(action).some((line) => line.includes("${{ inputs."))).toBe(false);
@@ -76,6 +77,17 @@ describe("@okfx/github-action", () => {
     expect(summary).toContain("Agent readiness: **88/100**");
     expect(summary).toContain("- Warnings: 3");
     expect(summary).toContain("okf-graph.json");
+  });
+
+  it("keeps untrusted paths inside Markdown code spans", () => {
+    const summary = formatOkfSummary({
+      root: "bundle` [Injected](evil)\nnext",
+      artifacts: { lint: "lint` <img src=x>.json" }
+    });
+
+    expect(summary).toContain("Bundle: ``bundle` [Injected](evil)\\nnext``");
+    expect(summary).toContain("- Lint JSON: ``lint` <img src=x>.json``");
+    expect(summary).not.toContain("Bundle: `bundle`");
   });
 });
 

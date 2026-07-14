@@ -150,6 +150,13 @@ runs:
             return undefined;
           }
         };
+        const markdownCode = (value) => {
+          const visibleValue = String(value).replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+          const longestFence = Math.max(0, ...[...visibleValue.matchAll(/`+/g)].map((match) => match[0].length));
+          const fence = "`".repeat(longestFence + 1);
+          const padding = /^[ `]|[ `]$/.test(visibleValue) ? " " : "";
+          return `${fence}${padding}${visibleValue}${padding}${fence}`;
+        };
         const doctor = process.env.OKF_RUN_DOCTOR === "true" ? readJson(process.env.OKF_DOCTOR_JSON) : undefined;
         const lint = readJson(process.env.OKF_LINT_JSON);
         const graph = readJson(process.env.OKF_GRAPH_JSON);
@@ -159,7 +166,7 @@ runs:
         const lines = [
           "## OKF Summary",
           "",
-          `Bundle: \`${process.env.OKF_BUNDLE}\``,
+          `Bundle: ${markdownCode(process.env.OKF_BUNDLE)}`,
           source.score === undefined ? undefined : `Agent readiness: **${source.score}/100**`,
           "",
           "### Concepts",
@@ -176,9 +183,9 @@ runs:
           `- Info: ${counts.info ?? 0}`,
           "",
           "### Artifacts",
-          `- Lint JSON: \`${process.env.OKF_LINT_JSON}\``,
-          `- Graph JSON: \`${process.env.OKF_GRAPH_JSON}\``,
-          fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: \`${process.env.OKF_DOCTOR_JSON}\`` : undefined
+          `- Lint JSON: ${markdownCode(process.env.OKF_LINT_JSON)}`,
+          `- Graph JSON: ${markdownCode(process.env.OKF_GRAPH_JSON)}`,
+          fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: ${markdownCode(process.env.OKF_DOCTOR_JSON)}` : undefined
         ].filter(Boolean).join("\n") + "\n";
         fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines);
         NODE
@@ -205,6 +212,13 @@ runs:
               return undefined;
             }
           };
+          const markdownCode = (value) => {
+            const visibleValue = String(value).replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+            const longestFence = Math.max(0, ...[...visibleValue.matchAll(/`+/g)].map((match) => match[0].length));
+            const fence = "`".repeat(longestFence + 1);
+            const padding = /^[ `]|[ `]$/.test(visibleValue) ? " " : "";
+            return `${fence}${padding}${visibleValue}${padding}${fence}`;
+          };
           const doctor = process.env.OKF_RUN_DOCTOR === "true" ? readJson(process.env.OKF_DOCTOR_JSON) : undefined;
           const lint = readJson(process.env.OKF_LINT_JSON);
           const graph = readJson(process.env.OKF_GRAPH_JSON);
@@ -216,7 +230,7 @@ runs:
             marker,
             "## OKF Summary",
             "",
-            `Bundle: \`${process.env.OKF_BUNDLE}\``,
+            `Bundle: ${markdownCode(process.env.OKF_BUNDLE)}`,
             source.score === undefined ? undefined : `Agent readiness: **${source.score}/100**`,
             "",
             "### Concepts",
@@ -233,9 +247,9 @@ runs:
             `- Info: ${counts.info ?? 0}`,
             "",
             "### Artifacts",
-            `- Lint JSON: \`${process.env.OKF_LINT_JSON}\``,
-            `- Graph JSON: \`${process.env.OKF_GRAPH_JSON}\``,
-            fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: \`${process.env.OKF_DOCTOR_JSON}\`` : undefined
+            `- Lint JSON: ${markdownCode(process.env.OKF_LINT_JSON)}`,
+            `- Graph JSON: ${markdownCode(process.env.OKF_GRAPH_JSON)}`,
+            fs.existsSync(process.env.OKF_DOCTOR_JSON) ? `- Doctor JSON: ${markdownCode(process.env.OKF_DOCTOR_JSON)}` : undefined
           ].filter(Boolean).join("\n");
           const issue = {
             owner: context.repo.owner,
