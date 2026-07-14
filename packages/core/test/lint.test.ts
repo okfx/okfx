@@ -295,6 +295,53 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("matches canonical host aliases without decoding opaque URL hosts", async () => {
+    await withBundle({
+      "concept.md": `---
+type: Note
+title: Concept
+resource:
+  - https://éxample.com/unicode
+  - s3://éxample.com/opaque-unicode
+  - http://127.1/short-ipv4
+  - http://[2001:db8::1]/ipv6
+  - s3://local%68ost/opaque
+---
+# Concept
+`
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: {
+          resourcePolicy: {
+            allowHosts: [
+              "éxample.com",
+              "127.0.0.1",
+              "2001:0DB8:0:0:0:0:0:1",
+              "local%68ost"
+            ]
+          }
+        }
+      });
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "security/non-allowlisted-resource"))
+        .toEqual([]);
+    });
+  });
+
+  it("does not decode percent escapes in opaque allowlist hosts", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\nresource: s3://local%68ost/private\n---\n# Concept\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: { resourcePolicy: { allowHosts: ["localhost"] } }
+      });
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code))
+        .toContain("security/non-allowlisted-resource");
+    });
+  });
+
   it("ignores hostless resources when enforcing host allowlists", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\ndescription: Demo\nresource:\n  - mailto:team@example.com\n  - urn:example:runbook\n---\n# Concept\n"

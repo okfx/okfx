@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::LazyLock;
+use url::{Host, Url};
 
 pub const CRATE_NAME: &str = "okfx_rules";
 
@@ -572,7 +573,7 @@ fn security_rules(context: &RuleContext<'_>) -> Vec<Diagnostic> {
         .options
         .resource_allow_hosts
         .iter()
-        .map(|host| normalize_configured_host(host))
+        .flat_map(|host| configured_host_aliases(host))
         .collect::<BTreeSet<_>>();
 
     for concept in context.concepts {
@@ -1317,75 +1318,41 @@ fn is_private_ipv4(address: Ipv4Addr) -> bool {
 }
 
 fn resource_host(value: &str) -> Option<String> {
-    let (scheme, rest) = value.trim().split_once("://")?;
-    let mut scheme_characters = scheme.chars();
-    if !scheme_characters
-        .next()
-        .is_some_and(|character| character.is_ascii_alphabetic())
-        || !scheme_characters.all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
-        })
-    {
-        return None;
-    }
-    let is_special_scheme = matches!(
-        scheme.to_ascii_lowercase().as_str(),
-        "ftp" | "http" | "https" | "ws" | "wss"
-    );
-    let authority = rest
-        .split(|character| {
-            matches!(character, '/' | '?' | '#') || (is_special_scheme && character == '\\')
-        })
-        .next()
-        .unwrap_or_default()
-        .rsplit('@')
-        .next()
-        .unwrap_or_default();
-    let decoded_host = if let Some(host) = authority
-        .strip_prefix('[')
-        .and_then(|host| host.split_once(']').map(|(host, _)| host))
-    {
-        host.to_string()
-    } else if is_special_scheme {
-        decode_url_host(authority.split(':').next().unwrap_or_default())?
-    } else {
-        authority.split(':').next().unwrap_or_default().to_string()
-    };
-    let host = decoded_host.trim().trim_end_matches('.').to_lowercase();
-    (!host.is_empty()).then_some(host)
+    Url::parse(value.trim()).ok()?.host().map(host_string)
 }
 
-fn decode_url_host(value: &str) -> Option<String> {
-    let bytes = value.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut cursor = 0;
+fn host_string<S: AsRef<str>>(host: Host<S>) -> String {
+    match host {
+        Host::Domain(domain) => domain.as_ref().trim_end_matches('.').to_lowercase(),
+        Host::Ipv4(address) => address.to_string(),
+        Host::Ipv6(address) => address.to_string(),
+    }
+}
 
-    while cursor < bytes.len() {
-        if bytes[cursor] == b'%' {
-            let high = url_hex_value(*bytes.get(cursor + 1)?)?;
-            let low = url_hex_value(*bytes.get(cursor + 2)?)?;
-            decoded.push((high << 4) | low);
-            cursor += 3;
-        } else {
-            decoded.push(bytes[cursor]);
-            cursor += 1;
+fn configured_host_aliases(value: &str) -> Vec<String> {
+    let literal = normalize_configured_host(value);
+    let mut aliases = vec![literal.clone()];
+    let authority = if literal.contains(':') {
+        format!("[{literal}]")
+    } else {
+        literal.clone()
+    };
+    let schemes = if literal.contains('%') {
+        &["okfx"][..]
+    } else {
+        &["http", "okfx"][..]
+    };
+    for scheme in schemes {
+        let canonical = Url::parse(&format!("{scheme}://{authority}"))
+            .ok()
+            .and_then(|url| url.host().map(host_string));
+        if let Some(canonical) = canonical
+            && !aliases.contains(&canonical)
+        {
+            aliases.push(canonical);
         }
     }
-
-    let decoded = String::from_utf8(decoded).ok()?;
-    (!decoded
-        .chars()
-        .any(|character| matches!(character, '/' | '\\' | '?' | '#' | '@' | ':')))
-    .then_some(decoded)
-}
-
-fn url_hex_value(value: u8) -> Option<u8> {
-    match value {
-        b'0'..=b'9' => Some(value - b'0'),
-        b'a'..=b'f' => Some(value - b'a' + 10),
-        b'A'..=b'F' => Some(value - b'A' + 10),
-        _ => None,
-    }
+    aliases
 }
 
 fn normalize_configured_host(value: &str) -> String {
@@ -1605,6 +1572,36 @@ mod tests {
             concepts: vec![concept("docs").with_resource("https://DOCS.Example.com./guide")],
             options: RuleOptions {
                 resource_allow_hosts: vec!["  Docs.Example.COM.  ".to_string()],
+                ..RuleOptions::default()
+            },
+            ..RuleInput::default()
+        });
+
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "security/non-allowlisted-resource")
+        );
+    }
+
+    #[test]
+    fn matches_canonical_host_aliases_without_decoding_opaque_hosts() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("resources")
+                    .with_resource("https://éxample.com/unicode")
+                    .with_resource("s3://éxample.com/opaque-unicode")
+                    .with_resource("http://127.1/short-ipv4")
+                    .with_resource("http://[2001:db8::1]/ipv6")
+                    .with_resource("s3://local%68ost/opaque"),
+            ],
+            options: RuleOptions {
+                resource_allow_hosts: vec![
+                    "éxample.com".to_string(),
+                    "127.0.0.1".to_string(),
+                    "2001:0DB8:0:0:0:0:0:1".to_string(),
+                    "local%68ost".to_string(),
+                ],
                 ..RuleOptions::default()
             },
             ..RuleInput::default()

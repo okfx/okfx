@@ -300,7 +300,7 @@ const builtInLintRules: BuiltInRule[] = [
         return [];
       }
 
-      const allowed = new Set(config.resourcePolicy.allowHosts.map((host) => host.toLowerCase()));
+      const allowed = new Set(config.resourcePolicy.allowHosts.flatMap(configuredHostAliases));
       return bundle.concepts.flatMap((concept) => resourceValues(concept)
         .filter((resource) => resourceHost(resource) !== undefined)
         .filter((resource) => !allowed.has(resourceHost(resource)!))
@@ -754,6 +754,22 @@ function resourceHost(value: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function configuredHostAliases(value: string): string[] {
+  const literal = value.toLowerCase();
+  const authority = literal.includes(":") ? `[${literal}]` : literal;
+  const aliases = new Set([literal]);
+  const candidates = literal.includes("%")
+    ? [`okfx://${authority}`]
+    : [`http://${authority}`, `okfx://${authority}`];
+  for (const candidate of candidates) {
+    const canonical = resourceHost(candidate);
+    if (canonical) {
+      aliases.add(canonical);
+    }
+  }
+  return [...aliases];
 }
 
 function createPrivateIpRanges(): BlockList {
