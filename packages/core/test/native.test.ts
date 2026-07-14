@@ -1,3 +1,7 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -5,6 +9,7 @@ import {
   formatMarkdownFileAcceleratedAsync,
   contentHash,
   getNativeBackendStatusAsync,
+  getNativeBackendStatus,
   nativeCapabilities,
   nativeCapabilitiesAsync,
   nativeBindingPackageNames,
@@ -72,6 +77,38 @@ describe("native wrapper", () => {
     );
 
     expect(parsed.body.headings[0]?.title).toBe("Fallback");
+  });
+
+  it("does not access inherited default exports while loading bindings", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-native-module-"));
+    const modulePath = join(root, "binding.cjs");
+    const previousBinding = process.env.OKFX_NATIVE_BINDING;
+    try {
+      await writeFile(modulePath, `
+const prototype = {};
+Object.defineProperty(prototype, "default", {
+  get() {
+    throw new Error("inherited default export was accessed");
+  }
+});
+const binding = Object.create(prototype);
+binding.nativeCapabilitiesJson = () => "{}";
+module.exports = binding;
+`, "utf8");
+      process.env.OKFX_NATIVE_BINDING = modulePath;
+
+      expect(getNativeBackendStatus().native).toMatchObject({
+        available: true,
+        source: modulePath
+      });
+    } finally {
+      if (previousBinding === undefined) {
+        delete process.env.OKFX_NATIVE_BINDING;
+      } else {
+        process.env.OKFX_NATIVE_BINDING = previousBinding;
+      }
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("supports WASM-style async bindings and normalizes Rust JSON field names", async () => {

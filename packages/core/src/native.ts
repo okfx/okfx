@@ -279,8 +279,11 @@ async function tryLoadWasmBinding(): Promise<BindingLoadAttempt> {
       }
       const imported = await import(candidate.specifier) as unknown;
       const importedRecord = isRecord(imported) ? imported : {};
-      const initialized = typeof importedRecord.default === "function"
-        ? await importedRecord.default()
+      const defaultExport = Object.hasOwn(importedRecord, "default")
+        ? importedRecord.default
+        : undefined;
+      const initialized = typeof defaultExport === "function"
+        ? await defaultExport()
         : undefined;
       return {
         binding: normalizeBindingModule(importedRecord, initialized),
@@ -404,8 +407,11 @@ function bindingFunction(
 
 function normalizeBindingModule(module: unknown, initialized?: unknown): NativeJsonBinding {
   const binding = Object.create(null) as NativeJsonBinding;
-  if (isRecord(module) && isRecord(module.default)) {
-    Object.assign(binding, module.default);
+  const defaultExport = isRecord(module) && Object.hasOwn(module, "default")
+    ? module.default
+    : undefined;
+  if (isRecord(defaultExport)) {
+    Object.assign(binding, defaultExport);
   }
   if (isRecord(module)) {
     Object.assign(binding, module);
