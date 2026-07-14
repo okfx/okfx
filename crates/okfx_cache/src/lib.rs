@@ -132,6 +132,7 @@ impl std::error::Error for CacheError {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheStore {
     cache_dir: PathBuf,
+    directory_root: PathBuf,
 }
 
 pub fn crate_name() -> &'static str {
@@ -140,14 +141,18 @@ pub fn crate_name() -> &'static str {
 
 impl CacheStore {
     pub fn new(bundle_root: impl AsRef<Path>) -> Self {
+        let directory_root = bundle_root.as_ref().to_path_buf();
         Self {
-            cache_dir: bundle_root.as_ref().join(DEFAULT_CACHE_DIR),
+            cache_dir: directory_root.join(DEFAULT_CACHE_DIR),
+            directory_root,
         }
     }
 
     pub fn at(cache_dir: impl AsRef<Path>) -> Self {
+        let cache_dir = cache_dir.as_ref().to_path_buf();
         Self {
-            cache_dir: cache_dir.as_ref().to_path_buf(),
+            directory_root: cache_dir.clone(),
+            cache_dir,
         }
     }
 
@@ -209,9 +214,11 @@ impl CacheStore {
     pub fn write_entry(&self, entry: &CacheEntry) -> Result<PathBuf, CacheError> {
         let path = self.cache_path(&entry.key)?;
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| CacheError::Io {
-                path: parent.to_path_buf(),
-                message: error.to_string(),
+            ensure_directory_chain(&self.directory_root, parent).map_err(|error| {
+                CacheError::Io {
+                    path: parent.to_path_buf(),
+                    message: error.to_string(),
+                }
             })?;
         }
         let content = serde_json::to_vec_pretty(entry).map_err(|error| CacheError::Encode {
@@ -235,6 +242,59 @@ impl CacheStore {
             }),
         }
     }
+}
+
+fn ensure_directory_chain(root: &Path, target: &Path) -> io::Result<()> {
+    fs::create_dir_all(root)?;
+    if !fs::metadata(root)?.is_dir() {
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "cache directory root is not a directory: {}",
+                root.display()
+            ),
+        ));
+    }
+
+    let relative = target.strip_prefix(root).map_err(|_| {
+        io::Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "cache directory {} is outside root {}",
+                target.display(),
+                root.display()
+            ),
+        )
+    })?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let std::path::Component::Normal(segment) = component else {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "cache directory contains an invalid component: {}",
+                    target.display()
+                ),
+            ));
+        };
+        current.push(segment);
+        match fs::create_dir(&current) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+        let metadata = fs::symlink_metadata(&current)?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "cache directory is not a real directory: {}",
+                    current.display()
+                ),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn write_cache_file(path: &Path, content: &[u8]) -> io::Result<()> {
@@ -470,6 +530,28 @@ mod tests {
         assert_eq!(store.read_entry(&key).unwrap(), Some(entry));
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlinks_in_cache_directory_chain() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_root("symlink-directory");
+        let outside = temp_root("symlink-directory-outside");
+        let store = CacheStore::new(&root);
+        let entry = CacheEntry::new(sample_key("sha256:directory-symlink"), sample_output());
+        symlink(&outside, root.join(".okfx")).unwrap();
+
+        assert!(matches!(
+            store.write_entry(&entry),
+            Err(CacheError::Io { .. })
+        ));
+        assert!(!outside.join("cache").exists());
+
+        fs::remove_file(root.join(".okfx")).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     fn sample_key(content_hash: &str) -> CacheKey {
