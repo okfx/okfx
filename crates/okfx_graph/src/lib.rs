@@ -203,13 +203,20 @@ fn analyze_graph(concept_ids: &BTreeSet<String>, edges: &[GraphEdge]) -> GraphAn
         .cloned()
         .collect::<Vec<_>>();
     let cycles = find_representative_cycles(concept_ids, &outgoing);
-    let top_referenced_concepts = incoming
+    let mut top_referenced_concepts = incoming
         .iter()
         .map(|(id, sources)| TopReferencedConcept {
             id: id.clone(),
             count: sources.len(),
         })
         .collect::<Vec<_>>();
+    top_referenced_concepts.sort_by(|left, right| {
+        right
+            .count
+            .cmp(&left.count)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    top_referenced_concepts.truncate(10);
 
     GraphAnalysis {
         backlinks,
@@ -357,6 +364,31 @@ mod tests {
     }
 
     #[test]
+    fn ranks_and_limits_top_referenced_concepts() {
+        let concepts = (0..12)
+            .map(|index| concept(&format!("target-{index:02}")))
+            .collect::<Vec<_>>();
+        let mut links = (0..12)
+            .map(|index| {
+                resolved_link(&format!("source-{index:02}"), &format!("target-{index:02}"))
+            })
+            .collect::<Vec<_>>();
+        links.push(resolved_link("extra-source", "target-11"));
+
+        let graph = build_graph(concepts, links);
+
+        assert_eq!(graph.analysis.top_referenced_concepts.len(), 10);
+        assert_eq!(
+            graph.analysis.top_referenced_concepts[0],
+            TopReferencedConcept {
+                id: "target-11".to_string(),
+                count: 2
+            }
+        );
+        assert_eq!(graph.analysis.top_referenced_concepts[1].id, "target-00");
+    }
+
+    #[test]
     fn analyzes_dense_acyclic_graphs_without_enumerating_paths() {
         let node_count = 40;
         let concept_ids = (0..node_count)
@@ -382,6 +414,18 @@ mod tests {
             title: Some(id.to_string()),
             resource: Vec::new(),
             tags: Vec::new(),
+        }
+    }
+
+    fn resolved_link(source: &str, target: &str) -> ResolvedLink {
+        ResolvedLink {
+            source_concept_id: source.to_string(),
+            source_path: format!("{source}.md"),
+            target_raw: format!("{target}.md"),
+            target_concept_id: Some(target.to_string()),
+            text: None,
+            kind: okfx_parser::LinkKind::Internal,
+            resolved: true,
         }
     }
 }
