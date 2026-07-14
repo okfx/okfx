@@ -188,6 +188,42 @@ export function resolveConfig(config: OkfxConfig = {}, configPath?: string): Res
   };
 }
 
+export function mergeConfig(
+  base: ResolvedOkfxConfig,
+  override: OkfxConfig | ResolvedOkfxConfig = {}
+): ResolvedOkfxConfig {
+  const resolvedOverride = resolveConfig(override, base.configPath);
+  const overridePresets = override.presets !== undefined;
+
+  return {
+    ...base,
+    okfVersion: override.okfVersion ?? base.okfVersion,
+    include: override.include ?? base.include,
+    exclude: override.exclude ?? base.exclude,
+    presets: override.presets ?? base.presets,
+    plugins: override.plugins !== undefined ? resolvedOverride.plugins : base.plugins,
+    rules: overridePresets
+      ? resolvedOverride.rules
+      : {
+          ...base.rules,
+          ...(override.rules ?? {})
+        },
+    failOn: override.failOn ?? (overridePresets ? resolvedOverride.failOn : base.failOn),
+    frontmatter: {
+      keyOrder: override.frontmatter?.keyOrder ?? base.frontmatter.keyOrder
+    },
+    resourcePolicy: {
+      allowHosts: override.resourcePolicy?.allowHosts ?? base.resourcePolicy.allowHosts
+    },
+    mcp: {
+      readonly: override.mcp?.readonly ?? base.mcp.readonly,
+      exposeDiagnostics: override.mcp?.exposeDiagnostics ?? base.mcp.exposeDiagnostics,
+      exposeGraph: override.mcp?.exposeGraph ?? base.mcp.exposeGraph
+    },
+    configPath: base.configPath
+  };
+}
+
 function assertConfig(value: unknown): asserts value is OkfxConfig {
   if (!isRecord(value)) {
     invalidConfig("config", "an object");

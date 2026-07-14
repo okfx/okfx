@@ -136,4 +136,31 @@ describe("formatBundle", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("preserves file config when applying runtime overrides", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-fmt-config-"));
+    try {
+      await mkdir(join(root, "knowledge"), { recursive: true });
+      await mkdir(join(root, "outside"), { recursive: true });
+      await writeFile(
+        join(root, "okfx.config.json"),
+        JSON.stringify({ include: ["knowledge/**/*.md"] }),
+        "utf8"
+      );
+      const content = "---\ntype: Note\ntitle: Example\n---\n# Example   ";
+      await writeFile(join(root, "knowledge/example.md"), content, "utf8");
+      await writeFile(join(root, "outside/example.md"), content, "utf8");
+
+      const result = await formatBundle(root, {
+        config: { frontmatter: { keyOrder: ["title", "type"] } }
+      });
+
+      expect(result.files.map((file) => file.path)).toEqual(["knowledge/example.md"]);
+      expect(await readFile(join(root, "knowledge/example.md"), "utf8"))
+        .toContain("title: Example\ntype: Note");
+      expect(await readFile(join(root, "outside/example.md"), "utf8")).toBe(content);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

@@ -8,7 +8,14 @@ import { promisify } from "node:util";
 import fg from "fast-glob";
 import * as tar from "tar";
 
-import { defaultConfig, loadConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
+import {
+  defaultConfig,
+  loadConfig,
+  mergeConfig,
+  resolveConfig,
+  type OkfxConfig,
+  type ResolvedOkfxConfig
+} from "./config.js";
 import { loadBundle } from "./bundle.js";
 import { sha256Hex } from "./hash.js";
 import { relativePosixPath, resolveBundleRoot } from "./paths.js";
@@ -84,7 +91,7 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
   const root = resolveBundleRoot(rootInput);
   const config = options.loadConfigFile === false
     ? resolveConfig(options.config)
-    : resolveConfig(options.config ?? await loadConfig(root));
+    : mergeConfig(await loadConfig(root), options.config);
   const bundle = await loadBundle(root, { config, loadConfigFile: false });
   const out = resolve(options.out ?? `${options.bundleName ?? basename(root)}.okf.tar.gz`);
   const files = await discoverPackFiles(root, config, out);

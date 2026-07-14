@@ -66,6 +66,33 @@ describe("packBundle", () => {
     }
   });
 
+  it("preserves file config when applying runtime overrides", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-config-"));
+    const out = join(root, "..", "configured.okf.tar.gz");
+    try {
+      await mkdir(join(root, "private"));
+      await writeFile(
+        join(root, "okfx.config.json"),
+        JSON.stringify({ exclude: ["private/**"] }),
+        "utf8"
+      );
+      await writeFile(join(root, "concept.md"), "---\ntype: Note\n---\n# Concept\n", "utf8");
+      await writeFile(join(root, "private/ignored.txt"), "do not pack", "utf8");
+
+      const result = await packBundle(root, {
+        out,
+        config: { okfVersion: "9.9" },
+        writeMetadata: false
+      });
+
+      expect(result.manifest.okf_version).toBe("9.9");
+      expect(result.manifest.files.map((file) => file.path)).not.toContain("private/ignored.txt");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(out, { force: true });
+    }
+  });
+
   it("excludes common credentials while retaining examples and public certificates", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-pack-secrets-"));
     const out = join(root, "..", "secrets.okf.tar.gz");

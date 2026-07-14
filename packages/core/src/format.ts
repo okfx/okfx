@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument, type Pair, type YAMLMap } from "yaml";
 
-import { loadConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
+import { loadConfig, mergeConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { discoverMarkdownFiles } from "./bundle.js";
 import { resolveBundleRoot } from "./paths.js";
 import type { DiagnosticIR } from "./types.js";
@@ -96,7 +96,7 @@ export async function formatBundle(rootInput: string, options: FormatBundleOptio
   const root = resolveBundleRoot(rootInput);
   const config = options.loadConfigFile === false
     ? resolveConfig(options.config)
-    : resolveConfig(options.config ?? await loadConfig(root));
+    : mergeConfig(await loadConfig(root), options.config);
   const files = await discoverMarkdownFiles(root, config);
   const results: FormatFileResult[] = [];
   const diagnostics: DiagnosticIR[] = [];
