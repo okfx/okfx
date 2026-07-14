@@ -36,6 +36,8 @@ description: Demo metric.
       expect(await api.searchConcepts("constructor")).toEqual([]);
       expect(await api.getBacklinks("metrics/wau")).toEqual(["index"]);
       expect(await api.getNeighbors("metrics/wau")).toMatchObject({ outgoing: ["tables/events"] });
+      expect(await api.getBacklinks("constructor")).toEqual([]);
+      expect(await api.getNeighbors("constructor")).toEqual({ outgoing: [], incoming: [] });
       expect((await api.getDiagnostics()).score).toBeLessThanOrEqual(100);
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -177,12 +177,12 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
           .filter((edge) => edge.resolved && edge.source === id)
           .map((edge) => edge.target))]
           .sort(compareStrings),
-        incoming: graph.analysis.backlinks[id] ?? []
+        incoming: ownStringArray(graph.analysis.backlinks, id)
       };
     },
     async getBacklinks(id) {
       const graph = buildGraph((await loadContext()).bundle);
-      return graph.analysis.backlinks[id] ?? [];
+      return ownStringArray(graph.analysis.backlinks, id);
     },
     async getGraph() {
       return buildGraph((await loadContext()).bundle);
@@ -245,6 +245,10 @@ export async function createOkfMcpServer(options: OkfMcpServerOptions): Promise<
 export async function startStdioServer(options: OkfMcpServerOptions): Promise<void> {
   const server = await createOkfMcpServer(options);
   await server.connect(new StdioServerTransport());
+}
+
+function ownStringArray(record: Record<string, string[]>, key: string): string[] {
+  return Object.hasOwn(record, key) ? record[key]! : [];
 }
 
 function registerResources(server: McpServer, api: OkfBundleApi, config: ResolvedOkfxConfig): void {
