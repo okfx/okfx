@@ -96,6 +96,12 @@ export function buildGraph(bundle: BundleIR, options: GraphOptions = {}): OkfxGr
   };
 }
 
+export function backlinksForConcept(graph: Pick<OkfxGraphIR, "analysis">, conceptId: string): string[] {
+  return Object.hasOwn(graph.analysis.backlinks, conceptId)
+    ? graph.analysis.backlinks[conceptId]!
+    : [];
+}
+
 export function graphToDot(graph: OkfxGraphIR): string {
   const lines = [
     "digraph okf {",

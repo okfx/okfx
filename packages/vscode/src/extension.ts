@@ -3,6 +3,7 @@ import { basename, join, relative, sep } from "node:path";
 import * as vscode from "vscode";
 
 import {
+  backlinksForConcept,
   buildGraph,
   conceptIdFromPath,
   doctorBundle,
@@ -195,7 +196,7 @@ async function showBacklinksPanel(context: vscode.ExtensionContext): Promise<voi
   const conceptId = conceptIdFromPath(sourcePath);
   const bundle = await loadBundle(root);
   const graph = buildGraph(bundle);
-  const backlinks = graph.analysis.backlinks[conceptId] ?? [];
+  const backlinks = backlinksForConcept(graph, conceptId);
   const panel = vscode.window.createWebviewPanel(
     "okfxBacklinks",
     "OKF Backlinks",

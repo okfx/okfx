@@ -1,5 +1,5 @@
 import { compareStrings } from "./compare.js";
-import { buildGraph } from "./graph.js";
+import { backlinksForConcept, buildGraph } from "./graph.js";
 import type { BundleIR } from "./types.js";
 
 export interface SearchIndexDocumentIR {
@@ -36,7 +36,7 @@ export function buildSearchIndex(bundle: BundleIR): SearchIndexIR {
     tags: concept.tags ?? [],
     headings: concept.body.headings.map((heading) => heading.title),
     body: concept.body.text,
-    backlinks: graph.analysis.backlinks[concept.id] ?? []
+    backlinks: backlinksForConcept(graph, concept.id)
   })).sort((a, b) => compareStrings(a.id, b.id));
   const terms = buildTermMap(documents);
 

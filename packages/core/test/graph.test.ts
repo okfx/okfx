@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 import {
+  backlinksForConcept,
   buildGraph,
   graphToCytoscape,
   graphToDot,
@@ -44,6 +45,7 @@ describe("buildGraph", () => {
         cycleCount: 1
       });
       expect(graph.analysis.backlinks.a).toEqual(["b"]);
+      expect(backlinksForConcept(graph, "constructor")).toEqual([]);
       expect(graph.analysis.cycles).toEqual([["a", "b", "a"]]);
       expect(graph.analysis.orphanConceptIds).toEqual(["orphan"]);
       expect(graph.analysis.topReferencedConcepts[0]).toEqual({ id: "a", count: 1 });

@@ -1,7 +1,7 @@
 import { posix } from "node:path";
 
 import { definePlugin, disambiguateGeneratedPaths } from "@okfx/plugin-api";
-import { compareStrings, type BundleIR, type ConceptIR, type OkfxGraphIR } from "@okfx/core";
+import { backlinksForConcept, compareStrings, type BundleIR, type ConceptIR, type OkfxGraphIR } from "@okfx/core";
 
 export interface StaticSiteFile {
   path: string;
@@ -79,7 +79,7 @@ function conceptPage(
   const neighbors = uniqueSorted(graph?.edges
     .filter((edge) => edge.resolved && edge.source === concept.id)
     .map((edge) => edge.target) ?? []);
-  const backlinks = uniqueSorted(graph?.analysis.backlinks[concept.id] ?? []);
+  const backlinks = uniqueSorted(graph ? backlinksForConcept(graph, concept.id) : []);
 
   return html(`${concept.title ?? concept.id} - ${title}`, `
     <main>
