@@ -1268,8 +1268,15 @@ fn is_private_ipv4(address: Ipv4Addr) -> bool {
 }
 
 fn resource_host(value: &str) -> Option<String> {
-    let (scheme, rest) = value.split_once("://")?;
-    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+    let (scheme, rest) = value.trim().split_once("://")?;
+    let mut scheme_characters = scheme.chars();
+    if !scheme_characters
+        .next()
+        .is_some_and(|character| character.is_ascii_alphabetic())
+        || !scheme_characters.all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+        })
+    {
         return None;
     }
     let authority = rest
@@ -1498,6 +1505,34 @@ mod tests {
                 .iter()
                 .all(|diagnostic| diagnostic.code != "security/non-allowlisted-resource")
         );
+    }
+
+    #[test]
+    fn enforces_resource_security_for_non_http_urls() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("resources")
+                    .with_resource("bigquery://blocked-project/dataset/table")
+                    .with_resource("s3://localhost/private"),
+            ],
+            options: RuleOptions {
+                resource_allow_hosts: vec!["allowed-project".to_string()],
+                ..RuleOptions::default()
+            },
+            ..RuleInput::default()
+        });
+
+        let messages_for = |code: &str| {
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == code)
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(messages_for("security/non-allowlisted-resource").len(), 2);
+        assert_eq!(messages_for("security/private-url").len(), 1);
+        assert!(messages_for("security/private-url")[0].contains("s3://localhost/private"));
     }
 
     #[test]
