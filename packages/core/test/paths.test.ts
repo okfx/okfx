@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { relativeMarkdownTarget, resolveMarkdownTarget } from "../src/index.js";
+import { conceptIdFromPath, relativeMarkdownTarget, resolveMarkdownTarget } from "../src/index.js";
+
+describe("conceptIdFromPath", () => {
+  it("removes the Markdown suffix even when it is the entire filename", () => {
+    expect(conceptIdFromPath(".md")).toBe("");
+    expect(conceptIdFromPath("concepts/.md")).toBe("concepts/");
+    expect(conceptIdFromPath("concepts/.hidden.md")).toBe("concepts/.hidden");
+  });
+});
 
 describe("relativeMarkdownTarget", () => {
   it("builds links relative to the source document directory", () => {

@@ -1,4 +1,4 @@
-import { basename, dirname, extname, isAbsolute, posix, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
 
 import { unescapeMarkdownDestination } from "./markdown-destination.js";
 
@@ -27,8 +27,7 @@ export function resolveBundleRoot(root: string): string {
 
 export function conceptIdFromPath(path: string): string {
   const normalized = normalizeRelativePath(path);
-  const ext = extname(normalized);
-  return ext === ".md" ? normalized.slice(0, -ext.length) : normalized;
+  return normalized.endsWith(".md") ? normalized.slice(0, -3) : normalized;
 }
 
 export function isReservedMarkdownFile(path: string): boolean {
