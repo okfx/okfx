@@ -20,6 +20,8 @@ import {
   type DiagnosticSeverity
 } from "@okfx/core";
 
+import { markdownTargetAt } from "./markdown-target.js";
+
 let diagnostics: vscode.DiagnosticCollection | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
 const diagnosticPathsByRoot = new Map<string, Set<string>>();
@@ -403,22 +405,6 @@ function isFrontmatterContext(document: vscode.TextDocument, position: vscode.Po
     }
   }
   return true;
-}
-
-function markdownTargetAt(line: string, character: number): string | undefined {
-  const uptoCursor = line.slice(0, character);
-  const linkStart = uptoCursor.lastIndexOf("](");
-  if (linkStart === -1) {
-    return undefined;
-  }
-
-  const targetStart = linkStart + 2;
-  const targetEnd = line.indexOf(")", targetStart);
-  if (targetEnd !== -1 && character > targetEnd) {
-    return undefined;
-  }
-
-  return line.slice(targetStart, targetEnd === -1 ? undefined : targetEnd).trim() || undefined;
 }
 
 function frontmatterInsertionPoint(document: vscode.TextDocument): vscode.Position | undefined {
