@@ -98,6 +98,27 @@ describe("buildGraph", () => {
     });
   });
 
+  it("does not treat metadata target collisions as concept links", async () => {
+    await withBundle({
+      "source.md": "---\ntype: Note\ntitle: Source\ntags:\n  - analytics\n---\n# Source\n",
+      "target.md": "---\ntype: Note\ntitle: Target\n---\n# Target\n"
+    }, async (root) => {
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      bundle.concepts.find((concept) => concept.path === "target.md")!.id = "tag:analytics";
+
+      const graph = buildGraph(bundle);
+
+      expect(graph.edges).toContainEqual(expect.objectContaining({
+        kind: "tag",
+        source: "source",
+        target: "tag:analytics"
+      }));
+      expect(graph.analysis.backlinks["tag:analytics"]).toEqual([]);
+      expect(graph.analysis.orphanConceptIds).toEqual(["source", "tag:analytics"]);
+      expect(graph.analysis.isolatedClusterCount).toBe(2);
+    });
+  });
+
   it("connects concepts to reserved graph nodes without reporting broken links", async () => {
     await withBundle({
       "index.md": "# Index\n",

@@ -293,6 +293,9 @@ function analyzeGraph(bundle: BundleIR, edges: GraphEdgeIR[], options: GraphOpti
   const brokenLinks: GraphAnalysisIR["brokenLinks"] = [];
 
   for (const edge of edges) {
+    if (edge.kind !== "markdown-link") {
+      continue;
+    }
     if (!edge.resolved) {
       brokenLinks.push({
         source: edge.source,

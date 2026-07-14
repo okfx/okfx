@@ -163,6 +163,9 @@ fn analyze_graph(concept_ids: &BTreeSet<String>, edges: &[GraphEdge]) -> GraphAn
     let mut broken_links = Vec::new();
 
     for edge in edges {
+        if edge.kind != "markdown-link" {
+            continue;
+        }
         if !edge.resolved {
             broken_links.push(edge.clone());
             continue;
@@ -361,6 +364,24 @@ mod tests {
             ]
         );
         assert!(graph.analysis.backlinks["a"].is_empty());
+    }
+
+    #[test]
+    fn does_not_treat_metadata_target_collisions_as_concept_links() {
+        let mut source = concept("source");
+        source.tags = vec!["analytics".to_string()];
+
+        let graph = build_graph(vec![source, concept("tag:analytics")], Vec::new());
+
+        assert!(graph.edges.iter().any(|edge| {
+            edge.kind == "tag" && edge.source == "source" && edge.target == "tag:analytics"
+        }));
+        assert!(graph.analysis.backlinks["tag:analytics"].is_empty());
+        assert_eq!(
+            graph.analysis.orphan_concept_ids,
+            vec!["source", "tag:analytics"]
+        );
+        assert_eq!(graph.analysis.isolated_cluster_count, 2);
     }
 
     #[test]
