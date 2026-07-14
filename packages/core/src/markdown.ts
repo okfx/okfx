@@ -69,7 +69,11 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
     if (startOffset === -1) {
       break;
     }
-    if (bodyRaw[startOffset - 1] === "!") {
+    if (isEscaped(bodyRaw, startOffset)) {
+      cursor = startOffset + 1;
+      continue;
+    }
+    if (bodyRaw[startOffset - 1] === "!" && !isEscaped(bodyRaw, startOffset - 1)) {
       cursor = startOffset + 1;
       continue;
     }

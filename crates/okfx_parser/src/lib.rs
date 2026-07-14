@@ -302,7 +302,14 @@ fn parse_links(
             break;
         };
         let open_bracket = cursor + open_bracket_relative;
-        if open_bracket > 0 && bytes[open_bracket - 1] == b'!' {
+        if is_escaped_delimiter(bytes, open_bracket) {
+            cursor = open_bracket + 1;
+            continue;
+        }
+        if open_bracket > 0
+            && bytes[open_bracket - 1] == b'!'
+            && !is_escaped_delimiter(bytes, open_bracket - 1)
+        {
             cursor = open_bracket + 1;
             continue;
         }
@@ -806,5 +813,23 @@ mod tests {
             ]
         );
         assert_eq!(parsed.links[0].location.end.as_ref().unwrap().offset, 37);
+    }
+
+    #[test]
+    fn honors_escaped_link_and_image_markers() {
+        let parsed = parse_markdown_document(
+            "note.md",
+            "\\[Escaped](hidden.md)\n\\\\[Visible](visible.md)\n![Image](image.png)\n\\![Not an image](visible-after-bang.md)\n",
+            "note",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["visible.md", "visible-after-bang.md"]
+        );
     }
 }

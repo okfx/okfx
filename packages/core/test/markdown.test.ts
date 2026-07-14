@@ -73,4 +73,19 @@ describe("Markdown code fences", () => {
     ]);
     expect(parsed.links[0]?.location.end.offset).toBe(37);
   });
+
+  it("honors escaped link and image markers", () => {
+    const parsed = parseMarkdownDocument("concept.md", [
+      "\\[Escaped](hidden.md)",
+      "\\\\[Visible](visible.md)",
+      "![Image](image.png)",
+      "\\![Not an image](visible-after-bang.md)",
+      ""
+    ].join("\n"), "concept");
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual([
+      "visible.md",
+      "visible-after-bang.md"
+    ]);
+  });
 });
