@@ -1924,6 +1924,9 @@ mod tests {
             "http://192.168.1/short-private",
             "http://0177.0.0.1/octal-loopback",
             "HTTP://127.0.0.2/uppercase-scheme",
+            "s3://2130706433/integer-loopback",
+            "s3://0x7f000001/hex-loopback",
+            "s3://0177.0.0.1/octal-loopback",
         ] {
             assert!(is_private_url(url), "expected private URL: {url}");
         }
@@ -1932,6 +1935,8 @@ mod tests {
             "http://100.128.0.1/public",
             "http://[2001:db8::1]/documentation",
             "http://[::ffff:8.8.8.8]/mapped-public",
+            "s3://08/not-valid-octal",
+            "s3://10.example.com/public",
         ] {
             assert!(!is_private_url(url), "unexpected private URL: {url}");
         }

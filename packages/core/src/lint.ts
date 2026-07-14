@@ -725,6 +725,11 @@ function isPrivateUrl(value: string): boolean {
     return true;
   }
 
+  const ipv4 = parseIpv4Host(host);
+  if (ipv4) {
+    return PRIVATE_IP_RANGES.check(ipv4, "ipv4");
+  }
+
   const mappedIpv4 = ipv4MappedAddress(host);
   if (mappedIpv4) {
     return PRIVATE_IP_RANGES.check(mappedIpv4, "ipv4");
@@ -732,6 +737,52 @@ function isPrivateUrl(value: string): boolean {
 
   const family = isIP(host);
   return family !== 0 && PRIVATE_IP_RANGES.check(host, family === 4 ? "ipv4" : "ipv6");
+}
+
+function parseIpv4Host(host: string): string | undefined {
+  const parts = host.split(".");
+  if (parts.length === 0 || parts.length > 4 || parts.some((part) => part.length === 0)) {
+    return undefined;
+  }
+  const numbers = parts.map(parseIpv4Number);
+  if (numbers.some((number) => number === undefined)) {
+    return undefined;
+  }
+  const values = numbers as number[];
+  if (values.slice(0, -1).some((number) => number > 255)) {
+    return undefined;
+  }
+
+  const finalBits = 8 * (5 - values.length);
+  const finalLimit = 2 ** finalBits;
+  const finalNumber = values.at(-1)!;
+  if (finalNumber >= finalLimit) {
+    return undefined;
+  }
+
+  let address = finalNumber;
+  values.slice(0, -1).forEach((number, index) => {
+    address += number * (2 ** (8 * (3 - index)));
+  });
+  return [address >>> 24, (address >>> 16) & 255, (address >>> 8) & 255, address & 255].join(".");
+}
+
+function parseIpv4Number(value: string): number | undefined {
+  let radix = 10;
+  let digits = value;
+  if (/^0x/iu.test(value)) {
+    radix = 16;
+    digits = value.slice(2);
+  } else if (value.length > 1 && value.startsWith("0")) {
+    radix = 8;
+    digits = value.slice(1);
+  }
+  const valid = radix === 16 ? /^[0-9a-f]+$/iu : (radix === 8 ? /^[0-7]+$/u : /^[0-9]+$/u);
+  if (!valid.test(digits)) {
+    return undefined;
+  }
+  const number = Number.parseInt(digits, radix);
+  return number <= 0xffff_ffff ? number : undefined;
 }
 
 function ipv4MappedAddress(host: string): string | undefined {

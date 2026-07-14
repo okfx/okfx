@@ -399,6 +399,11 @@ resource:
   - http://0x7f000001/hex-loopback
   - http://127.1/short-loopback
   - http://192.168.1/short-private
+  - s3://2130706433/integer-loopback
+  - s3://0x7f000001/hex-loopback
+  - s3://0177.0.0.1/octal-loopback
+  - s3://08/not-valid-octal
+  - s3://10.example.com/public
   - http://[::ffff:127.0.0.1]/mapped-loopback
   - http://[::ffff:8.8.8.8]/mapped-public
 ---
@@ -410,11 +415,13 @@ resource:
         .filter((diagnostic) => diagnostic.code === "security/private-url")
         .map((diagnostic) => diagnostic.message);
 
-      expect(messages).toHaveLength(11);
+      expect(messages).toHaveLength(14);
       expect(messages.some((message) => message.includes("10.example.com"))).toBe(false);
       expect(messages.some((message) => message.includes("127.0.0.2"))).toBe(true);
       expect(messages.some((message) => message.includes("[fc00::1]"))).toBe(true);
       expect(messages.some((message) => message.includes("2130706433"))).toBe(true);
+      expect(messages.some((message) => message.includes("s3://0x7f000001"))).toBe(true);
+      expect(messages.some((message) => message.includes("s3://08"))).toBe(false);
       expect(messages.some((message) => message.includes("[::ffff:8.8.8.8]"))).toBe(false);
     });
   });
