@@ -47,8 +47,12 @@ export interface DiffOptions {
 export function diffBundles(before: BundleIR, after: BundleIR, options: DiffOptions = {}): BundleDiffIR {
   const beforeById = new Map(before.concepts.map((concept) => [concept.id, concept]));
   const afterById = new Map(after.concepts.map((concept) => [concept.id, concept]));
-  const added = after.concepts.filter((concept) => !beforeById.has(concept.id));
-  const removed = before.concepts.filter((concept) => !afterById.has(concept.id));
+  const added = after.concepts
+    .filter((concept) => !beforeById.has(concept.id))
+    .sort((a, b) => compareStrings(a.id, b.id) || compareStrings(a.path, b.path));
+  const removed = before.concepts
+    .filter((concept) => !afterById.has(concept.id))
+    .sort((a, b) => compareStrings(a.id, b.id) || compareStrings(a.path, b.path));
   const renamed = detectRenames(removed, added);
   const renamedFrom = new Set(renamed.map((entry) => entry.from));
   const renamedTo = new Set(renamed.map((entry) => entry.to));

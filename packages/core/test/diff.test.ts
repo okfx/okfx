@@ -162,4 +162,27 @@ type: Note
       await before.cleanup();
     }
   });
+
+  it("produces the same rename pairs for permuted bundle inputs", async () => {
+    const content = "---\ntype: Note\ntitle: Shared\n---\n# Shared\n";
+    const before = await bundle({ "removed-b.md": content, "removed-a.md": content });
+    const after = await bundle({ "added-b.md": content, "added-a.md": content });
+
+    try {
+      const forward = diffBundles(before.loaded, after.loaded);
+      const reverse = diffBundles(
+        { ...before.loaded, concepts: [...before.loaded.concepts].reverse() },
+        { ...after.loaded, concepts: [...after.loaded.concepts].reverse() }
+      );
+
+      expect(reverse.renamedConcepts).toEqual(forward.renamedConcepts);
+      expect(forward.renamedConcepts.map(({ from, to }) => [from, to])).toEqual([
+        ["removed-a", "added-a"],
+        ["removed-b", "added-b"]
+      ]);
+    } finally {
+      await before.cleanup();
+      await after.cleanup();
+    }
+  });
 });
