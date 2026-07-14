@@ -1,3 +1,5 @@
+use saphyr::{LoadableYamlNode, Scalar, Yaml};
+use saphyr_parser::{Event, EventReceiver, Parser};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -167,8 +169,47 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
 
 fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, String> {
     let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
-    let value = serde_yaml::from_str::<serde_yaml::Value>(&normalized)
-        .map_err(|error| error.to_string())?;
+    let legacy = serde_yaml::from_str::<serde_yaml::Value>(&normalized);
+
+    if let Err(error) = &legacy
+        && error.to_string().contains("duplicate entry with key")
+    {
+        return Err(error.to_string());
+    }
+
+    let saphyr_input = match prepare_saphyr_input(&normalized) {
+        Ok((_, true)) => return finish_frontmatter(legacy.map_err(|error| error.to_string())?),
+        Ok((input, false)) => input,
+        Err(error) => {
+            return match legacy {
+                Ok(value) => finish_frontmatter(value),
+                Err(_) => Err(error),
+            };
+        }
+    };
+
+    let mut documents = match Yaml::load_from_str(&saphyr_input) {
+        Ok(documents) => documents,
+        Err(error) => {
+            return match legacy {
+                Ok(value) => finish_frontmatter(value),
+                Err(_) => Err(error.to_string()),
+            };
+        }
+    };
+    if documents.is_empty() {
+        return Err("Frontmatter must be a YAML mapping.".to_string());
+    }
+    if documents.len() > 1 {
+        return Err("Frontmatter must contain exactly one YAML document.".to_string());
+    }
+    let value = saphyr_to_serde(documents.pop().unwrap_or(Yaml::BadValue))?;
+    finish_frontmatter(value)
+}
+
+fn finish_frontmatter(
+    value: serde_yaml::Value,
+) -> Result<BTreeMap<String, serde_yaml::Value>, String> {
     if !has_only_string_mapping_keys(&value) {
         return Err("Frontmatter keys must be strings.".to_string());
     }
@@ -191,6 +232,281 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
     }
 
     Ok(frontmatter)
+}
+
+#[derive(Default)]
+struct ExplicitTagDetector {
+    found: bool,
+}
+
+impl<'input> EventReceiver<'input> for ExplicitTagDetector {
+    fn on_event(&mut self, event: Event<'input>) {
+        self.found |= match event {
+            Event::Scalar(_, _, _, tag)
+            | Event::SequenceStart(_, tag)
+            | Event::MappingStart(_, tag) => tag.is_some(),
+            _ => false,
+        };
+    }
+}
+
+fn prepare_saphyr_input(raw: &str) -> Result<(String, bool), String> {
+    let mut input = normalize_yaml_separator_tabs(raw);
+    loop {
+        let mut parser = Parser::new_from_str(&input);
+        let mut detector = ExplicitTagDetector::default();
+        match parser.load(&mut detector, true) {
+            Ok(()) => return Ok((input, detector.found)),
+            Err(error)
+                if error.info() == "':' must be followed by a valid YAML whitespace"
+                    && replace_separator_tab(&mut input, error.marker()) => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+}
+
+fn normalize_yaml_separator_tabs(raw: &str) -> String {
+    let mut normalized = String::with_capacity(raw.len());
+    let mut block_scalar_indent = None;
+    let mut quote = None;
+
+    for line in split_lines_inclusive(raw) {
+        let content = line.trim_end_matches(['\r', '\n']);
+        let ending = &line[content.len()..];
+        let indent = content.bytes().take_while(|byte| *byte == b' ').count();
+        let blank = content
+            .chars()
+            .all(|character| matches!(character, ' ' | '\t'));
+
+        if let Some(parent_indent) = block_scalar_indent {
+            if blank || indent > parent_indent {
+                normalized.push_str(line);
+                continue;
+            }
+            block_scalar_indent = None;
+        }
+
+        if quote.is_none() && starts_block_scalar(content) {
+            block_scalar_indent = Some(indent);
+        }
+        normalized.push_str(&replace_unquoted_separator_tabs(content, &mut quote));
+        normalized.push_str(ending);
+    }
+
+    normalized
+}
+
+fn replace_unquoted_separator_tabs(line: &str, quote: &mut Option<u8>) -> String {
+    let bytes = line.as_bytes();
+    let mut normalized = bytes.to_vec();
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        match *quote {
+            Some(b'\'') => {
+                if bytes[cursor] == b'\'' {
+                    if bytes.get(cursor + 1) == Some(&b'\'') {
+                        cursor += 2;
+                        continue;
+                    }
+                    *quote = None;
+                }
+            }
+            Some(b'"') => {
+                if bytes[cursor] == b'\\' {
+                    cursor += escaped_character_width(&line[cursor + 1..]) + 1;
+                    continue;
+                }
+                if bytes[cursor] == b'"' {
+                    *quote = None;
+                }
+            }
+            Some(_) => unreachable!(),
+            None => match bytes[cursor] {
+                b'#' if cursor == 0 || bytes[cursor - 1].is_ascii_whitespace() => break,
+                b'\'' | b'"' if yaml_quote_can_start(bytes, cursor) => {
+                    *quote = Some(bytes[cursor]);
+                }
+                b':' if bytes.get(cursor + 1) == Some(&b'\t') => {
+                    normalized[cursor + 1] = b' ';
+                }
+                _ => {}
+            },
+        }
+        cursor += 1;
+    }
+
+    String::from_utf8(normalized).expect("replacing ASCII YAML separators preserves UTF-8")
+}
+
+fn escaped_character_width(value: &str) -> usize {
+    value.chars().next().map(char::len_utf8).unwrap_or_default()
+}
+
+fn yaml_quote_can_start(bytes: &[u8], cursor: usize) -> bool {
+    cursor == 0
+        || bytes[cursor - 1].is_ascii_whitespace()
+        || matches!(bytes[cursor - 1], b'[' | b'{' | b',' | b':' | b'?' | b'-')
+}
+
+fn starts_block_scalar(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    let mut quote = None;
+    let mut cursor = 0;
+    let first_content = bytes
+        .iter()
+        .position(|byte| !byte.is_ascii_whitespace())
+        .unwrap_or(bytes.len());
+
+    while cursor < bytes.len() {
+        match quote {
+            Some(b'\'') => {
+                if bytes[cursor] == b'\'' {
+                    if bytes.get(cursor + 1) == Some(&b'\'') {
+                        cursor += 2;
+                        continue;
+                    }
+                    quote = None;
+                }
+            }
+            Some(b'"') => {
+                if bytes[cursor] == b'\\' {
+                    cursor += escaped_character_width(&line[cursor + 1..]) + 1;
+                    continue;
+                }
+                if bytes[cursor] == b'"' {
+                    quote = None;
+                }
+            }
+            Some(_) => unreachable!(),
+            None => match bytes[cursor] {
+                b'#' if cursor == 0 || bytes[cursor - 1].is_ascii_whitespace() => return false,
+                b'\'' | b'"' if yaml_quote_can_start(bytes, cursor) => {
+                    quote = Some(bytes[cursor]);
+                }
+                b':' if bytes.get(cursor + 1).is_some_and(u8::is_ascii_whitespace) => {
+                    let indicator = skip_ascii_whitespace(bytes, cursor + 1);
+                    if valid_block_scalar_indicator(&line[indicator..]) {
+                        return true;
+                    }
+                }
+                b'-' if cursor == first_content
+                    && bytes.get(cursor + 1).is_some_and(u8::is_ascii_whitespace) =>
+                {
+                    let indicator = skip_ascii_whitespace(bytes, cursor + 1);
+                    if valid_block_scalar_indicator(&line[indicator..]) {
+                        return true;
+                    }
+                }
+                _ => {}
+            },
+        }
+        cursor += 1;
+    }
+    false
+}
+
+fn skip_ascii_whitespace(bytes: &[u8], mut cursor: usize) -> usize {
+    while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+        cursor += 1;
+    }
+    cursor
+}
+
+fn valid_block_scalar_indicator(value: &str) -> bool {
+    let Some(marker) = value.as_bytes().first() else {
+        return false;
+    };
+    if !matches!(marker, b'|' | b'>') {
+        return false;
+    }
+    let modifiers = value[1..]
+        .split_once('#')
+        .map(|(before, _)| before)
+        .unwrap_or(&value[1..])
+        .trim();
+    if modifiers.len() > 2 {
+        return false;
+    }
+    let mut chomping = false;
+    let mut indentation = false;
+    for byte in modifiers.bytes() {
+        match byte {
+            b'+' | b'-' if !chomping => chomping = true,
+            b'1'..=b'9' if !indentation => indentation = true,
+            _ => return false,
+        }
+    }
+    true
+}
+
+fn replace_separator_tab(input: &mut String, marker: &saphyr_parser::Marker) -> bool {
+    let Some(line_start) = line_start_offset(input, marker.line()) else {
+        return false;
+    };
+    let line = &input[line_start..];
+    let column = marker.col();
+    if column < 2 {
+        return false;
+    }
+    let mut characters = line.char_indices();
+    let Some((colon_offset, ':')) = characters.nth(column - 2) else {
+        return false;
+    };
+    let Some((tab_offset, '\t')) = characters.next() else {
+        return false;
+    };
+    debug_assert!(tab_offset > colon_offset);
+    let tab_offset = line_start + tab_offset;
+    input.replace_range(tab_offset..tab_offset + 1, " ");
+    true
+}
+
+fn line_start_offset(value: &str, line_number: usize) -> Option<usize> {
+    if line_number == 0 {
+        return None;
+    }
+    let mut offset = 0;
+    for _ in 1..line_number {
+        offset += value[offset..].find('\n')? + 1;
+    }
+    Some(offset)
+}
+
+fn saphyr_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
+    match value {
+        Yaml::Value(Scalar::Null) => Ok(serde_yaml::Value::Null),
+        Yaml::Value(Scalar::Boolean(value)) => Ok(serde_yaml::Value::Bool(value)),
+        Yaml::Value(Scalar::Integer(value)) => {
+            Ok(serde_yaml::Value::Number(serde_yaml::Number::from(value)))
+        }
+        Yaml::Value(Scalar::FloatingPoint(value)) => Ok(serde_yaml::Value::Number(
+            serde_yaml::Number::from(value.into_inner()),
+        )),
+        Yaml::Value(Scalar::String(value)) => Ok(serde_yaml::Value::String(value.into_owned())),
+        Yaml::Sequence(sequence) => sequence
+            .into_iter()
+            .map(saphyr_to_serde)
+            .collect::<Result<Vec<_>, _>>()
+            .map(serde_yaml::Value::Sequence),
+        Yaml::Mapping(mapping) => {
+            let mut converted = serde_yaml::Mapping::new();
+            for (key, value) in mapping {
+                let key = saphyr_to_serde(key)?;
+                if !matches!(key, serde_yaml::Value::String(_)) {
+                    return Err("Frontmatter keys must be strings.".to_string());
+                }
+                converted.insert(key, saphyr_to_serde(value)?);
+            }
+            Ok(serde_yaml::Value::Mapping(converted))
+        }
+        Yaml::Representation(_, _, _) | Yaml::Tagged(_, _) => {
+            Err("Could not resolve YAML frontmatter scalar.".to_string())
+        }
+        Yaml::Alias(_) | Yaml::BadValue => {
+            Err("Frontmatter must not contain unresolved YAML aliases.".to_string())
+        }
+    }
 }
 
 fn has_only_string_mapping_keys(value: &serde_yaml::Value) -> bool {
@@ -1244,7 +1560,7 @@ mod tests {
 
     #[test]
     fn rejects_non_finite_frontmatter_numbers() {
-        for value in [".nan", ".inf", "-.inf"] {
+        for value in [".nan", ".inf", "-.inf", "1e400"] {
             let content = format!("---\nmetadata: [{value}]\n---\n# Bad\n");
             let parsed = parse_markdown_document("bad.md", content, "bad");
 
@@ -1255,6 +1571,74 @@ mod tests {
                 "Frontmatter numbers must be finite."
             );
         }
+    }
+
+    #[test]
+    fn matches_yaml_1_2_implicit_scalar_resolution() {
+        let parsed = parse_markdown_document(
+            "scalars.md",
+            "---\nzero: 00\ndecimal: 012\nbinary_like: 0b101\noversized: 18446744073709551616\nnel: \u{0085}\nseparator: \u{2028}\nquoted: \"x:\ty\"\nmultiline: \"x\n  z:\tw\"\nliteral: |\n  x:\ty\ntabbed:\tvalue\n---\n",
+            "scalars",
+        );
+        let frontmatter = parsed.frontmatter.as_ref().unwrap();
+
+        assert!(parsed.diagnostics.is_empty());
+        assert_eq!(
+            frontmatter.get("zero").and_then(serde_yaml::Value::as_i64),
+            Some(0)
+        );
+        assert_eq!(
+            frontmatter
+                .get("decimal")
+                .and_then(serde_yaml::Value::as_i64),
+            Some(12)
+        );
+        assert_eq!(
+            frontmatter
+                .get("binary_like")
+                .and_then(serde_yaml::Value::as_str),
+            Some("0b101")
+        );
+        assert_eq!(
+            frontmatter
+                .get("oversized")
+                .and_then(serde_yaml::Value::as_f64),
+            Some(18_446_744_073_709_552_000.0)
+        );
+        assert_eq!(
+            frontmatter.get("nel").and_then(serde_yaml::Value::as_str),
+            Some("\u{0085}")
+        );
+        assert_eq!(
+            frontmatter
+                .get("separator")
+                .and_then(serde_yaml::Value::as_str),
+            Some("\u{2028}")
+        );
+        assert_eq!(
+            frontmatter
+                .get("tabbed")
+                .and_then(serde_yaml::Value::as_str),
+            Some("value")
+        );
+        assert_eq!(
+            frontmatter
+                .get("quoted")
+                .and_then(serde_yaml::Value::as_str),
+            Some("x:\ty")
+        );
+        assert_eq!(
+            frontmatter
+                .get("literal")
+                .and_then(serde_yaml::Value::as_str),
+            Some("x:\ty\n")
+        );
+        assert!(
+            frontmatter
+                .get("multiline")
+                .and_then(serde_yaml::Value::as_str)
+                .is_some_and(|value| value.contains("z:\tw"))
+        );
     }
 
     #[test]
