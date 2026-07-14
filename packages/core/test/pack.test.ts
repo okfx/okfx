@@ -66,7 +66,7 @@ describe("packBundle", () => {
     }
   });
 
-  it("excludes dotenv secrets while retaining an example file", async () => {
+  it("excludes common credentials while retaining examples and public certificates", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-pack-secrets-"));
     const out = join(root, "..", "secrets.okf.tar.gz");
     try {
@@ -74,10 +74,20 @@ describe("packBundle", () => {
       await writeFile(join(root, ".env"), "TOKEN=secret\n", "utf8");
       await writeFile(join(root, ".env.local"), "TOKEN=local-secret\n", "utf8");
       await writeFile(join(root, ".env.example"), "TOKEN=\n", "utf8");
+      await writeFile(join(root, ".npmrc"), "//registry.example/:_authToken=secret\n", "utf8");
+      await mkdir(join(root, ".aws"));
+      await writeFile(join(root, ".aws/credentials"), "aws_secret_access_key=secret\n", "utf8");
+      await writeFile(join(root, "terraform.tfstate"), JSON.stringify({ secret: "value" }), "utf8");
+      await writeFile(join(root, "server.pem"), "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----\n", "utf8");
+      await writeFile(join(root, "certificate.pem"), "-----BEGIN CERTIFICATE-----\npublic\n-----END CERTIFICATE-----\n", "utf8");
 
       const result = await packBundle(root, { out });
 
-      expect(result.manifest.files.map((file) => file.path)).toEqual([".env.example", "concept.md"]);
+      expect(result.manifest.files.map((file) => file.path)).toEqual([
+        ".env.example",
+        "certificate.pem",
+        "concept.md"
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(out, { force: true });
