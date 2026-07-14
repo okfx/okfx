@@ -306,24 +306,19 @@ fn parse_links(
             cursor = open_bracket + 1;
             continue;
         }
-        let Some(close_bracket_relative) = line[open_bracket + 1..].find(']') else {
+        let Some(close_bracket) = find_unescaped_byte(bytes, open_bracket + 1, b']') else {
             break;
         };
-        let close_bracket = open_bracket + 1 + close_bracket_relative;
-        if !line[close_bracket + 1..].starts_with('(') {
+        if close_bracket == open_bracket + 1 || !line[close_bracket + 1..].starts_with('(') {
             cursor = close_bracket + 1;
             continue;
         }
         let target_start = close_bracket + 2;
-        let Some(close_paren_relative) = line[target_start..].find(')') else {
-            break;
+        let Some((target_end, close_paren)) = parse_link_destination(line, target_start) else {
+            cursor = close_bracket + 1;
+            continue;
         };
-        let close_paren = target_start + close_paren_relative;
-        let target_raw = line[target_start..close_paren]
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_string();
+        let target_raw = line[target_start..target_end].to_string();
         let text = line[open_bracket + 1..close_bracket].trim().to_string();
 
         links.push(Link {
@@ -349,6 +344,67 @@ fn parse_links(
     }
 
     links
+}
+
+fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usize)> {
+    let bytes = line.as_bytes();
+    let mut depth = 0;
+    let mut cursor = target_start;
+
+    while cursor < bytes.len() {
+        let character = line[cursor..].chars().next()?;
+        if character == '(' && !is_escaped_delimiter(bytes, cursor) {
+            depth += 1;
+        } else if character == ')' && !is_escaped_delimiter(bytes, cursor) {
+            if depth == 0 {
+                return (cursor > target_start).then_some((cursor, cursor));
+            }
+            depth -= 1;
+        } else if character.is_whitespace() {
+            if depth != 0 || cursor == target_start {
+                return None;
+            }
+            return parse_link_title(line, cursor, target_start);
+        }
+        cursor += character.len_utf8();
+    }
+
+    None
+}
+
+fn parse_link_title(line: &str, target_end: usize, target_start: usize) -> Option<(usize, usize)> {
+    let bytes = line.as_bytes();
+    let mut cursor = target_end;
+    while bytes
+        .get(cursor)
+        .is_some_and(|byte| matches!(*byte, b' ' | b'\t'))
+    {
+        cursor += 1;
+    }
+    let quote = *bytes.get(cursor)?;
+    if !matches!(quote, b'\'' | b'"') || target_end == target_start {
+        return None;
+    }
+
+    cursor += 1;
+    while cursor < bytes.len() {
+        if bytes[cursor] == quote && !is_escaped_delimiter(bytes, cursor) {
+            return (bytes.get(cursor + 1) == Some(&b')')).then_some((target_end, cursor + 1));
+        }
+        cursor += 1;
+    }
+
+    None
+}
+
+fn find_unescaped_byte(value: &[u8], start: usize, needle: u8) -> Option<usize> {
+    value[start..]
+        .iter()
+        .enumerate()
+        .find_map(|(offset, byte)| {
+            let index = start + offset;
+            (*byte == needle && !is_escaped_delimiter(value, index)).then_some(index)
+        })
 }
 
 fn classify_link_target(target: &str) -> LinkKind {
@@ -485,7 +541,7 @@ fn mask_inline_code(markdown: &str) -> String {
             break;
         };
         let opener = cursor + opener_relative;
-        if is_escaped_backtick(bytes, opener) {
+        if is_escaped_delimiter(bytes, opener) {
             cursor = opener + 1;
             continue;
         }
@@ -541,7 +597,7 @@ fn backtick_run_length(value: &[u8], start: usize) -> usize {
         .count()
 }
 
-fn is_escaped_backtick(value: &[u8], index: usize) -> bool {
+fn is_escaped_delimiter(value: &[u8], index: usize) -> bool {
     value[..index]
         .iter()
         .rev()
@@ -727,5 +783,28 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["visible.md", "also-visible.md"]
         );
+    }
+
+    #[test]
+    fn parses_balanced_and_escaped_parentheses_in_link_destinations() {
+        let parsed = parse_markdown_document(
+            "note.md",
+            "[Wiki](https://example.com/Foo_(bar))\n[Nested](docs/foo_(bar_(baz)).md \"A title\")\n[Escaped](docs/foo_\\(bar\\).md)\n[Broken](docs/foo_(bar.md)\n",
+            "note",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "https://example.com/Foo_(bar)",
+                "docs/foo_(bar_(baz)).md",
+                "docs/foo_\\(bar\\).md"
+            ]
+        );
+        assert_eq!(parsed.links[0].location.end.as_ref().unwrap().offset, 37);
     }
 }

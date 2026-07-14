@@ -62,25 +62,122 @@ function extractHeadings(bodyRaw: string, bodyStartOffset: number, bodyStartLine
 
 function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset: number, bodyStartLine: number): LinkIR[] {
   const links: LinkIR[] = [];
-  const linkPattern = /(?<!!)\[([^\]\n]+)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  let cursor = 0;
 
-  for (const match of bodyRaw.matchAll(linkPattern)) {
-    const targetRaw = match[2] ?? "";
-    const startOffset = match.index ?? 0;
+  while (cursor < bodyRaw.length) {
+    const startOffset = bodyRaw.indexOf("[", cursor);
+    if (startOffset === -1) {
+      break;
+    }
+    if (bodyRaw[startOffset - 1] === "!") {
+      cursor = startOffset + 1;
+      continue;
+    }
+
+    const labelEnd = findUnescaped(bodyRaw, "]", startOffset + 1, true);
+    if (labelEnd === -1 || labelEnd === startOffset + 1 || bodyRaw[labelEnd + 1] !== "(") {
+      cursor = startOffset + 1;
+      continue;
+    }
+    const destination = parseLinkDestination(bodyRaw, labelEnd + 2);
+    if (!destination) {
+      cursor = labelEnd + 1;
+      continue;
+    }
+
+    const targetRaw = bodyRaw.slice(labelEnd + 2, destination.targetEnd);
     links.push({
       sourceConceptId,
       targetRaw,
-      text: match[1]?.trim(),
+      text: bodyRaw.slice(startOffset + 1, labelEnd).trim(),
       kind: classifyLinkTarget(targetRaw),
       resolved: false,
       location: {
         start: locationFromOffset(bodyRaw, startOffset, bodyStartOffset, bodyStartLine),
-        end: locationFromOffset(bodyRaw, startOffset + match[0].length, bodyStartOffset, bodyStartLine)
+        end: locationFromOffset(bodyRaw, destination.closingParen + 1, bodyStartOffset, bodyStartLine)
       }
     });
+    cursor = destination.closingParen + 1;
   }
 
   return links;
+}
+
+function parseLinkDestination(
+  markdown: string,
+  targetStart: number
+): { targetEnd: number; closingParen: number } | undefined {
+  let depth = 0;
+  let cursor = targetStart;
+
+  while (cursor < markdown.length) {
+    const character = markdown[cursor];
+    if (character === "\r" || character === "\n") {
+      return undefined;
+    }
+    if (character === "(" && !isEscaped(markdown, cursor)) {
+      depth += 1;
+    } else if (character === ")" && !isEscaped(markdown, cursor)) {
+      if (depth === 0) {
+        return cursor === targetStart ? undefined : { targetEnd: cursor, closingParen: cursor };
+      }
+      depth -= 1;
+    } else if (/\s/u.test(character ?? "")) {
+      if (depth !== 0 || cursor === targetStart) {
+        return undefined;
+      }
+      return parseLinkTitle(markdown, cursor, targetStart);
+    }
+    cursor += 1;
+  }
+
+  return undefined;
+}
+
+function parseLinkTitle(
+  markdown: string,
+  targetEnd: number,
+  targetStart: number
+): { targetEnd: number; closingParen: number } | undefined {
+  let cursor = targetEnd;
+  while (cursor < markdown.length && /[ \t]/u.test(markdown[cursor] ?? "")) {
+    cursor += 1;
+  }
+  const quote = markdown[cursor];
+  if ((quote !== "\"" && quote !== "'") || targetEnd === targetStart) {
+    return undefined;
+  }
+
+  cursor += 1;
+  while (cursor < markdown.length) {
+    const character = markdown[cursor];
+    if (character === "\r" || character === "\n") {
+      return undefined;
+    }
+    if (character === quote && !isEscaped(markdown, cursor)) {
+      return markdown[cursor + 1] === ")"
+        ? { targetEnd, closingParen: cursor + 1 }
+        : undefined;
+    }
+    cursor += 1;
+  }
+
+  return undefined;
+}
+
+function findUnescaped(value: string, needle: string, start: number, stopAtLineEnd = false): number {
+  let cursor = start;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    if (stopAtLineEnd && (character === "\r" || character === "\n")) {
+      return -1;
+    }
+    if (character === needle && !isEscaped(value, cursor)) {
+      return cursor;
+    }
+    cursor += 1;
+  }
+  return -1;
 }
 
 export function slugifyHeading(title: string): string {

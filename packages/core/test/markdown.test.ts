@@ -56,4 +56,21 @@ describe("Markdown code fences", () => {
       "also-visible.md"
     ]);
   });
+
+  it("parses balanced and escaped parentheses in link destinations", () => {
+    const parsed = parseMarkdownDocument("concept.md", [
+      "[Wiki](https://example.com/Foo_(bar))",
+      "[Nested](docs/foo_(bar_(baz)).md \"A title\")",
+      "[Escaped](docs/foo_\\(bar\\).md)",
+      "[Broken](docs/foo_(bar.md)",
+      ""
+    ].join("\n"), "concept");
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual([
+      "https://example.com/Foo_(bar)",
+      "docs/foo_(bar_(baz)).md",
+      "docs/foo_\\(bar\\).md"
+    ]);
+    expect(parsed.links[0]?.location.end.offset).toBe(37);
+  });
 });
