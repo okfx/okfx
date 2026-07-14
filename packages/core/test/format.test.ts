@@ -77,6 +77,19 @@ usage: *summary
     expect(result.formatted).toContain("type: Note\ntitle: Example # keep title comment\ndescription: &summary Shared description # keep anchor comment\nusage: *summary");
   });
 
+  it("keeps anchor owners before aliases when lexical key order conflicts", () => {
+    const result = formatMarkdownFile("concept.md", `---
+z_anchor: &summary Shared description
+a_alias: *summary
+type: Note
+---
+# Example
+`);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.formatted).toContain("type: Note\nz_anchor: &summary Shared description\na_alias: *summary");
+  });
+
   it("preserves alias targets when anchor names are redefined", () => {
     const result = formatMarkdownFile("concept.md", `---
 z: &shared one

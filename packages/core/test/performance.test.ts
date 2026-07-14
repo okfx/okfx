@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildGraph, buildSearchIndex, diffBundles, lintBundle, loadBundle, parseMarkdownDocument, validateBundle } from "../src/index.js";
+import { buildGraph, buildSearchIndex, diffBundles, formatMarkdownFile, lintBundle, loadBundle, parseMarkdownDocument, validateBundle } from "../src/index.js";
 import { metricMissingSourceDiagnostics } from "../src/agent-rules.js";
 import type { BundleIR, ConceptIR } from "../src/types.js";
 
@@ -211,6 +211,23 @@ describe("performance baselines", () => {
     const elapsedMs = performance.now() - started;
 
     expect(result.diagnostics).toHaveLength(count);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
+
+  it("orders large frontmatter mappings without repeatedly sorting remaining keys", () => {
+    const keyCount = 8_000;
+    const frontmatter = Array.from(
+      { length: keyCount },
+      (_, index) => `key${(keyCount - index).toString().padStart(5, "0")}: value`
+    ).join("\n");
+    const content = `---\n${frontmatter}\n---\n# Body\n`;
+    const started = performance.now();
+
+    const result = formatMarkdownFile("large.md", content);
+    const elapsedMs = performance.now() - started;
+
+    expect(result.changed).toBe(true);
+    expect(result.formatted).toContain("key00001: value\nkey00002: value");
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
 });

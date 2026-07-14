@@ -130,7 +130,7 @@ export async function formatBundle(rootInput: string, options: FormatBundleOptio
 }
 
 function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
-  const entries = frontmatter.items.map((pair, index) => {
+  const entries: FrontmatterEntry[] = frontmatter.items.map((pair, index) => {
     const references = collectYamlReferences(pair);
     return {
       pair,
@@ -157,21 +157,107 @@ function orderFrontmatter(frontmatter: YAMLMap, keyOrder: string[]): void {
     }
   }
 
+  const dependencies = entries.map((entry) => new Set([...entry.aliases]
+    .map((alias) => anchorOwners.get(alias))
+    .filter((owner): owner is number => owner !== undefined && owner !== entry.index)));
+  const dependents = entries.map(() => [] as number[]);
+  const indegrees = dependencies.map((owners) => owners.size);
+  for (const [dependent, owners] of dependencies.entries()) {
+    for (const owner of owners) {
+      dependents[owner]!.push(dependent);
+    }
+  }
+
+  const compareEntries = (a: FrontmatterEntry, b: FrontmatterEntry) => compareFrontmatterEntries(a, b, keyOrder);
   const remaining = new Set(entries.map((entry) => entry.index));
+  const available: FrontmatterEntry[] = [];
+  const allEntries: FrontmatterEntry[] = [];
+  for (const entry of entries) {
+    heapPush(allEntries, entry, compareEntries);
+    if (indegrees[entry.index] === 0) {
+      heapPush(available, entry, compareEntries);
+    }
+  }
   const ordered: Pair[] = [];
   while (remaining.size > 0) {
-    const candidates = entries.filter((entry) => remaining.has(entry.index) && [...entry.aliases].every((alias) => {
-      const owner = anchorOwners.get(alias);
-      return owner === undefined || owner === entry.index || !remaining.has(owner);
-    }));
-    const next = (candidates.length > 0 ? candidates : entries.filter((entry) => remaining.has(entry.index)))
-      .sort((a, b) => compareFrontmatterEntries(a, b, keyOrder))[0];
+    const next = heapPopRemaining(available, remaining, compareEntries)
+      ?? heapPopRemaining(allEntries, remaining, compareEntries)!;
     ordered.push(next.pair);
     remaining.delete(next.index);
+    for (const dependent of dependents[next.index]!) {
+      if (!remaining.has(dependent)) {
+        continue;
+      }
+      indegrees[dependent] = indegrees[dependent]! - 1;
+      if (indegrees[dependent] === 0) {
+        heapPush(available, entries[dependent]!, compareEntries);
+      }
+    }
   }
   frontmatter.items = ordered;
 
   normalizeFrontmatterTimestamp(frontmatter);
+}
+
+interface FrontmatterEntry {
+  pair: Pair;
+  index: number;
+  key?: string;
+  anchors: string[];
+  aliases: Set<string>;
+}
+
+function heapPush<T>(heap: T[], value: T, compare: (a: T, b: T) => number): void {
+  heap.push(value);
+  let index = heap.length - 1;
+  while (index > 0) {
+    const parent = Math.floor((index - 1) / 2);
+    if (compare(heap[parent]!, value) <= 0) {
+      break;
+    }
+    heap[index] = heap[parent]!;
+    index = parent;
+  }
+  heap[index] = value;
+}
+
+function heapPopRemaining<T extends { index: number }>(
+  heap: T[],
+  remaining: ReadonlySet<number>,
+  compare: (a: T, b: T) => number
+): T | undefined {
+  while (heap.length > 0) {
+    const value = heapPop(heap, compare)!;
+    if (remaining.has(value.index)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function heapPop<T>(heap: T[], compare: (a: T, b: T) => number): T | undefined {
+  const first = heap[0];
+  const last = heap.pop();
+  if (first === undefined || last === undefined || heap.length === 0) {
+    return first;
+  }
+
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    if (left >= heap.length) {
+      break;
+    }
+    const right = left + 1;
+    const child = right < heap.length && compare(heap[right]!, heap[left]!) < 0 ? right : left;
+    if (compare(last, heap[child]!) <= 0) {
+      break;
+    }
+    heap[index] = heap[child]!;
+    index = child;
+  }
+  heap[index] = last;
+  return first;
 }
 
 function normalizeFrontmatterTimestamp(frontmatter: YAMLMap): void {
