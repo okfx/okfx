@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -129,6 +129,38 @@ describe("packBundle", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(out, { force: true });
+    }
+  });
+
+  it("refuses a symlinked metadata directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-metadata-link-"));
+    const external = await mkdtemp(join(tmpdir(), "okfx-pack-metadata-external-"));
+    const out = join(root, "bundle.okf.tar.gz");
+    try {
+      await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Example\n---\n# Example\n", "utf8");
+      await symlink(external, join(root, ".okfx"), process.platform === "win32" ? "junction" : "dir");
+
+      await expect(packBundle(root, { out })).rejects.toThrow("unsafe pack metadata directory");
+      await expect(stat(join(external, "manifest.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(external, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a symlinked archive target", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-archive-link-"));
+    const external = join(root, "external.tar.gz");
+    const out = join(root, "bundle.okf.tar.gz");
+    try {
+      await writeFile(join(root, "concept.md"), "---\ntype: Note\ntitle: Example\n---\n# Example\n", "utf8");
+      await writeFile(external, "sentinel", "utf8");
+      await symlink(external, out, "file");
+
+      await expect(packBundle(root, { out })).rejects.toThrow("unsafe pack archive");
+      expect(await readFile(external, "utf8")).toBe("sentinel");
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

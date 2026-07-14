@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -78,8 +79,13 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
   const conceptIdsByPath = new Map(bundle.concepts.map((concept) => [concept.path, concept.id]));
   const metadataDir = join(root, ".okfx");
   const stagingRoot = await mkdtemp(join(tmpdir(), "okfx-pack-"));
+  let archiveStagingDir: string | undefined;
 
   try {
+    await mkdir(dirname(out), { recursive: true });
+    await assertSafeFileTarget(out, "archive");
+    archiveStagingDir = await mkdtemp(join(dirname(out), ".okfx-pack-archive-"));
+    const stagedArchive = join(archiveStagingDir, basename(out));
     const manifestFiles = await Promise.all(files.map((path) => stagePackFile(
       root,
       stagingRoot,
@@ -116,18 +122,19 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
     await writePackMetadata(stagingMetadataDir, manifest, checksums, provenance);
 
     if (options.writeMetadata ?? true) {
-      await mkdir(metadataDir, { recursive: true });
+      await ensureSafeDirectory(metadataDir, "metadata directory");
       await writePackMetadata(metadataDir, manifest, checksums, provenance);
     }
 
-    await mkdir(dirname(out), { recursive: true });
     await tar.create({
       cwd: stagingRoot,
-      file: out,
+      file: stagedArchive,
       gzip: true,
       portable: true,
       noMtime: true
     }, [...files, ...metadataFiles]);
+    await assertSafeFileTarget(out, "archive");
+    await rename(stagedArchive, out);
 
     return {
       out,
@@ -138,6 +145,9 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
     };
   } finally {
     await rm(stagingRoot, { recursive: true, force: true });
+    if (archiveStagingDir) {
+      await rm(archiveStagingDir, { recursive: true, force: true });
+    }
   }
 }
 
@@ -167,10 +177,14 @@ async function writePackMetadata(
   checksums: ChecksumsIR,
   provenance: ProvenanceIR
 ): Promise<void> {
+  const entries = [
+    [join(directory, "manifest.json"), manifest],
+    [join(directory, "checksums.json"), checksums],
+    [join(directory, "provenance.json"), provenance]
+  ] as const;
+  await Promise.all(entries.map(([path]) => assertSafeFileTarget(path, "metadata file")));
   await Promise.all([
-    writeJson(join(directory, "manifest.json"), manifest),
-    writeJson(join(directory, "checksums.json"), checksums),
-    writeJson(join(directory, "provenance.json"), provenance)
+    ...entries.map(([path, value]) => writeJson(path, value))
   ]);
 }
 
@@ -198,7 +212,52 @@ function isSensitivePackFile(path: string): boolean {
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+  const handle = await open(
+    path,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | noFollow,
+    0o666
+  );
+  try {
+    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function ensureSafeDirectory(path: string, label: string): Promise<void> {
+  try {
+    const entry = await lstat(path);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw new Error(`Refusing to use unsafe pack ${label}: ${path}`);
+    }
+  } catch (error) {
+    if (!isFileSystemError(error, "ENOENT")) {
+      throw error;
+    }
+    await mkdir(path);
+    const entry = await lstat(path);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw new Error(`Refusing to use unsafe pack ${label}: ${path}`);
+    }
+  }
+}
+
+async function assertSafeFileTarget(path: string, label: string): Promise<void> {
+  try {
+    const entry = await lstat(path);
+    if (entry.isSymbolicLink() || !entry.isFile()) {
+      throw new Error(`Refusing to overwrite unsafe pack ${label}: ${path}`);
+    }
+  } catch (error) {
+    if (!isFileSystemError(error, "ENOENT")) {
+      throw error;
+    }
+  }
+}
+
+function isFileSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error && error.code === code;
 }
 
 async function gitSource(root: string): Promise<PackManifestIR["source"]> {
