@@ -65,4 +65,15 @@ describe("@okfx/cli command shell", () => {
     expect(output.stderr()).toContain("bad\\u001b]52;c;clipboard\\u0007\\u009b31m");
     expect(sanitizeTerminalOutput("line one\n\tline two")).toBe("line one\n\tline two");
   });
+
+  it("keeps command errors on one line before help output", async () => {
+    const output = capture();
+
+    const code = await main(["unknown\n::add-mask::secret"], output.io);
+
+    expect(code).toBe(1);
+    expect(output.stderr()).not.toContain("\n::add-mask::secret");
+    expect(output.stderr()).toContain("unknown\\n::add-mask::secret");
+    expect(output.stderr()).toContain("\n\nUsage: okf");
+  });
 });

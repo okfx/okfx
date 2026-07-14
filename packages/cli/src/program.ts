@@ -14,6 +14,7 @@ import { createLintCommand } from "./commands/lint.js";
 import { createMcpCommand } from "./commands/mcp.js";
 import { createPackCommand } from "./commands/pack.js";
 import { createValidateCommand } from "./commands/validate.js";
+import { terminalValue } from "./output.js";
 
 export interface CliIO {
   stdout: {
@@ -63,7 +64,8 @@ export function createProgram(context: CliContext, runtime: CliRuntime = default
     .exitOverride()
     .configureOutput({
       writeOut: (text) => context.io.stdout.write(text),
-      writeErr: (text) => context.io.stderr.write(text)
+      writeErr: (text) => context.io.stderr.write(text),
+      outputError: (text, write) => write(formatCommanderError(text))
     });
 
   for (const [name, description] of plannedCommands) {
@@ -132,13 +134,19 @@ export async function runProgram(
     }
 
     if (error instanceof InvalidArgumentError) {
-      safeIo.stderr.write(`${error.message}\n`);
+      safeIo.stderr.write(`${terminalValue(error.message)}\n`);
       return 2;
     }
 
-    safeIo.stderr.write(error instanceof Error ? `${error.message}\n` : "unknown error\n");
+    safeIo.stderr.write(error instanceof Error ? `${terminalValue(error.message)}\n` : "unknown error\n");
     return 2;
   }
+}
+
+function formatCommanderError(text: string): string {
+  const hasTrailingLineBreak = /[\r\n]$/u.test(text);
+  const body = text.replace(/[\r\n]+$/u, "");
+  return `${terminalValue(body)}${hasTrailingLineBreak ? "\n" : ""}`;
 }
 
 export function sanitizeTerminalOutput(text: string): string {
