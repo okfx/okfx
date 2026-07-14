@@ -1175,10 +1175,7 @@ fn frontmatter_without_resources(raw: &str) -> String {
     {
         let resource_keys = mapping
             .keys()
-            .filter(|key| {
-                key.as_str()
-                    .is_some_and(|key| key.eq_ignore_ascii_case("resource"))
-            })
+            .filter(|key| key.as_str().is_some_and(|key| key == "resource"))
             .cloned()
             .collect::<Vec<_>>();
         for key in resource_keys {
@@ -1194,7 +1191,7 @@ fn frontmatter_without_resources(raw: &str) -> String {
 
     for line in logical_lines(raw) {
         if let Some(key) = top_level_frontmatter_key(line) {
-            inside_resource = key.eq_ignore_ascii_case("resource");
+            inside_resource = key == "resource";
         }
         if !inside_resource {
             frontmatter_lines.push(line);
@@ -1783,6 +1780,23 @@ mod tests {
             vec!["flow.md", "quoted.md"]
         );
         assert!(paths_for("security/internal-url").is_empty());
+    }
+
+    #[test]
+    fn scans_case_variant_resource_keys_as_regular_frontmatter() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("case-variant")
+                    .with_frontmatter("type: Note\nResource: http://localhost/private"),
+            ],
+            ..RuleInput::default()
+        });
+
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "security/internal-url")
+        );
     }
 
     #[test]

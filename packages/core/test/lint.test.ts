@@ -312,6 +312,17 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("scans case-variant resource keys as regular frontmatter", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\nResource: http://localhost/private\n---\n# Concept\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code))
+        .toContain("security/internal-url");
+    });
+  });
+
   it("classifies private IP ranges without treating numeric-looking domains as private", async () => {
     await withBundle({
       "concept.md": `---
