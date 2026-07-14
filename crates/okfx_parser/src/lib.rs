@@ -610,7 +610,9 @@ fn plain_text(markdown: &str) -> String {
         let heading_text = parse_atx_heading(&without_links)
             .map(|(_, title)| title)
             .unwrap_or(without_links);
-        let stripped = heading_text.replace(['*', '_', '~', '`', '>', '-'], " ");
+        let stripped = heading_text
+            .replace('`', "")
+            .replace(['*', '_', '~', '>', '-'], " ");
         text.push_str(&stripped);
         text.push(' ');
     }
@@ -1270,6 +1272,15 @@ mod tests {
         );
 
         assert_eq!(parsed.body.text, "Wiki Code");
+    }
+
+    #[test]
+    fn removes_unmatched_backticks_without_splitting_plain_text() {
+        let parsed =
+            parse_markdown_document("note.md", "foo`bar \\`[Visible](visible.md)`\n", "note");
+
+        assert_eq!(parsed.body.text, "foobar \\Visible");
+        assert_eq!(parsed.links.len(), 1);
     }
 
     #[test]
