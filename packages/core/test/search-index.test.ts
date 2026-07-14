@@ -42,4 +42,8 @@ Counts active users.
   it("measures minimum term length in Unicode code points", () => {
     expect(tokenizeSearchText("中 中国 𐐀 𐐀𐐁")).toEqual(["中国", "𐐨𐐩"]);
   });
+
+  it("returns terms in deterministic code-point order", () => {
+    expect(tokenizeSearchText("zulu alpha beta alpha")).toEqual(["alpha", "beta", "zulu"]);
+  });
 });

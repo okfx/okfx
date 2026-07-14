@@ -81,5 +81,6 @@ export function tokenizeSearchText(value: string): string[] {
     .toLowerCase()
     .split(/[^\p{L}\p{N}_-]+/u)
     .map((term) => term.trim())
-    .filter((term) => [...term].length >= 2))];
+    .filter((term) => [...term].length >= 2))]
+    .sort(compareStrings);
 }
