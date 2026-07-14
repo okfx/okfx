@@ -269,6 +269,29 @@ describe("parseMarkdownDocument", () => {
     });
   });
 
+  it("rejects exponential YAML alias expansion", () => {
+    const aliases = (levels: number): string => {
+      const names = ["a", "b", "c", "d"];
+      const lines = ["---", "a: &a [x,x,x,x,x]"];
+      for (let level = 1; level <= levels; level += 1) {
+        const alias = `*${names[level - 1]}`;
+        lines.push(`${names[level]}: &${names[level]} [${Array(5).fill(alias).join(",")}]`);
+      }
+      lines.push(`root: *${names[levels]}`, "---");
+      return lines.join("\n");
+    };
+
+    const accepted = parseMarkdownDocument("concepts/aliases.md", aliases(2), "concepts/aliases");
+    const rejected = parseMarkdownDocument("concepts/aliases.md", aliases(3), "concepts/aliases");
+
+    expect(accepted.diagnostics).toEqual([]);
+    expect(rejected.frontmatter).toBeUndefined();
+    expect(rejected.diagnostics[0]).toMatchObject({
+      code: "spec/invalid-frontmatter",
+      message: "Excessive alias count indicates a resource exhaustion attack"
+    });
+  });
+
   it.each(["1: one", "[a, b]: sequence", "metadata: {1: one}", "metadata: !!omap [{1: one}]"])(
     "rejects non-string frontmatter key %j",
     (entry) => {

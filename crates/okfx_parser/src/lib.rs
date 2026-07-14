@@ -10,7 +10,10 @@ use std::sync::LazyLock;
 pub const CRATE_NAME: &str = "okfx_parser";
 const MAX_LINK_DESTINATION_NESTING: usize = 64;
 const MAX_YAML_COLLECTION_NESTING: usize = 200;
+const MAX_YAML_ALIAS_EXPANSION: usize = 100;
 const YAML_NESTING_ERROR: &str = "Frontmatter must not contain more than 200 nested collections.";
+const YAML_ALIAS_EXPANSION_ERROR: &str =
+    "Excessive alias count indicates a resource exhaustion attack";
 static EXPLICIT_FLOAT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+|[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*))$",
@@ -287,17 +290,34 @@ enum TaggedYamlNode<'input> {
     BadValue,
 }
 
+#[derive(Clone)]
+struct LoadedYamlNode<'input> {
+    value: TaggedYamlNode<'input>,
+    alias_sources: BTreeSet<usize>,
+    has_scalar: bool,
+}
+
+struct YamlAnchor<'input> {
+    loaded: LoadedYamlNode<'input>,
+    count: usize,
+    alias_count: usize,
+}
+
 enum TaggedYamlContainer<'input> {
     Sequence {
         values: Vec<TaggedYamlNode<'input>>,
         tag: Option<Cow<'input, Tag>>,
         anchor: usize,
+        alias_sources: BTreeSet<usize>,
+        has_scalar: bool,
     },
     Mapping {
         entries: Vec<(TaggedYamlNode<'input>, TaggedYamlNode<'input>)>,
         pending_key: Option<TaggedYamlNode<'input>>,
         tag: Option<Cow<'input, Tag>>,
         anchor: usize,
+        alias_sources: BTreeSet<usize>,
+        has_scalar: bool,
     },
 }
 
@@ -305,30 +325,61 @@ enum TaggedYamlContainer<'input> {
 struct TaggedYamlLoader<'input> {
     documents: Vec<TaggedYamlNode<'input>>,
     stack: Vec<TaggedYamlContainer<'input>>,
-    root: Option<TaggedYamlNode<'input>>,
-    anchors: BTreeMap<usize, TaggedYamlNode<'input>>,
+    root: Option<LoadedYamlNode<'input>>,
+    anchors: BTreeMap<usize, YamlAnchor<'input>>,
     error: Option<String>,
 }
 
 impl<'input> TaggedYamlLoader<'input> {
-    fn insert(&mut self, node: TaggedYamlNode<'input>, anchor: usize) {
+    fn insert(&mut self, loaded: LoadedYamlNode<'input>, anchor: usize) {
         if anchor > 0 {
-            self.anchors.insert(anchor, node.clone());
+            self.anchors.insert(
+                anchor,
+                YamlAnchor {
+                    loaded: loaded.clone(),
+                    count: 1,
+                    alias_count: 0,
+                },
+            );
         }
+        let LoadedYamlNode {
+            value,
+            alias_sources,
+            has_scalar,
+        } = loaded;
         match self.stack.last_mut() {
-            Some(TaggedYamlContainer::Sequence { values, .. }) => values.push(node),
+            Some(TaggedYamlContainer::Sequence {
+                values,
+                alias_sources: sources,
+                has_scalar: contains_scalar,
+                ..
+            }) => {
+                sources.extend(alias_sources);
+                *contains_scalar |= has_scalar;
+                values.push(value);
+            }
             Some(TaggedYamlContainer::Mapping {
                 entries,
                 pending_key,
+                alias_sources: sources,
+                has_scalar: contains_scalar,
                 ..
             }) => {
+                sources.extend(alias_sources);
+                *contains_scalar |= has_scalar;
                 if let Some(key) = pending_key.take() {
-                    entries.push((key, node));
+                    entries.push((key, value));
                 } else {
-                    *pending_key = Some(node);
+                    *pending_key = Some(value);
                 }
             }
-            None if self.root.is_none() => self.root = Some(node),
+            None if self.root.is_none() => {
+                self.root = Some(LoadedYamlNode {
+                    value,
+                    alias_sources,
+                    has_scalar,
+                });
+            }
             None => {
                 self.error.get_or_insert_with(|| {
                     "Frontmatter contains multiple YAML roots in one document.".to_string()
@@ -337,18 +388,85 @@ impl<'input> TaggedYamlLoader<'input> {
         };
     }
 
+    fn alias_count(&self, loaded: &LoadedYamlNode<'input>) -> usize {
+        let mut count = usize::from(loaded.has_scalar);
+        for source in &loaded.alias_sources {
+            if let Some(anchor) = self.anchors.get(source) {
+                count = count.max(anchor.count.saturating_mul(anchor.alias_count));
+            }
+        }
+        count
+    }
+
+    fn insert_alias(&mut self, anchor: usize) {
+        let Some(existing) = self.anchors.get(&anchor) else {
+            self.insert(
+                LoadedYamlNode {
+                    value: TaggedYamlNode::BadValue,
+                    alias_sources: BTreeSet::new(),
+                    has_scalar: false,
+                },
+                0,
+            );
+            return;
+        };
+        let alias_count = if existing.alias_count == 0 {
+            self.alias_count(&existing.loaded)
+        } else {
+            existing.alias_count
+        };
+        let excessive = {
+            let existing = self.anchors.get_mut(&anchor).expect("anchor still exists");
+            existing.count = existing.count.saturating_add(1);
+            if existing.alias_count == 0 {
+                existing.alias_count = alias_count;
+            }
+            existing.count.saturating_mul(existing.alias_count) > MAX_YAML_ALIAS_EXPANSION
+        };
+        if excessive {
+            self.error
+                .get_or_insert_with(|| YAML_ALIAS_EXPANSION_ERROR.to_string());
+            return;
+        }
+
+        let value = self
+            .anchors
+            .get(&anchor)
+            .expect("anchor still exists")
+            .loaded
+            .value
+            .clone();
+        self.insert(
+            LoadedYamlNode {
+                value,
+                alias_sources: BTreeSet::from([anchor]),
+                has_scalar: false,
+            },
+            0,
+        );
+    }
+
     fn close_sequence(&mut self) {
         let Some(TaggedYamlContainer::Sequence {
             values,
             tag,
             anchor,
+            alias_sources,
+            has_scalar,
         }) = self.stack.pop()
         else {
             self.error
                 .get_or_insert_with(|| "Unexpected YAML sequence terminator.".to_string());
             return;
         };
-        self.insert(TaggedYamlNode::Sequence(values, tag), anchor);
+        self.insert(
+            LoadedYamlNode {
+                value: TaggedYamlNode::Sequence(values, tag),
+                alias_sources,
+                has_scalar,
+            },
+            anchor,
+        );
     }
 
     fn close_mapping(&mut self) {
@@ -357,6 +475,8 @@ impl<'input> TaggedYamlLoader<'input> {
             pending_key,
             tag,
             anchor,
+            alias_sources,
+            has_scalar,
         }) = self.stack.pop()
         else {
             self.error
@@ -367,7 +487,14 @@ impl<'input> TaggedYamlLoader<'input> {
             self.error
                 .get_or_insert_with(|| "YAML mapping is missing a value.".to_string());
         }
-        self.insert(TaggedYamlNode::Mapping(entries, tag), anchor);
+        self.insert(
+            LoadedYamlNode {
+                value: TaggedYamlNode::Mapping(entries, tag),
+                alias_sources,
+                has_scalar,
+            },
+            anchor,
+        );
     }
 
     fn finish(self) -> Result<Vec<TaggedYamlNode<'input>>, String> {
@@ -383,6 +510,9 @@ impl<'input> TaggedYamlLoader<'input> {
 
 impl<'input> EventReceiver<'input> for TaggedYamlLoader<'input> {
     fn on_event(&mut self, event: Event<'input>) {
+        if self.error.is_some() {
+            return;
+        }
         match event {
             Event::DocumentStart(_) => {
                 self.root = None;
@@ -394,17 +524,30 @@ impl<'input> EventReceiver<'input> for TaggedYamlLoader<'input> {
                         "YAML frontmatter ended before the document was complete.".to_string()
                     });
                 }
-                self.documents
-                    .push(self.root.take().unwrap_or(TaggedYamlNode::BadValue));
+                self.documents.push(
+                    self.root
+                        .take()
+                        .map(|loaded| loaded.value)
+                        .unwrap_or(TaggedYamlNode::BadValue),
+                );
             }
             Event::Scalar(value, style, anchor, tag) => {
-                self.insert(TaggedYamlNode::Scalar(value, style, tag), anchor);
+                self.insert(
+                    LoadedYamlNode {
+                        value: TaggedYamlNode::Scalar(value, style, tag),
+                        alias_sources: BTreeSet::new(),
+                        has_scalar: true,
+                    },
+                    anchor,
+                );
             }
             Event::SequenceStart(anchor, tag) => {
                 self.stack.push(TaggedYamlContainer::Sequence {
                     values: Vec::new(),
                     tag,
                     anchor,
+                    alias_sources: BTreeSet::new(),
+                    has_scalar: false,
                 });
             }
             Event::SequenceEnd => self.close_sequence(),
@@ -414,17 +557,12 @@ impl<'input> EventReceiver<'input> for TaggedYamlLoader<'input> {
                     pending_key: None,
                     tag,
                     anchor,
+                    alias_sources: BTreeSet::new(),
+                    has_scalar: false,
                 });
             }
             Event::MappingEnd => self.close_mapping(),
-            Event::Alias(anchor) => {
-                let node = self
-                    .anchors
-                    .get(&anchor)
-                    .cloned()
-                    .unwrap_or(TaggedYamlNode::BadValue);
-                self.insert(node, 0);
-            }
+            Event::Alias(anchor) => self.insert_alias(anchor),
             Event::Nothing | Event::StreamStart | Event::StreamEnd => {}
         }
     }
@@ -2019,6 +2157,31 @@ mod tests {
 
         assert!(parsed.frontmatter.is_none());
         assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+    }
+
+    #[test]
+    fn rejects_excessive_yaml_alias_expansion() {
+        fn aliases(levels: usize) -> String {
+            let names = ['a', 'b', 'c', 'd'];
+            let mut lines = vec!["---".to_string(), "a: &a [x,x,x,x,x]".to_string()];
+            for level in 1..=levels {
+                let aliases = vec![format!("*{}", names[level - 1]); 5].join(",");
+                lines.push(format!("{}: &{} [{aliases}]", names[level], names[level]));
+            }
+            lines.push(format!("root: *{}", names[levels]));
+            lines.push("---".to_string());
+            lines.join("\n")
+        }
+
+        assert!(
+            parse_markdown_document("aliases.md", aliases(2), "aliases")
+                .diagnostics
+                .is_empty()
+        );
+        let parsed = parse_markdown_document("aliases.md", aliases(3), "aliases");
+        assert!(parsed.frontmatter.is_none());
+        assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+        assert_eq!(parsed.diagnostics[0].message, YAML_ALIAS_EXPANSION_ERROR);
     }
 
     #[test]
