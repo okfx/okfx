@@ -45,4 +45,25 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(bare, bare.indexOf("bare.md"))).toBe("docs/bare.md");
     expect(markdownTargetAt(enclosed, enclosed.indexOf("a b"))).toBe("docs/a b.md");
   });
+
+  it("ignores destination-like text without a matching link label", () => {
+    const line = "Plain text](not-a-link.md) and \\[Escaped](also-not.md)";
+
+    expect(markdownTargetAt(line, line.indexOf("not-a-link"))).toBeUndefined();
+    expect(markdownTargetAt(line, line.indexOf("also-not"))).toBeUndefined();
+  });
+
+  it("falls back past destination-like text inside a valid target", () => {
+    const line = "[Outer](docs/foo](bar).md)";
+
+    expect(markdownTargetAt(line, line.indexOf("bar"))).toBe("docs/foo](bar).md");
+    expect(markdownTargetAt(line, line.indexOf(".md"))).toBe("docs/foo](bar).md");
+  });
+
+  it("recognizes image labels nested inside links", () => {
+    const line = "[![Diagram](diagram.png)](guide.md)";
+
+    expect(markdownTargetAt(line, line.indexOf("diagram.png"))).toBe("diagram.png");
+    expect(markdownTargetAt(line, line.indexOf("guide.md"))).toBe("guide.md");
+  });
 });

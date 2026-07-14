@@ -1,16 +1,43 @@
 export function markdownTargetAt(line: string, character: number): string | undefined {
   const cursor = Math.max(0, Math.min(character, line.length));
-  const linkStart = line.slice(0, cursor).lastIndexOf("](");
-  if (linkStart === -1) {
-    return undefined;
+  let searchFrom = cursor - 1;
+  while (searchFrom >= 0) {
+    const linkStart = line.lastIndexOf("](", searchFrom);
+    if (linkStart === -1) {
+      return undefined;
+    }
+    searchFrom = linkStart - 1;
+    if (!hasLinkLabel(line, linkStart)) {
+      continue;
+    }
+
+    const targetStart = linkStart + 2;
+    const destination = parseDestination(line, targetStart);
+    if (!destination || cursor < targetStart || cursor > destination.closingParen) {
+      continue;
+    }
+    return line.slice(destination.targetStart, destination.targetEnd);
   }
 
-  const targetStart = linkStart + 2;
-  const destination = parseDestination(line, targetStart);
-  if (!destination || cursor < targetStart || cursor > destination.closingParen) {
-    return undefined;
+  return undefined;
+}
+
+function hasLinkLabel(line: string, closingBracket: number): boolean {
+  let nestedBrackets = 0;
+  for (let cursor = closingBracket - 1; cursor >= 0; cursor -= 1) {
+    if (isEscaped(line, cursor)) {
+      continue;
+    }
+    if (line[cursor] === "]") {
+      nestedBrackets += 1;
+    } else if (line[cursor] === "[") {
+      if (nestedBrackets === 0) {
+        return true;
+      }
+      nestedBrackets -= 1;
+    }
   }
-  return line.slice(destination.targetStart, destination.targetEnd);
+  return false;
 }
 
 function parseDestination(
