@@ -167,6 +167,36 @@ impl CacheStore {
 
     pub fn lookup(&self, key: &CacheKey) -> Result<CacheLookup, CacheError> {
         let path = self.cache_path(key)?;
+        let Some(parent) = path.parent() else {
+            return Ok(CacheLookup::Miss(CacheMiss::Missing));
+        };
+        match validate_directory_chain(&self.directory_root, parent) {
+            Ok(true) => {}
+            Ok(false) => return Ok(CacheLookup::Miss(CacheMiss::Missing)),
+            Err(error) => {
+                return Err(CacheError::Io {
+                    path: parent.to_path_buf(),
+                    message: error.to_string(),
+                });
+            }
+        }
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+                return Ok(CacheLookup::Miss(CacheMiss::Invalid {
+                    message: "cache entry is not a regular file".to_string(),
+                }));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {
+                return Ok(CacheLookup::Miss(CacheMiss::Missing));
+            }
+            Err(error) => {
+                return Err(CacheError::Io {
+                    path,
+                    message: error.to_string(),
+                });
+            }
+        }
         let content = match fs::read_to_string(&path) {
             Ok(content) => content,
             Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -233,6 +263,19 @@ impl CacheStore {
 
     pub fn remove_entry(&self, key: &CacheKey) -> Result<bool, CacheError> {
         let path = self.cache_path(key)?;
+        let Some(parent) = path.parent() else {
+            return Ok(false);
+        };
+        match validate_directory_chain(&self.directory_root, parent) {
+            Ok(true) => {}
+            Ok(false) => return Ok(false),
+            Err(error) => {
+                return Err(CacheError::Io {
+                    path: parent.to_path_buf(),
+                    message: error.to_string(),
+                });
+            }
+        }
         match fs::remove_file(&path) {
             Ok(()) => Ok(true),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
@@ -295,6 +338,62 @@ fn ensure_directory_chain(root: &Path, target: &Path) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+fn validate_directory_chain(root: &Path, target: &Path) -> io::Result<bool> {
+    match fs::metadata(root) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Ok(_) => {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "cache directory root is not a directory: {}",
+                    root.display()
+                ),
+            ));
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    }
+
+    let relative = target.strip_prefix(root).map_err(|_| {
+        io::Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "cache directory {} is outside root {}",
+                target.display(),
+                root.display()
+            ),
+        )
+    })?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let std::path::Component::Normal(segment) = component else {
+            return Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "cache directory contains an invalid component: {}",
+                    target.display()
+                ),
+            ));
+        };
+        current.push(segment);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!(
+                        "cache directory is not a real directory: {}",
+                        current.display()
+                    ),
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(true)
 }
 
 fn write_cache_file(path: &Path, content: &[u8]) -> io::Result<()> {
@@ -548,6 +647,42 @@ mod tests {
             Err(CacheError::Io { .. })
         ));
         assert!(!outside.join("cache").exists());
+
+        fs::remove_file(root.join(".okfx")).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refuses_to_read_or_remove_entries_through_directory_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_root("symlink-read");
+        let outside = temp_root("symlink-read-outside");
+        let store = CacheStore::new(&root);
+        let key = sample_key("sha256:outside");
+        let outside_entry = outside.join(
+            store
+                .cache_path(&key)
+                .unwrap()
+                .strip_prefix(root.join(".okfx"))
+                .unwrap(),
+        );
+        fs::create_dir_all(outside_entry.parent().unwrap()).unwrap();
+        fs::write(
+            &outside_entry,
+            serde_json::to_vec(&CacheEntry::new(key.clone(), sample_output())).unwrap(),
+        )
+        .unwrap();
+        symlink(&outside, root.join(".okfx")).unwrap();
+
+        assert!(matches!(store.lookup(&key), Err(CacheError::Io { .. })));
+        assert!(matches!(
+            store.remove_entry(&key),
+            Err(CacheError::Io { .. })
+        ));
+        assert!(outside_entry.exists());
 
         fs::remove_file(root.join(".okfx")).unwrap();
         fs::remove_dir_all(root).unwrap();
