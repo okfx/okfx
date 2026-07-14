@@ -200,9 +200,33 @@ describe("native wrapper", () => {
           level: 1,
           title: "Bad",
           slug: "bad",
+          location: { start: { line: 2, column: 1, offset: 0 } }
+        }]
+      }
+    }))).toThrow("outside the input");
+    expect(() => parseWith(parsedDocument({
+      body: {
+        raw: "input",
+        text: "",
+        headings: [{
+          level: 1,
+          title: "Bad",
+          slug: "bad",
+          location: { start: { line: 1, column: 2, offset: 0 } }
+        }]
+      }
+    }))).toThrow("offset inconsistent");
+    expect(() => parseWith(parsedDocument({
+      body: {
+        raw: "input",
+        text: "",
+        headings: [{
+          level: 1,
+          title: "Bad",
+          slug: "bad",
           location: {
-            start: { line: 2, column: 1, offset: 2 },
-            end: { line: 1, column: 1, offset: 1 }
+            start: { line: 1, column: 2, offset: 1 },
+            end: { line: 1, column: 1, offset: 0 }
           }
         }]
       }

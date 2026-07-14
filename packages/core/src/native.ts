@@ -439,10 +439,13 @@ function normalizeParsedDocument(
     throw new TypeError(`Binding returned parsed document path "${returnedPath}" for "${fallbackPath}".`);
   }
   const body = requiredRecord(document.body, "parsed document body");
-  const headings = requiredArray(body.headings, "parsed document headings").map(normalizeHeading);
-  const links = requiredArray(document.links, "parsed document links").map((link) => normalizeLink(link, fallbackSourceConceptId));
+  const bounds = sourceBounds(content);
+  const headings = requiredArray(body.headings, "parsed document headings")
+    .map((heading) => normalizeHeading(heading, bounds));
+  const links = requiredArray(document.links, "parsed document links")
+    .map((link) => normalizeLink(link, fallbackSourceConceptId, bounds));
   const diagnostics = requiredArray(document.diagnostics, "parsed document diagnostics")
-    .map((diagnostic) => normalizeDiagnostic(diagnostic, fallbackPath));
+    .map((diagnostic) => normalizeDiagnostic(diagnostic, fallbackPath, bounds));
   const frontmatter = document.frontmatter === null || document.frontmatter === undefined
     ? undefined
     : requiredRecord(document.frontmatter, "parsed document frontmatter");
@@ -533,17 +536,17 @@ function normalizeFormatDiagnostic(value: unknown): FormatAcceleratedResult["dia
   };
 }
 
-function normalizeHeading(value: unknown): HeadingIR {
+function normalizeHeading(value: unknown, bounds: SourceBounds): HeadingIR {
   const heading = requiredRecord(value, "heading");
   return {
     level: requiredInteger(heading.level, "heading level", 1, 6),
     title: requiredString(heading.title, "heading title"),
     slug: requiredString(heading.slug, "heading slug"),
-    location: normalizeRange(heading.location)
+    location: normalizeRange(heading.location, bounds)
   };
 }
 
-function normalizeLink(value: unknown, fallbackSourceConceptId: string): LinkIR {
+function normalizeLink(value: unknown, fallbackSourceConceptId: string, bounds: SourceBounds): LinkIR {
   const link = requiredRecord(value, "link");
   const returnedSourceConceptId = optionalStrictString(
     field(link, "sourceConceptId", "source_concept_id"),
@@ -568,11 +571,11 @@ function normalizeLink(value: unknown, fallbackSourceConceptId: string): LinkIR 
     text: optionalStrictString(link.text, "link text"),
     kind,
     resolved: requiredBoolean(link.resolved, "link resolved state"),
-    location: normalizeRange(link.location)
+    location: normalizeRange(link.location, bounds)
   };
 }
 
-function normalizeDiagnostic(value: unknown, fallbackPath: string): DiagnosticIR {
+function normalizeDiagnostic(value: unknown, fallbackPath: string, bounds: SourceBounds): DiagnosticIR {
   const diagnostic = requiredRecord(value, "diagnostic");
   const returnedPath = optionalStrictString(diagnostic.path, "diagnostic path");
   if (returnedPath !== undefined && returnedPath !== fallbackPath) {
@@ -593,14 +596,16 @@ function normalizeDiagnostic(value: unknown, fallbackPath: string): DiagnosticIR
     ),
     location: diagnostic.location === null || diagnostic.location === undefined
       ? undefined
-      : normalizeRange(diagnostic.location)
+      : normalizeRange(diagnostic.location, bounds)
   };
 }
 
-function normalizeRange(value: unknown): SourceRangeIR {
+function normalizeRange(value: unknown, bounds: SourceBounds): SourceRangeIR {
   const range = requiredRecord(value, "source range");
-  const start = normalizeLocation(range.start);
-  const end = range.end === null || range.end === undefined ? undefined : normalizeLocation(range.end);
+  const start = normalizeLocation(range.start, bounds);
+  const end = range.end === null || range.end === undefined
+    ? undefined
+    : normalizeLocation(range.end, bounds);
   if (
     end
     && (
@@ -613,13 +618,44 @@ function normalizeRange(value: unknown): SourceRangeIR {
   return { start, end };
 }
 
-function normalizeLocation(value: unknown): SourceLocationIR {
+function normalizeLocation(value: unknown, bounds: SourceBounds): SourceLocationIR {
   const location = requiredRecord(value, "source location");
-  return {
-    line: requiredInteger(location.line, "source line", 1),
-    column: requiredInteger(location.column, "source column", 1),
-    offset: optionalInteger(location.offset, "source offset", 0)
-  };
+  const line = requiredInteger(location.line, "source line", 1);
+  const column = requiredInteger(location.column, "source column", 1);
+  const offset = optionalInteger(location.offset, "source offset", 0);
+  const lineBounds = bounds.lines[line - 1];
+  if (!lineBounds || column > lineBounds.end - lineBounds.start + 1) {
+    throw new TypeError("Binding returned a source location outside the input.");
+  }
+  if (offset !== undefined && offset !== lineBounds.start + column - 1) {
+    throw new TypeError("Binding returned a source offset inconsistent with its line and column.");
+  }
+  return { line, column, offset };
+}
+
+interface SourceBounds {
+  lines: Array<{ start: number; end: number }>;
+}
+
+function sourceBounds(content: string): SourceBounds {
+  const lines: SourceBounds["lines"] = [];
+  let lineStart = 0;
+  let cursor = 0;
+  while (cursor < content.length) {
+    if (content[cursor] !== "\r" && content[cursor] !== "\n") {
+      cursor += 1;
+      continue;
+    }
+    lines.push({ start: lineStart, end: cursor });
+    if (content[cursor] === "\r" && content[cursor + 1] === "\n") {
+      cursor += 2;
+    } else {
+      cursor += 1;
+    }
+    lineStart = cursor;
+  }
+  lines.push({ start: lineStart, end: content.length });
+  return { lines };
 }
 
 function locationPrecedes(left: SourceLocationIR, right: SourceLocationIR): boolean {
