@@ -21,6 +21,7 @@ export function markdownTargetAtDocument(
 export function markdownTargetAt(line: string, character: number): string | undefined {
   const cursor = Math.max(0, Math.min(character, line.length));
   const searchableLine = maskInlineCode(line);
+  const labelStarts = matchingLinkLabelStarts(searchableLine);
   let searchFrom = cursor - 1;
   while (searchFrom >= 0) {
     const linkStart = searchableLine.lastIndexOf("](", searchFrom);
@@ -28,7 +29,7 @@ export function markdownTargetAt(line: string, character: number): string | unde
       return undefined;
     }
     searchFrom = linkStart - 1;
-    const labelStart = findLinkLabelStart(searchableLine, linkStart);
+    const labelStart = labelStarts.get(linkStart);
     if (labelStart === undefined
       || (searchableLine[labelStart - 1] === "!" && !isEscaped(searchableLine, labelStart - 1))
       || linkLabelContainsLink(searchableLine, labelStart + 1, linkStart)) {
@@ -150,22 +151,24 @@ function isClosingFence(line: string, fence: { marker: "`" | "~"; length: number
   return Boolean(match && match[1]![0] === fence.marker && match[1]!.length >= fence.length);
 }
 
-function findLinkLabelStart(line: string, closingBracket: number): number | undefined {
-  let nestedBrackets = 0;
-  for (let cursor = closingBracket - 1; cursor >= 0; cursor -= 1) {
-    if (isEscaped(line, cursor)) {
+function matchingLinkLabelStarts(line: string): Map<number, number> {
+  const starts: number[] = [];
+  const matchingStarts = new Map<number, number>();
+  for (let cursor = 0; cursor < line.length; cursor += 1) {
+    const character = line[cursor];
+    if ((character !== "[" && character !== "]") || isEscaped(line, cursor)) {
       continue;
     }
-    if (line[cursor] === "]") {
-      nestedBrackets += 1;
-    } else if (line[cursor] === "[") {
-      if (nestedBrackets === 0) {
-        return cursor;
+    if (character === "[") {
+      starts.push(cursor);
+    } else {
+      const start = starts.pop();
+      if (start !== undefined) {
+        matchingStarts.set(cursor, start);
       }
-      nestedBrackets -= 1;
     }
   }
-  return undefined;
+  return matchingStarts;
 }
 
 function linkLabelContainsLink(line: string, start: number, end: number): boolean {

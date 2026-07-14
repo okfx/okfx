@@ -104,6 +104,14 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.length)).toBeUndefined();
     expect(performance.now() - started).toBeLessThan(1000);
   }, 5000);
+
+  it("indexes link label brackets for malformed candidate-heavy lines", () => {
+    const line = `${"](".repeat(20_000)}x`;
+    const started = performance.now();
+
+    expect(markdownTargetAt(line, line.length)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(1000);
+  }, 5000);
 });
 
 describe("resolveDefinitionTarget", () => {
