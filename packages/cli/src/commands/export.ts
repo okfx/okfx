@@ -11,6 +11,7 @@ import {
   resolveGeneratedFiles,
   writeGeneratedFile
 } from "../generated-files.js";
+import { terminalValue } from "../output.js";
 import type { CliContext } from "../program.js";
 
 type ExportTarget = "static-site";
@@ -49,9 +50,9 @@ export function createExportCommand(context: CliContext): Command {
           await inspectGeneratedPath(out, file.relativePath);
           await writeGeneratedFile(file.path, file.content, options.force);
         }
-        context.io.stdout.write(`Exported ${files.length} ${target} files to ${out}\n`);
+        context.io.stdout.write(`Exported ${files.length} ${terminalValue(target)} files to ${terminalValue(out)}\n`);
         for (const file of files) {
-          context.io.stdout.write(`  ${file.path}\n`);
+          context.io.stdout.write(`  ${terminalValue(file.path)}\n`);
         }
         return;
       }

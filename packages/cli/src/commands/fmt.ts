@@ -4,7 +4,7 @@ import { Command } from "commander";
 
 import { formatBundle, type FormatBundleResult } from "@okfx/core";
 
-import { formatDiagnosticGroups, parseOutputFormat, writeOutput, type CliOutputFormat } from "../output.js";
+import { formatDiagnosticGroups, parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";
 
 export function createFmtCommand(context: CliContext): Command {
@@ -41,7 +41,7 @@ function formatFmt(result: FormatBundleResult, root: string, format: CliOutputFo
     ? result.changed ? "OKF format check failed" : "OKF format check passed"
     : result.changed ? "OKF files formatted" : "OKF files already formatted";
   const changedList = changed.length > 0
-    ? `\nChanged files:\n${changed.map((path) => `  ${path}`).join("\n")}\n`
+    ? `\nChanged files:\n${changed.map((path) => `  ${terminalValue(path)}`).join("\n")}\n`
     : "";
   const diagnostics = result.diagnostics.length > 0
     ? `\n${formatDiagnosticGroups(result.diagnostics)}\n`
@@ -50,7 +50,7 @@ function formatFmt(result: FormatBundleResult, root: string, format: CliOutputFo
   return `${status}
 
 Bundle:
-  root: ${root}
+  root: ${terminalValue(root)}
   files: ${result.files.length}
   changed: ${changed.length}
 ${changedList}${diagnostics}`;

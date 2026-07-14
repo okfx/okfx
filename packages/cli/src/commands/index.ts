@@ -10,7 +10,7 @@ import {
   resolveGeneratedFiles,
   writeGeneratedFile
 } from "../generated-files.js";
-import { parseOutputFormat, writeOutput, type CliOutputFormat } from "../output.js";
+import { parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";
 
 type IndexMode = "full-text" | "vector" | "hybrid";
@@ -82,7 +82,7 @@ function formatIndex(index: SearchIndexIR, outDir: string, format: CliOutputForm
   return `OKF search index built
 
 Index:
-  ${join(outDir, "index.json")}
+  ${terminalValue(join(outDir, "index.json"))}
 
 Documents:
   ${index.documents.length}

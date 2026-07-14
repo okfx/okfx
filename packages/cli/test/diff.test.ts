@@ -78,6 +78,21 @@ describe("okf diff", () => {
     expect(output.stdout()).toContain("No semantic changes");
   });
 
+  it("keeps pretty diff fields on their structural lines", async () => {
+    const before = await tempRoot();
+    const after = await tempRoot();
+    const key = "line\\n::warning::injected";
+    await write(before, "concept.md", `---\ntype: Note\ntitle: Same\n"${key}": before\n---\n# Same\n`);
+    await write(after, "concept.md", `---\ntype: Note\ntitle: Same\n"${key}": after\n---\n# Same\n`);
+    const output = capture();
+
+    const code = await main(["diff", before, after], output.io);
+
+    expect(code).toBe(1);
+    expect(output.stdout()).not.toContain("\n::warning::injected");
+    expect(output.stdout()).toContain("line\\n::warning::injected changed");
+  });
+
   it("writes markdown output", async () => {
     const before = await tempRoot();
     const after = await tempRoot();

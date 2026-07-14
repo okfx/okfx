@@ -16,6 +16,7 @@ import {
   writeGeneratedFile,
   type GeneratedFile
 } from "../generated-files.js";
+import { terminalValue } from "../output.js";
 import type { CliContext } from "../program.js";
 
 type ImportAdapter = "markdown" | "openapi" | "dbt" | "datahub" | "bigquery";
@@ -52,9 +53,9 @@ export function createImportCommand(context: CliContext): Command {
           await writeGeneratedFile(file.path, file.content, options.force);
         }
 
-        context.io.stdout.write(`Generated ${files.length} OKF files in ${out}\n`);
+        context.io.stdout.write(`Generated ${files.length} OKF files in ${terminalValue(out)}\n`);
         for (const file of files) {
-          context.io.stdout.write(`  ${file.path}\n`);
+          context.io.stdout.write(`  ${terminalValue(file.path)}\n`);
         }
         return;
       }

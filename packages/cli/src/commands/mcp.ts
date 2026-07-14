@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { loadConfig } from "@okfx/core";
 import { getOkfMcpTools, OKF_MCP_PROMPTS, startStdioServer } from "@okfx/mcp";
 
+import { terminalValue } from "../output.js";
 import type { CliContext } from "../program.js";
 
 export function createMcpCommand(context: CliContext): Command {
@@ -30,7 +31,7 @@ export function createMcpCommand(context: CliContext): Command {
         return;
       }
 
-      context.io.stderr.write(`Starting OKF MCP server for ${root}\n`);
+      context.io.stderr.write(`Starting OKF MCP server for ${terminalValue(root)}\n`);
       await startStdioServer({ root, readonly, config });
     });
 }

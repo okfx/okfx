@@ -6,6 +6,7 @@ import { InvalidArgumentError, Command } from "commander";
 
 import { generationTimestamp } from "@okfx/plugin-api";
 
+import { terminalValue } from "../output.js";
 import type { CliContext, CliRuntime } from "../program.js";
 
 type InitTemplate = "minimal" | "data-platform" | "api-catalog" | "metrics";
@@ -41,9 +42,9 @@ export function createInitCommand(context: CliContext, runtime: CliRuntime): Com
         await writeTemplateFile(path, file.content, options.force);
       }
 
-      context.io.stdout.write(`Created OKF bundle at ${root}\n`);
+      context.io.stdout.write(`Created OKF bundle at ${terminalValue(root)}\n`);
       for (const file of files) {
-        context.io.stdout.write(`  ${file.path}\n`);
+        context.io.stdout.write(`  ${terminalValue(file.path)}\n`);
       }
     });
 }

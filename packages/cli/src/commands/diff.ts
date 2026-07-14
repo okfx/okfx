@@ -4,7 +4,7 @@ import { Command, InvalidArgumentError } from "commander";
 
 import { diffBundles, loadBundle, type BundleDiffIR } from "@okfx/core";
 
-import { writeOutput } from "../output.js";
+import { terminalValue, writeOutput } from "../output.js";
 import type { CliContext } from "../program.js";
 
 type DiffFormat = "pretty" | "json" | "markdown";
@@ -91,7 +91,7 @@ function section(title: string, values: string[], marker: string): string {
     return `${title}:\n  none\n`;
   }
 
-  return `${title}:\n${values.map((value) => `  ${marker} ${value}`).join("\n")}\n`;
+  return `${title}:\n${values.map((value) => `  ${marker} ${terminalValue(value)}`).join("\n")}\n`;
 }
 
 function renameSection(diff: BundleDiffIR): string {
@@ -99,7 +99,7 @@ function renameSection(diff: BundleDiffIR): string {
     return "Renamed concepts:\n  none\n";
   }
 
-  return `Renamed concepts:\n${diff.renamedConcepts.map((entry) => `  ~ ${entry.from} -> ${entry.to}`).join("\n")}\n`;
+  return `Renamed concepts:\n${diff.renamedConcepts.map((entry) => `  ~ ${terminalValue(entry.from)} -> ${terminalValue(entry.to)}`).join("\n")}\n`;
 }
 
 function changedSection(diff: BundleDiffIR): string {
@@ -107,7 +107,7 @@ function changedSection(diff: BundleDiffIR): string {
     return "Changed concepts:\n  none\n";
   }
 
-  return `Changed concepts:\n${diff.changedConcepts.map((concept) => `  ~ ${concept.id}\n${concept.changes.map((change) => `    ${change}`).join("\n")}`).join("\n")}\n`;
+  return `Changed concepts:\n${diff.changedConcepts.map((concept) => `  ~ ${terminalValue(concept.id)}\n${concept.changes.map((change) => `    ${terminalValue(change)}`).join("\n")}`).join("\n")}\n`;
 }
 
 function readinessSection(diff: BundleDiffIR): string {
@@ -147,7 +147,7 @@ function formatDelta(delta: number): string {
 }
 
 function markdownCode(value: string): string {
-  const visibleValue = value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+  const visibleValue = terminalValue(value);
   let longestFence = 0;
   for (const match of visibleValue.matchAll(/`+/g)) {
     longestFence = Math.max(longestFence, match[0].length);

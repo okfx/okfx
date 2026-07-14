@@ -9,7 +9,7 @@ import {
   type ValidationResult
 } from "@okfx/core";
 
-import { formatDiagnosticGroups, parseOutputFormat, writeOutput, type CliOutputFormat } from "../output.js";
+import { formatDiagnosticGroups, parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";
 
 export function createValidateCommand(context: CliContext): Command {
@@ -48,7 +48,7 @@ function formatValidation(result: ValidationResult, bundle: BundleIR, format: Cl
     return `OKF validation passed
 
 Bundle:
-  root: ${bundle.root}
+  root: ${terminalValue(bundle.root)}
   files: ${bundle.stats.fileCount}
   concepts: ${bundle.stats.conceptCount}
   diagnostics: ${result.diagnostics.length}

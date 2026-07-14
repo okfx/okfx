@@ -12,7 +12,7 @@ import {
   type ResolvedOkfxConfig
 } from "@okfx/core";
 
-import { formatDiagnostic, parseOutputFormat, writeOutput, type CliOutputFormat } from "../output.js";
+import { formatDiagnostic, parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";
 
 export function createDoctorCommand(context: CliContext): Command {
@@ -62,7 +62,7 @@ function formatDoctor(
   return `OKF Doctor
 
 Bundle:
-  root: ${bundle.root}
+  root: ${terminalValue(bundle.root)}
   concepts: ${result.summary.conceptCount}
   links: ${result.summary.linkCount}
   broken links: ${result.summary.brokenLinkCount}

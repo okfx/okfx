@@ -15,7 +15,7 @@ import {
   type ResolvedOkfxConfig
 } from "@okfx/core";
 
-import { formatDiagnosticGroups, writeOutput } from "../output.js";
+import { formatDiagnosticGroups, terminalValue, writeOutput } from "../output.js";
 import type { CliContext } from "../program.js";
 
 type LintFormat = "pretty" | "json" | "sarif";
@@ -104,7 +104,7 @@ function formatLint(
   return `${status}
 
 Bundle:
-  root: ${bundle.root}
+  root: ${terminalValue(bundle.root)}
   files: ${bundle.stats.fileCount}
   concepts: ${bundle.stats.conceptCount}
   failOn: ${config.failOn}
@@ -186,13 +186,13 @@ function formatDebug(input: {
 }): string {
   const trace = input.trace
     ? `  diagnostics:
-${input.result.diagnostics.map((diagnostic) => `    - ${diagnostic.code} ${diagnostic.path ?? "(bundle)"}`).join("\n")}
+${input.result.diagnostics.map((diagnostic) => `    - ${terminalValue(diagnostic.code)} ${terminalValue(diagnostic.path ?? "(bundle)")}`).join("\n")}
 `
     : "";
 
   return `okfx debug:
-  root: ${input.root}
-  config: ${input.config.configPath ?? "(default)"}
+  root: ${terminalValue(input.root)}
+  config: ${terminalValue(input.config.configPath ?? "(default)")}
   filesScanned: ${input.loaded.stats.fileCount}
   conceptsParsed: ${input.loaded.stats.conceptCount}
   rulesExecuted: built-in
@@ -208,7 +208,7 @@ function formatPluginSummary(result: LintResult): string {
   }
 
   return result.plugins
-    .map((plugin) => `${plugin.name}${plugin.version ? `@${plugin.version}` : ""} (${plugin.source}, ${plugin.ruleCount} rules)`)
+    .map((plugin) => `${terminalValue(plugin.name)}${plugin.version ? `@${terminalValue(plugin.version)}` : ""} (${terminalValue(plugin.source)}, ${plugin.ruleCount} rules)`)
     .join(", ");
 }
 

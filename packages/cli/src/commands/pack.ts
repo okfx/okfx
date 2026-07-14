@@ -4,7 +4,7 @@ import { Command } from "commander";
 
 import { packBundle, type PackResult } from "@okfx/core";
 
-import { parseOutputFormat, writeOutput, type CliOutputFormat } from "../output.js";
+import { parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";
 
 export function createPackCommand(context: CliContext): Command {
@@ -43,15 +43,15 @@ function formatPack(result: PackResult, format: CliOutputFormat): string {
   return `OKF bundle packed
 
 Archive:
-  ${result.out}
+  ${terminalValue(result.out)}
 
 Metadata:
-  ${result.metadataDir}/manifest.json
-  ${result.metadataDir}/checksums.json
-  ${result.metadataDir}/provenance.json
+  ${terminalValue(result.metadataDir)}/manifest.json
+  ${terminalValue(result.metadataDir)}/checksums.json
+  ${terminalValue(result.metadataDir)}/provenance.json
 
 Bundle:
-  name: ${result.manifest.bundle_name}
+  name: ${terminalValue(result.manifest.bundle_name)}
   concepts: ${result.manifest.concept_count}
   files: ${result.manifest.file_count}
   content hash: sha256:${result.manifest.content_hash}
