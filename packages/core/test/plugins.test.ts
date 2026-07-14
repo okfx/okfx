@@ -89,4 +89,23 @@ describe("loadConfiguredPlugins", () => {
       });
     });
   });
+
+  it("preserves plugin rules whose ids match object prototype properties", async () => {
+    await withRoot(async (root) => {
+      await write(root, "okfx.config.ts", "export default {};\n");
+      await write(root, "prototype-plugin.ts", `
+const rule = { run: () => [] };
+export default {
+  name: "prototype-plugin",
+  rules: Object.fromEntries([["constructor", rule], ["__proto__", rule]])
+};
+`);
+      const config = resolveConfig({ plugins: ["./prototype-plugin.ts"] }, join(root, "okfx.config.ts"));
+
+      const result = await loadConfiguredPlugins(root, config);
+
+      expect(result.diagnostics).toEqual([]);
+      expect(Object.keys(result.plugins[0]?.rules ?? {}).sort()).toEqual(["__proto__", "constructor"]);
+    });
+  });
 });

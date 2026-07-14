@@ -114,7 +114,7 @@ function normalizePluginRules(rules: unknown): Record<string, OkfxRuntimeRule> {
     return {};
   }
 
-  const normalized: Record<string, OkfxRuntimeRule> = {};
+  const normalized = Object.create(null) as Record<string, OkfxRuntimeRule>;
   for (const [id, rule] of Object.entries(rules)) {
     if (isRecord(rule) && typeof rule.run === "function") {
       normalized[id] = rule as unknown as OkfxRuntimeRule;

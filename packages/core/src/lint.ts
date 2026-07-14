@@ -305,7 +305,7 @@ const builtInLintRules: BuiltInRule[] = [
 ];
 
 function runRule(rule: BuiltInRule, context: RuleContext): DiagnosticIR[] {
-  const severity = resolveRuleLevel(context.config.rules[rule.id], rule.defaultSeverity);
+  const severity = resolveRuleLevel(configuredRule(context.config, rule.id), rule.defaultSeverity);
   if (severity === "off") {
     return [];
   }
@@ -318,7 +318,7 @@ function runRule(rule: BuiltInRule, context: RuleContext): DiagnosticIR[] {
 
 function configuredValidationDiagnostics(bundle: BundleIR, config: ResolvedOkfxConfig): DiagnosticIR[] {
   return validateBundle(bundle).diagnostics.flatMap((diagnostic) => {
-    const severity = resolveRuleLevel(config.rules[diagnostic.code], diagnostic.severity);
+    const severity = resolveRuleLevel(configuredRule(config, diagnostic.code), diagnostic.severity);
     return severity === "off" ? [] : [{ ...diagnostic, severity }];
   });
 }
@@ -328,12 +328,12 @@ async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext)
 
   for (const plugin of plugins) {
     for (const [ruleId, rule] of Object.entries(plugin.rules)) {
-      if (resolveRuleLevel(context.config.rules[ruleId], "warning") === "off") {
+      if (resolveRuleLevel(configuredRule(context.config, ruleId), "warning") === "off") {
         continue;
       }
 
       try {
-        const severity = resolveRuleLevel(context.config.rules[ruleId], pluginRuleDefaultSeverity(rule));
+        const severity = resolveRuleLevel(configuredRule(context.config, ruleId), pluginRuleDefaultSeverity(rule));
         if (severity === "off") {
           continue;
         }
@@ -362,6 +362,10 @@ async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext)
   }
 
   return diagnostics;
+}
+
+function configuredRule(config: ResolvedOkfxConfig, ruleId: string) {
+  return Object.hasOwn(config.rules, ruleId) ? config.rules[ruleId] : undefined;
 }
 
 function pluginRuleDefaultSeverity(rule: LoadedOkfxPlugin["rules"][string]): DiagnosticSeverity {

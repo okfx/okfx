@@ -410,4 +410,33 @@ resource:
       ]));
     });
   });
+
+  it("runs plugin rules whose ids match object prototype properties", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    }, async (root) => {
+      const rules = Object.fromEntries(["constructor", "__proto__"].map((id) => [id, {
+        run: () => [{ message: `Rule ${id} ran.` }]
+      }]));
+      const result = await lintBundleWithPlugins(
+        await loadBundle(root, { loadConfigFile: false }),
+        {
+          plugins: [{
+            name: "prototype-rules",
+            source: "inline",
+            options: {},
+            rules
+          }]
+        }
+      );
+
+      expect(result.diagnostics
+        .filter((diagnostic) => diagnostic.code === "constructor" || diagnostic.code === "__proto__")
+        .map((diagnostic) => ({ code: diagnostic.code, severity: diagnostic.severity })))
+        .toEqual([
+          { code: "__proto__", severity: "warning" },
+          { code: "constructor", severity: "warning" }
+        ]);
+    });
+  });
 });
