@@ -2,13 +2,16 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs;
-use std::io::ErrorKind;
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub const CRATE_NAME: &str = "okfx_cache";
 pub const CACHE_SCHEMA_VERSION: u8 = 1;
 pub const DEFAULT_CACHE_DIR: &str = ".okfx/cache";
+
+static NEXT_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CacheKey {
@@ -214,7 +217,7 @@ impl CacheStore {
         let content = serde_json::to_vec_pretty(entry).map_err(|error| CacheError::Encode {
             message: error.to_string(),
         })?;
-        fs::write(&path, content).map_err(|error| CacheError::Io {
+        write_cache_file(&path, &content).map_err(|error| CacheError::Io {
             path: path.clone(),
             message: error.to_string(),
         })?;
@@ -231,6 +234,74 @@ impl CacheStore {
                 message: error.to_string(),
             }),
         }
+    }
+}
+
+fn write_cache_file(path: &Path, content: &[u8]) -> io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(
+            ErrorKind::InvalidInput,
+            format!("cache path has no parent: {}", path.display()),
+        )
+    })?;
+    let (temporary_path, mut temporary_file) = create_temporary_file(parent)?;
+
+    let result = (|| {
+        temporary_file.write_all(content)?;
+        temporary_file.flush()?;
+        drop(temporary_file);
+        replace_cache_file(&temporary_path, path)
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    result
+}
+
+fn create_temporary_file(parent: &Path) -> io::Result<(PathBuf, File)> {
+    for _ in 0..100 {
+        let id = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        let path = parent.join(format!(".okfx-cache-{}-{id}.tmp", std::process::id()));
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(io::Error::new(
+        ErrorKind::AlreadyExists,
+        "could not allocate a unique cache temporary file",
+    ))
+}
+
+#[cfg(not(windows))]
+fn replace_cache_file(temporary_path: &Path, path: &Path) -> io::Result<()> {
+    fs::rename(temporary_path, path)
+}
+
+#[cfg(windows)]
+fn replace_cache_file(temporary_path: &Path, path: &Path) -> io::Result<()> {
+    match fs::rename(temporary_path, path) {
+        Ok(()) => Ok(()),
+        Err(rename_error)
+            if rename_error.kind() == ErrorKind::AlreadyExists
+                || rename_error.kind() == ErrorKind::PermissionDenied =>
+        {
+            match fs::symlink_metadata(path) {
+                Ok(metadata)
+                    if metadata.file_type().is_file() || metadata.file_type().is_symlink() =>
+                {
+                    fs::remove_file(path)?;
+                }
+                Ok(_) => return Err(rename_error),
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+            fs::rename(temporary_path, path)
+        }
+        Err(error) => Err(error),
     }
 }
 
@@ -368,6 +439,35 @@ mod tests {
             store.lookup(&other_key).unwrap(),
             CacheLookup::Miss(CacheMiss::Invalid { .. })
         ));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaces_cache_entry_symlinks_without_overwriting_their_targets() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_root("symlink-entry");
+        let store = CacheStore::new(&root);
+        let key = sample_key("sha256:symlink");
+        let entry = CacheEntry::new(key.clone(), sample_output());
+        let path = store.cache_path(&key).unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let target = root.join("outside.json");
+        fs::write(&target, b"do not overwrite").unwrap();
+        symlink(&target, &path).unwrap();
+
+        store.write_entry(&entry).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), b"do not overwrite");
+        assert!(
+            !fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(store.read_entry(&key).unwrap(), Some(entry));
 
         fs::remove_dir_all(root).unwrap();
     }
