@@ -191,6 +191,33 @@ module.exports = binding;
     })).toThrow("Unsupported format diagnostic severity");
   });
 
+  it("does not accept native result fields inherited from Object.prototype", () => {
+    const inheritedFields = {
+      formatted: "original",
+      changed: false,
+      diagnostics: []
+    };
+    for (const [key, value] of Object.entries(inheritedFields)) {
+      Object.defineProperty(Object.prototype, key, {
+        configurable: true,
+        value,
+        writable: true
+      });
+    }
+
+    try {
+      expect(() => formatMarkdownFileAccelerated("native.md", "original", {}, {
+        binding: {
+          formatMarkdownDocumentJson: () => "{}"
+        }
+      })).toThrow("format result.formatted");
+    } finally {
+      for (const key of Object.keys(inheritedFields)) {
+        delete (Object.prototype as Record<string, unknown>)[key];
+      }
+    }
+  });
+
   it("rejects inconsistent parsed document identities, hashes, and locations", () => {
     const parsedDocument = (overrides: Record<string, unknown> = {}) => ({
       path: "native.md",

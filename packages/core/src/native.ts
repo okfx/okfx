@@ -445,21 +445,22 @@ function normalizeParsedDocument(
   content: string
 ): ParsedMarkdownDocument {
   const document = requiredRecord(value, "parsed document");
-  const returnedPath = optionalStrictString(document.path, "parsed document path");
+  const returnedPath = optionalStrictString(ownValue(document, "path"), "parsed document path");
   if (returnedPath !== undefined && returnedPath !== fallbackPath) {
     throw new TypeError(`Binding returned parsed document path "${returnedPath}" for "${fallbackPath}".`);
   }
-  const body = requiredRecord(document.body, "parsed document body");
+  const body = requiredRecord(ownValue(document, "body"), "parsed document body");
   const bounds = sourceBounds(content);
-  const headings = requiredArray(body.headings, "parsed document headings")
+  const headings = requiredArray(ownValue(body, "headings"), "parsed document headings")
     .map((heading) => normalizeHeading(heading, bounds));
-  const links = requiredArray(document.links, "parsed document links")
+  const links = requiredArray(ownValue(document, "links"), "parsed document links")
     .map((link) => normalizeLink(link, fallbackSourceConceptId, bounds));
-  const diagnostics = requiredArray(document.diagnostics, "parsed document diagnostics")
+  const diagnostics = requiredArray(ownValue(document, "diagnostics"), "parsed document diagnostics")
     .map((diagnostic) => normalizeDiagnostic(diagnostic, fallbackPath, bounds));
-  const frontmatter = document.frontmatter === null || document.frontmatter === undefined
+  const configuredFrontmatter = ownValue(document, "frontmatter");
+  const frontmatter = configuredFrontmatter === null || configuredFrontmatter === undefined
     ? undefined
-    : requiredRecord(document.frontmatter, "parsed document frontmatter");
+    : requiredRecord(configuredFrontmatter, "parsed document frontmatter");
   const returnedContentHash = requiredString(
     field(document, "contentHash", "content_hash"),
     "parsed document content hash"
@@ -468,7 +469,7 @@ function normalizeParsedDocument(
     field(document, "frontmatterRaw", "frontmatter_raw"),
     "parsed document frontmatter raw"
   );
-  const bodyRaw = requiredString(body.raw, "parsed document body.raw");
+  const bodyRaw = requiredString(ownValue(body, "raw"), "parsed document body.raw");
   const expectedContentHash = contentHash(content);
   if (returnedContentHash !== expectedContentHash) {
     throw new TypeError("Binding returned parsed document content hash that does not match the input.");
@@ -481,7 +482,7 @@ function normalizeParsedDocument(
     frontmatterRaw,
     body: {
       raw: bodyRaw,
-      text: requiredString(body.text, "parsed document body.text"),
+      text: requiredString(ownValue(body, "text"), "parsed document body.text"),
       headings
     },
     links,
@@ -519,8 +520,8 @@ function assertParsedContentSlices(
 
 function normalizeFormatResult(value: unknown, originalContent: string): FormatAcceleratedResult {
   const result = requiredRecord(value, "format result");
-  const formatted = requiredString(result.formatted, "format result.formatted");
-  const changed = requiredBoolean(result.changed, "format result.changed");
+  const formatted = requiredString(ownValue(result, "formatted"), "format result.formatted");
+  const changed = requiredBoolean(ownValue(result, "changed"), "format result.changed");
   if (changed !== (formatted !== originalContent)) {
     throw new TypeError("Binding returned inconsistent format result.changed.");
   }
@@ -528,21 +529,21 @@ function normalizeFormatResult(value: unknown, originalContent: string): FormatA
   return {
     formatted,
     changed,
-    diagnostics: requiredArray(result.diagnostics, "format result diagnostics")
+    diagnostics: requiredArray(ownValue(result, "diagnostics"), "format result diagnostics")
       .map(normalizeFormatDiagnostic)
   };
 }
 
 function normalizeFormatDiagnostic(value: unknown): FormatAcceleratedResult["diagnostics"][number] {
   const diagnostic = requiredRecord(value, "format diagnostic");
-  const severity = optionalStrictString(diagnostic.severity, "format diagnostic severity");
+  const severity = optionalStrictString(ownValue(diagnostic, "severity"), "format diagnostic severity");
   if (severity !== undefined && !isDiagnosticSeverity(severity)) {
     throw new TypeError(`Unsupported format diagnostic severity from binding: ${severity}`);
   }
   return {
-    code: requiredString(diagnostic.code, "format diagnostic code"),
-    message: requiredString(diagnostic.message, "format diagnostic message"),
-    path: optionalStrictString(diagnostic.path, "format diagnostic path"),
+    code: requiredString(ownValue(diagnostic, "code"), "format diagnostic code"),
+    message: requiredString(ownValue(diagnostic, "message"), "format diagnostic message"),
+    path: optionalStrictString(ownValue(diagnostic, "path"), "format diagnostic path"),
     severity
   };
 }
@@ -550,10 +551,10 @@ function normalizeFormatDiagnostic(value: unknown): FormatAcceleratedResult["dia
 function normalizeHeading(value: unknown, bounds: SourceBounds): HeadingIR {
   const heading = requiredRecord(value, "heading");
   return {
-    level: requiredInteger(heading.level, "heading level", 1, 6),
-    title: requiredString(heading.title, "heading title"),
-    slug: requiredString(heading.slug, "heading slug"),
-    location: normalizeRange(heading.location, bounds)
+    level: requiredInteger(ownValue(heading, "level"), "heading level", 1, 6),
+    title: requiredString(ownValue(heading, "title"), "heading title"),
+    slug: requiredString(ownValue(heading, "slug"), "heading slug"),
+    location: normalizeRange(ownValue(heading, "location"), bounds)
   };
 }
 
@@ -568,7 +569,7 @@ function normalizeLink(value: unknown, fallbackSourceConceptId: string, bounds: 
       `Binding returned link source concept ID "${returnedSourceConceptId}" for "${fallbackSourceConceptId}".`
     );
   }
-  const kind = requiredString(link.kind, "link kind");
+  const kind = requiredString(ownValue(link, "kind"), "link kind");
   if (!isLinkKind(kind)) {
     throw new TypeError(`Unsupported link kind from binding: ${kind}`);
   }
@@ -579,44 +580,45 @@ function normalizeLink(value: unknown, fallbackSourceConceptId: string, bounds: 
       field(link, "targetConceptId", "target_concept_id"),
       "link target concept ID"
     ),
-    text: optionalStrictString(link.text, "link text"),
+    text: optionalStrictString(ownValue(link, "text"), "link text"),
     kind,
-    resolved: requiredBoolean(link.resolved, "link resolved state"),
-    location: normalizeRange(link.location, bounds)
+    resolved: requiredBoolean(ownValue(link, "resolved"), "link resolved state"),
+    location: normalizeRange(ownValue(link, "location"), bounds)
   };
 }
 
 function normalizeDiagnostic(value: unknown, fallbackPath: string, bounds: SourceBounds): DiagnosticIR {
   const diagnostic = requiredRecord(value, "diagnostic");
-  const returnedPath = optionalStrictString(diagnostic.path, "diagnostic path");
+  const returnedPath = optionalStrictString(ownValue(diagnostic, "path"), "diagnostic path");
   if (returnedPath !== undefined && returnedPath !== fallbackPath) {
     throw new TypeError(`Binding returned diagnostic path "${returnedPath}" for "${fallbackPath}".`);
   }
-  const severity = requiredString(diagnostic.severity, "diagnostic severity");
+  const severity = requiredString(ownValue(diagnostic, "severity"), "diagnostic severity");
   if (severity !== "error" && severity !== "warning" && severity !== "advice" && severity !== "info") {
     throw new TypeError(`Unsupported diagnostic severity from binding: ${severity}`);
   }
   return {
-    code: requiredString(diagnostic.code, "diagnostic code"),
+    code: requiredString(ownValue(diagnostic, "code"), "diagnostic code"),
     severity,
-    message: requiredString(diagnostic.message, "diagnostic message"),
+    message: requiredString(ownValue(diagnostic, "message"), "diagnostic message"),
     path: returnedPath,
     conceptId: optionalStrictString(
       field(diagnostic, "conceptId", "concept_id"),
       "diagnostic concept ID"
     ),
-    location: diagnostic.location === null || diagnostic.location === undefined
+    location: ownValue(diagnostic, "location") === null || ownValue(diagnostic, "location") === undefined
       ? undefined
-      : normalizeRange(diagnostic.location, bounds)
+      : normalizeRange(ownValue(diagnostic, "location"), bounds)
   };
 }
 
 function normalizeRange(value: unknown, bounds: SourceBounds): SourceRangeIR {
   const range = requiredRecord(value, "source range");
-  const start = normalizeLocation(range.start, bounds);
-  const end = range.end === null || range.end === undefined
+  const start = normalizeLocation(ownValue(range, "start"), bounds);
+  const configuredEnd = ownValue(range, "end");
+  const end = configuredEnd === null || configuredEnd === undefined
     ? undefined
-    : normalizeLocation(range.end, bounds);
+    : normalizeLocation(configuredEnd, bounds);
   if (
     end
     && (
@@ -631,9 +633,9 @@ function normalizeRange(value: unknown, bounds: SourceBounds): SourceRangeIR {
 
 function normalizeLocation(value: unknown, bounds: SourceBounds): SourceLocationIR {
   const location = requiredRecord(value, "source location");
-  const line = requiredInteger(location.line, "source line", 1);
-  const column = requiredInteger(location.column, "source column", 1);
-  const offset = optionalInteger(location.offset, "source offset", 0);
+  const line = requiredInteger(ownValue(location, "line"), "source line", 1);
+  const column = requiredInteger(ownValue(location, "column"), "source column", 1);
+  const offset = optionalInteger(ownValue(location, "offset"), "source offset", 0);
   const lineBounds = bounds.lines[line - 1];
   if (!lineBounds || column > lineBounds.end - lineBounds.start + 1) {
     throw new TypeError("Binding returned a source location outside the input.");
@@ -680,7 +682,11 @@ function locationPrecedes(left: SourceLocationIR, right: SourceLocationIR): bool
 }
 
 function field(record: Record<string, unknown>, camelCase: string, snakeCase: string): unknown {
-  return record[camelCase] ?? record[snakeCase];
+  return ownValue(record, camelCase) ?? ownValue(record, snakeCase);
+}
+
+function ownValue(record: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
 function requiredRecord(value: unknown, label: string): Record<string, unknown> {
