@@ -65,11 +65,7 @@ fn fmt_command(args: &[String]) -> Result<ExitCode, String> {
     let result = okfx_fmt::format_markdown_document(path.as_str(), &content);
     if !result.diagnostics.is_empty() {
         for diagnostic in result.diagnostics {
-            eprintln!(
-                "{} {}",
-                diagnostic.code,
-                diagnostic.path.unwrap_or_else(|| path.to_string())
-            );
+            eprintln!("{}", format_format_diagnostic(&diagnostic, path));
         }
         return Ok(ExitCode::from(1));
     }
@@ -87,6 +83,18 @@ fn fmt_command(args: &[String]) -> Result<ExitCode, String> {
             .map_err(|error| format!("failed to write {path}: {error}"))?;
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn format_format_diagnostic(
+    diagnostic: &okfx_fmt::FormatDiagnostic,
+    fallback_path: &str,
+) -> String {
+    format!(
+        "{} {}: {}",
+        diagnostic.code,
+        diagnostic.path.as_deref().unwrap_or(fallback_path),
+        diagnostic.message
+    )
 }
 
 fn rules_command(args: &[String]) -> Result<ExitCode, String> {
@@ -174,6 +182,20 @@ mod tests {
         let code = run(vec!["fmt".to_string(), "--check".to_string(), path.clone()]).unwrap();
         assert_eq!(code, ExitCode::from(1));
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn includes_format_diagnostic_messages() {
+        let diagnostic = okfx_fmt::FormatDiagnostic {
+            code: "spec/invalid-frontmatter".to_string(),
+            message: "Frontmatter must be a YAML mapping.".to_string(),
+            path: Some("bad.md".to_string()),
+        };
+
+        assert_eq!(
+            format_format_diagnostic(&diagnostic, "fallback.md"),
+            "spec/invalid-frontmatter bad.md: Frontmatter must be a YAML mapping."
+        );
     }
 
     fn temp_file(name: &str, content: &str) -> String {
