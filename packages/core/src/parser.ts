@@ -1,4 +1,4 @@
-import { parseDocument } from "yaml";
+import { isMap, isScalar, parseDocument } from "yaml";
 
 import { contentHash } from "./hash.js";
 import { extractMarkdown } from "./markdown.js";
@@ -35,11 +35,19 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
         throw document.errors[0];
       }
 
-      const value = document.toJSON();
-      if (!isPlainRecord(value)) {
+      if (!isMap(document.contents)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
+      } else if (!document.contents.items.every(
+        (pair) => isScalar(pair.key) && typeof pair.key.value === "string"
+      )) {
+        diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
       } else {
-        frontmatter = value;
+        const value = document.toJSON();
+        if (!isPlainRecord(value)) {
+          diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
+        } else {
+          frontmatter = value;
+        }
       }
     } catch (error) {
       diagnostics.push(invalidFrontmatter(path, error instanceof Error ? error.message : "Could not parse YAML frontmatter."));

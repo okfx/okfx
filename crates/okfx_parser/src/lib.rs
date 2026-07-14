@@ -179,9 +179,7 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
             serde_yaml::Value::String(key) => {
                 frontmatter.insert(key, value);
             }
-            other => {
-                frontmatter.insert(format!("{other:?}"), value);
-            }
+            _ => return Err("Frontmatter keys must be strings.".to_string()),
         }
     }
 
@@ -1046,6 +1044,21 @@ mod tests {
             assert_eq!(
                 parsed.diagnostics[0].message,
                 "Frontmatter must be a YAML mapping."
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_non_string_frontmatter_keys() {
+        for entry in ["1: one", "[a, b]: sequence"] {
+            let content = format!("---\n{entry}\n---\n# Bad\n");
+            let parsed = parse_markdown_document("bad.md", content, "bad");
+
+            assert_eq!(parsed.frontmatter, None);
+            assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+            assert_eq!(
+                parsed.diagnostics[0].message,
+                "Frontmatter keys must be strings."
             );
         }
     }

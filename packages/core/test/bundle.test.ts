@@ -216,6 +216,23 @@ describe("parseMarkdownDocument", () => {
     });
   });
 
+  it.each(["1: one", "[a, b]: sequence"])(
+    "rejects non-string frontmatter key %j",
+    (entry) => {
+      const parsed = parseMarkdownDocument(
+        "concepts/bad.md",
+        `---\n${entry}\n---\n# Bad\n`,
+        "concepts/bad"
+      );
+
+      expect(parsed.frontmatter).toBeUndefined();
+      expect(parsed.diagnostics[0]).toMatchObject({
+        code: "spec/invalid-frontmatter",
+        message: "Frontmatter keys must be strings."
+      });
+    }
+  );
+
   it("extracts heading locations after frontmatter", () => {
     const parsed = parseMarkdownDocument("concepts/wau.md", "---\ntype: Metric\n---\n\n# Heading\n", "concepts/wau");
 
