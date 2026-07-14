@@ -136,6 +136,20 @@ describe("Markdown code fences", () => {
     expect(parsed.links.map((link) => link.targetRaw)).toEqual(["docs/valid.md"]);
   });
 
+  it("allows spaces around destinations and titles", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "[Leading](   docs/leading.md) [Angle](  <docs/a b.md> ) [Title]( docs/title.md \"Title\"  )\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual([
+      "docs/leading.md",
+      "docs/a b.md",
+      "docs/title.md"
+    ]);
+  });
+
   it("honors escaped link and image markers", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "\\[Escaped](hidden.md)",

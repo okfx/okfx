@@ -10,23 +10,35 @@ export function markdownTargetAt(line: string, character: number): string | unde
   if (!destination || cursor < targetStart || cursor > destination.closingParen) {
     return undefined;
   }
-  const enclosed = line[targetStart] === "<";
-  return line.slice(enclosed ? targetStart + 1 : targetStart, destination.targetEnd);
+  return line.slice(destination.targetStart, destination.targetEnd);
 }
 
 function parseDestination(
   line: string,
   targetStart: number
-): { targetEnd: number; closingParen: number } | undefined {
-  if (line[targetStart] === "<") {
-    let cursor = targetStart + 1;
+): { targetStart: number; targetEnd: number; closingParen: number } | undefined {
+  let destinationStart = targetStart;
+  while (destinationStart < line.length && /[ \t]/u.test(line[destinationStart] ?? "")) {
+    destinationStart += 1;
+  }
+
+  if (destinationStart > targetStart
+    && (line[destinationStart] === ")"
+      || line[destinationStart] === "\""
+      || line[destinationStart] === "'"
+      || line[destinationStart] === "(")) {
+    return parseDestinationTail(line, targetStart, destinationStart, destinationStart);
+  }
+
+  if (line[destinationStart] === "<") {
+    let cursor = destinationStart + 1;
     while (cursor < line.length) {
       const character = line[cursor];
       if (character === "<" && !isEscaped(line, cursor)) {
         return undefined;
       }
       if (character === ">" && !isEscaped(line, cursor)) {
-        return parseDestinationTail(line, cursor + 1, cursor);
+        return parseDestinationTail(line, cursor + 1, destinationStart + 1, cursor);
       }
       cursor += 1;
     }
@@ -34,7 +46,7 @@ function parseDestination(
   }
 
   let depth = 0;
-  let cursor = targetStart;
+  let cursor = destinationStart;
 
   while (cursor < line.length) {
     const character = line[cursor];
@@ -42,14 +54,14 @@ function parseDestination(
       depth += 1;
     } else if (character === ")" && !isEscaped(line, cursor)) {
       if (depth === 0) {
-        return { targetEnd: cursor, closingParen: cursor };
+        return { targetStart: destinationStart, targetEnd: cursor, closingParen: cursor };
       }
       depth -= 1;
     } else if (/\s/u.test(character ?? "")) {
       if (depth !== 0) {
         return undefined;
       }
-      return parseDestinationTail(line, cursor, cursor);
+      return parseDestinationTail(line, cursor, destinationStart, cursor);
     }
     cursor += 1;
   }
@@ -60,15 +72,16 @@ function parseDestination(
 function parseDestinationTail(
   line: string,
   tailStart: number,
+  targetStart: number,
   targetEnd: number
-): { targetEnd: number; closingParen: number } | undefined {
+): { targetStart: number; targetEnd: number; closingParen: number } | undefined {
   let cursor = tailStart;
   while (cursor < line.length && /[ \t]/u.test(line[cursor] ?? "")) {
     cursor += 1;
   }
   const hasTitleSeparator = cursor > tailStart;
   if (line[cursor] === ")") {
-    return { targetEnd, closingParen: cursor };
+    return { targetStart, targetEnd, closingParen: cursor };
   }
   if (!hasTitleSeparator) {
     return undefined;
@@ -83,8 +96,12 @@ function parseDestinationTail(
   cursor += 1;
   while (cursor < line.length) {
     if (line[cursor] === closingQuote && !isEscaped(line, cursor)) {
-      return line[cursor + 1] === ")"
-        ? { targetEnd, closingParen: cursor + 1 }
+      let closingParen = cursor + 1;
+      while (closingParen < line.length && /[ \t]/u.test(line[closingParen] ?? "")) {
+        closingParen += 1;
+      }
+      return line[closingParen] === ")"
+        ? { targetStart, targetEnd, closingParen }
         : undefined;
     }
     cursor += 1;

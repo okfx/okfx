@@ -37,4 +37,12 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(invalid, invalid.indexOf("invalid.md"))).toBeUndefined();
     expect(markdownTargetAt(valid, valid.indexOf("valid.md"))).toBe("docs/valid.md");
   });
+
+  it("allows spaces around destinations and titles", () => {
+    const bare = "[Bare](   docs/bare.md  )";
+    const enclosed = "[Angle](  <docs/a b.md> \"Title\"  )";
+
+    expect(markdownTargetAt(bare, bare.indexOf("bare.md"))).toBe("docs/bare.md");
+    expect(markdownTargetAt(enclosed, enclosed.indexOf("a b"))).toBe("docs/a b.md");
+  });
 });

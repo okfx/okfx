@@ -376,13 +376,39 @@ fn parse_links(
 
 fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usize, usize)> {
     let bytes = line.as_bytes();
-    if bytes.get(target_start) == Some(&b'<') {
-        let mut cursor = target_start + 1;
+    let mut destination_start = target_start;
+    while bytes
+        .get(destination_start)
+        .is_some_and(|byte| matches!(*byte, b' ' | b'\t'))
+    {
+        destination_start += 1;
+    }
+
+    if destination_start > target_start
+        && bytes
+            .get(destination_start)
+            .is_some_and(|byte| matches!(*byte, b')' | b'\'' | b'"' | b'('))
+    {
+        return parse_link_destination_tail(
+            line,
+            target_start,
+            destination_start,
+            destination_start,
+        );
+    }
+
+    if bytes.get(destination_start) == Some(&b'<') {
+        let mut cursor = destination_start + 1;
         while cursor < bytes.len() {
             match bytes[cursor] {
                 b'<' if !is_escaped_delimiter(bytes, cursor) => return None,
                 b'>' if !is_escaped_delimiter(bytes, cursor) => {
-                    return parse_link_destination_tail(line, cursor + 1, target_start + 1, cursor);
+                    return parse_link_destination_tail(
+                        line,
+                        cursor + 1,
+                        destination_start + 1,
+                        cursor,
+                    );
                 }
                 _ => cursor += 1,
             }
@@ -391,7 +417,7 @@ fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usi
     }
 
     let mut depth = 0;
-    let mut cursor = target_start;
+    let mut cursor = destination_start;
 
     while cursor < bytes.len() {
         let character = line[cursor..].chars().next()?;
@@ -399,14 +425,14 @@ fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usi
             depth += 1;
         } else if character == ')' && !is_escaped_delimiter(bytes, cursor) {
             if depth == 0 {
-                return Some((target_start, cursor, cursor));
+                return Some((destination_start, cursor, cursor));
             }
             depth -= 1;
         } else if character.is_whitespace() {
             if depth != 0 {
                 return None;
             }
-            return parse_link_destination_tail(line, cursor, target_start, cursor);
+            return parse_link_destination_tail(line, cursor, destination_start, cursor);
         }
         cursor += character.len_utf8();
     }
@@ -445,10 +471,17 @@ fn parse_link_destination_tail(
     cursor += 1;
     while cursor < bytes.len() {
         if bytes[cursor] == closing_quote && !is_escaped_delimiter(bytes, cursor) {
-            return (bytes.get(cursor + 1) == Some(&b')')).then_some((
+            let mut closing_paren = cursor + 1;
+            while bytes
+                .get(closing_paren)
+                .is_some_and(|byte| matches!(*byte, b' ' | b'\t'))
+            {
+                closing_paren += 1;
+            }
+            return (bytes.get(closing_paren) == Some(&b')')).then_some((
                 target_start,
                 target_end,
-                cursor + 1,
+                closing_paren,
             ));
         }
         cursor += 1;
@@ -1014,6 +1047,24 @@ mod tests {
                 .map(|link| link.target_raw.as_str())
                 .collect::<Vec<_>>(),
             vec!["docs/valid.md"]
+        );
+    }
+
+    #[test]
+    fn allows_spaces_around_destinations_and_titles() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "[Leading](   docs/leading.md) [Angle](  <docs/a b.md> ) [Title]( docs/title.md \"Title\"  )\n",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["docs/leading.md", "docs/a b.md", "docs/title.md"]
         );
     }
 

@@ -115,15 +115,28 @@ function parseLinkDestination(
   markdown: string,
   targetStart: number
 ): { targetStart: number; targetEnd: number; closingParen: number } | undefined {
-  if (markdown[targetStart] === "<") {
-    let cursor = targetStart + 1;
+  let destinationStart = targetStart;
+  while (destinationStart < markdown.length && /[ \t]/u.test(markdown[destinationStart] ?? "")) {
+    destinationStart += 1;
+  }
+
+  if (destinationStart > targetStart
+    && (markdown[destinationStart] === ")"
+      || markdown[destinationStart] === "\""
+      || markdown[destinationStart] === "'"
+      || markdown[destinationStart] === "(")) {
+    return parseLinkDestinationTail(markdown, targetStart, destinationStart, destinationStart);
+  }
+
+  if (markdown[destinationStart] === "<") {
+    let cursor = destinationStart + 1;
     while (cursor < markdown.length) {
       const character = markdown[cursor];
       if (character === "\r" || character === "\n" || (character === "<" && !isEscaped(markdown, cursor))) {
         return undefined;
       }
       if (character === ">" && !isEscaped(markdown, cursor)) {
-        return parseLinkDestinationTail(markdown, cursor + 1, targetStart + 1, cursor);
+        return parseLinkDestinationTail(markdown, cursor + 1, destinationStart + 1, cursor);
       }
       cursor += 1;
     }
@@ -131,7 +144,7 @@ function parseLinkDestination(
   }
 
   let depth = 0;
-  let cursor = targetStart;
+  let cursor = destinationStart;
 
   while (cursor < markdown.length) {
     const character = markdown[cursor];
@@ -142,14 +155,14 @@ function parseLinkDestination(
       depth += 1;
     } else if (character === ")" && !isEscaped(markdown, cursor)) {
       if (depth === 0) {
-        return { targetStart, targetEnd: cursor, closingParen: cursor };
+        return { targetStart: destinationStart, targetEnd: cursor, closingParen: cursor };
       }
       depth -= 1;
     } else if (/\s/u.test(character ?? "")) {
       if (depth !== 0) {
         return undefined;
       }
-      return parseLinkDestinationTail(markdown, cursor, targetStart, cursor);
+      return parseLinkDestinationTail(markdown, cursor, destinationStart, cursor);
     }
     cursor += 1;
   }
@@ -188,8 +201,12 @@ function parseLinkDestinationTail(
       return undefined;
     }
     if (character === closingQuote && !isEscaped(markdown, cursor)) {
-      return markdown[cursor + 1] === ")"
-        ? { targetStart, targetEnd, closingParen: cursor + 1 }
+      let closingParen = cursor + 1;
+      while (closingParen < markdown.length && /[ \t]/u.test(markdown[closingParen] ?? "")) {
+        closingParen += 1;
+      }
+      return markdown[closingParen] === ")"
+        ? { targetStart, targetEnd, closingParen }
         : undefined;
     }
     cursor += 1;
