@@ -253,7 +253,38 @@ async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: 
     .filter((entry) => resolve(entry) !== out)
     .map((entry) => relativePosixPath(root, entry))
     .sort(compareStrings);
-  return paths.filter((path) => !isSensitivePackPath(path));
+  const includedPaths = paths.filter((path) => !isSensitivePackPath(path));
+  assertPortablePackPaths(includedPaths);
+  return includedPaths;
+}
+
+function assertPortablePackPaths(paths: string[]): void {
+  const pathsByPortableKey = new Map<string, string>();
+  for (const path of paths) {
+    for (const segment of path.split("/")) {
+      const deviceName = segment.split(".", 1)[0]?.toUpperCase();
+      if (
+        !segment
+        || /[<>:"|?*\u0000-\u001f\u007f-\u009f]/u.test(segment)
+        || /[ .]$/u.test(segment)
+        || deviceName === "CON"
+        || deviceName === "PRN"
+        || deviceName === "AUX"
+        || deviceName === "NUL"
+        || /^COM[1-9]$/u.test(deviceName ?? "")
+        || /^LPT[1-9]$/u.test(deviceName ?? "")
+      ) {
+        throw new Error(`Refusing to pack non-portable path: ${JSON.stringify(path)}`);
+      }
+    }
+
+    const key = path.normalize("NFC").toLowerCase();
+    const existing = pathsByPortableKey.get(key);
+    if (existing !== undefined) {
+      throw new Error(`Refusing to pack paths that collide on portable filesystems: ${JSON.stringify(existing)}, ${JSON.stringify(path)}`);
+    }
+    pathsByPortableKey.set(key, path);
+  }
 }
 
 function isSensitivePackPath(path: string): boolean {

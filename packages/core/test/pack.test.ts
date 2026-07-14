@@ -29,6 +29,23 @@ describe("packBundle", () => {
     }
   });
 
+  it("rejects filenames that cannot be extracted portably", async () => {
+    if (sep === "\\") {
+      return;
+    }
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-portable-"));
+    const out = join(root, "..", "portable.okf.tar.gz");
+    try {
+      await writeFile(join(root, "CON.md"), "# Reserved\n", "utf8");
+
+      await expect(packBundle(root, { out, writeMetadata: false }))
+        .rejects.toThrow("non-portable path");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(out, { force: true });
+    }
+  });
+
   it("writes metadata and archive", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-pack-"));
     const out = join(root, "..", "knowledge.okf.tar.gz");

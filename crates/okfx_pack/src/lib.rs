@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use unicode_normalization::UnicodeNormalization;
 
 pub const CRATE_NAME: &str = "okfx_pack";
 
@@ -106,7 +107,7 @@ pub fn build_pack_metadata(
     let mut manifest_files = Vec::with_capacity(files.len());
     for file in files {
         let path = normalize_path(&file.path)?;
-        if !seen_paths.insert(path.clone()) {
+        if !seen_paths.insert(portable_path_key(&path)) {
             return Err(PackError::DuplicatePath { path });
         }
         manifest_files.push(ManifestFile {
@@ -191,13 +192,40 @@ fn normalize_path(path: &str) -> Result<String, PackError> {
         || has_windows_drive_prefix
         || normalized
             .split('/')
-            .any(|segment| segment.is_empty() || matches!(segment, "." | ".."))
+            .any(|segment| !is_portable_path_segment(segment))
     {
         return Err(PackError::InvalidPath {
             path: path.to_string(),
         });
     }
     Ok(normalized)
+}
+
+fn is_portable_path_segment(segment: &str) -> bool {
+    if segment.is_empty()
+        || matches!(segment, "." | "..")
+        || segment.ends_with([' ', '.'])
+        || segment
+            .chars()
+            .any(|character| character.is_control() || r#"<>:"|?*"#.contains(character))
+    {
+        return false;
+    }
+
+    let device_name = segment.split('.').next().unwrap_or_default().to_uppercase();
+    !matches!(device_name.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        && !matches_reserved_numbered_device(&device_name, "COM")
+        && !matches_reserved_numbered_device(&device_name, "LPT")
+}
+
+fn matches_reserved_numbered_device(value: &str, prefix: &str) -> bool {
+    value
+        .strip_prefix(prefix)
+        .is_some_and(|suffix| suffix.len() == 1 && matches!(suffix.as_bytes()[0], b'1'..=b'9'))
+}
+
+fn portable_path_key(path: &str) -> String {
+    path.nfc().flat_map(char::to_lowercase).collect()
 }
 
 #[cfg(test)]
@@ -279,6 +307,11 @@ mod tests {
             "C:/absolute.md",
             "a/./b.md",
             "a\0b.md",
+            "CON.md",
+            "dir/aux.txt",
+            "bad?.md",
+            "trailing.",
+            "trailing ",
         ] {
             assert!(matches!(
                 metadata_for(&[path]),
@@ -291,5 +324,13 @@ mod tests {
                 path: "a.md".to_string()
             })
         );
+        assert!(matches!(
+            metadata_for(&["Case.md", "case.md"]),
+            Err(PackError::DuplicatePath { .. })
+        ));
+        assert!(matches!(
+            metadata_for(&["Caf\u{e9}.md", "Cafe\u{301}.md"]),
+            Err(PackError::DuplicatePath { .. })
+        ));
     }
 }
