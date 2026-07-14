@@ -461,7 +461,7 @@ function locationFromOffset(
 ): SourceLocationIR {
   const absoluteOffset = bodyStartOffset + bodyOffset;
   const prefix = bodyRaw.slice(0, bodyOffset);
-  const lines = prefix.split("\n");
+  const lines = prefix.split(/\r\n|\n|\r/);
   return {
     line: bodyStartLine + lines.length - 1,
     column: lines[lines.length - 1]!.length + 1,

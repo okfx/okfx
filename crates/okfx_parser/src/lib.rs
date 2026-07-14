@@ -139,7 +139,7 @@ struct FrontmatterSplit<'a> {
 fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     let opening_len = if content.starts_with("---\r\n") {
         5
-    } else if content.starts_with("---\n") {
+    } else if content.starts_with("---\n") || content.starts_with("---\r") {
         4
     } else {
         return None;
@@ -147,7 +147,7 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     let rest = &content[opening_len..];
     let mut offset = opening_len;
 
-    for line in rest.split_inclusive('\n') {
+    for line in split_lines_inclusive(rest) {
         let trimmed = line
             .trim_end_matches(['\r', '\n'])
             .trim_end_matches([' ', '\t']);
@@ -165,8 +165,9 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
 }
 
 fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, String> {
-    let value =
-        serde_yaml::from_str::<serde_yaml::Value>(raw).map_err(|error| error.to_string())?;
+    let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
+    let value = serde_yaml::from_str::<serde_yaml::Value>(&normalized)
+        .map_err(|error| error.to_string())?;
     let mapping = match value {
         serde_yaml::Value::Mapping(mapping) => mapping,
         serde_yaml::Value::Null => serde_yaml::Mapping::new(),
@@ -200,9 +201,9 @@ fn parse_markdown_body(
     let mut code_fence = None;
     let link_searchable = mask_inline_code(&mask_fenced_code(raw));
 
-    for (line_index, (line, link_line)) in raw
-        .split_inclusive('\n')
-        .zip(link_searchable.split_inclusive('\n'))
+    for (line_index, (line, link_line)) in split_lines_inclusive(raw)
+        .into_iter()
+        .zip(split_lines_inclusive(&link_searchable))
         .enumerate()
     {
         let line_number = body_start_line + line_index;
@@ -596,8 +597,8 @@ fn plain_text(markdown: &str) -> String {
     let mut text = String::new();
     let mut code_fence = None;
 
-    for line in markdown.lines() {
-        let line = line.trim_end_matches('\r');
+    for line in split_lines_inclusive(markdown) {
+        let line = line.trim_end_matches(['\r', '\n']);
         if let Some(fence) = code_fence {
             if is_closing_code_fence(line, fence) {
                 code_fence = None;
@@ -716,7 +717,7 @@ fn mask_fenced_code(markdown: &str) -> String {
     let mut masked = String::with_capacity(markdown.len());
     let mut code_fence = None;
 
-    for line in markdown.split_inclusive('\n') {
+    for line in split_lines_inclusive(markdown) {
         let without_newline = line.trim_end_matches(['\r', '\n']);
         if let Some(fence) = code_fence {
             masked.push_str(&mask_preserving_line_endings(line));
@@ -850,11 +851,49 @@ fn invalid_frontmatter(path: &str, message: String) -> Diagnostic {
 }
 
 fn line_number_at(content: &str, offset: usize) -> usize {
-    content[..offset]
-        .bytes()
-        .filter(|byte| *byte == b'\n')
-        .count()
-        + 1
+    let bytes = &content.as_bytes()[..offset];
+    let mut line = 1;
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        match bytes[cursor] {
+            b'\r' => {
+                line += 1;
+                cursor += usize::from(bytes.get(cursor + 1) == Some(&b'\n')) + 1;
+            }
+            b'\n' => {
+                line += 1;
+                cursor += 1;
+            }
+            _ => cursor += 1,
+        }
+    }
+    line
+}
+
+fn split_lines_inclusive(value: &str) -> Vec<&str> {
+    let bytes = value.as_bytes();
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        let end = match bytes[cursor] {
+            b'\r' if bytes.get(cursor + 1) == Some(&b'\n') => cursor + 2,
+            b'\r' | b'\n' => cursor + 1,
+            _ => {
+                cursor += 1;
+                continue;
+            }
+        };
+        lines.push(&value[start..end]);
+        start = end;
+        cursor = end;
+    }
+
+    if start < value.len() {
+        lines.push(&value[start..]);
+    }
+    lines
 }
 
 fn utf16_len(value: &str) -> usize {
@@ -912,6 +951,28 @@ mod tests {
 
         assert_eq!(parsed.body.headings[0].title, "\u{a0}Padded\u{a0}");
         assert_eq!(parsed.body.headings[0].slug, "padded");
+    }
+
+    #[test]
+    fn parses_frontmatter_and_locations_with_carriage_return_line_endings() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "---\rtype: Note\r---\r# Heading\r[Target](target.md)\r",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .frontmatter
+                .as_ref()
+                .and_then(|frontmatter| frontmatter.get("type"))
+                .and_then(serde_yaml::Value::as_str),
+            Some("Note")
+        );
+        assert_eq!(parsed.body.headings[0].location.start.line, 4);
+        assert_eq!(parsed.body.headings[0].location.start.column, 1);
+        assert_eq!(parsed.links[0].location.start.line, 5);
+        assert_eq!(parsed.links[0].location.start.column, 1);
     }
 
     #[test]

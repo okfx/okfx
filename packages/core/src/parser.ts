@@ -30,7 +30,7 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
     bodyStartLine = frontmatterBlock.bodyStartLine;
 
     try {
-      const document = parseDocument(frontmatterRaw, { prettyErrors: false });
+      const document = parseDocument(frontmatterRaw.replace(/\r\n?/g, "\n"), { prettyErrors: false });
       if (document.errors.length > 0) {
         throw document.errors[0];
       }
@@ -67,12 +67,12 @@ interface FrontmatterBlock {
 }
 
 function splitFrontmatter(content: string): FrontmatterBlock | undefined {
-  if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) {
+  const opening = /^---(\r\n|\n|\r)/.exec(content);
+  if (!opening) {
     return undefined;
   }
 
-  const lineEnding = content.startsWith("---\r\n") ? "\r\n" : "\n";
-  const openingLength = 3 + lineEnding.length;
+  const openingLength = opening[0].length;
   const closingPattern = /^---[ \t]*\r?$/m;
   const rest = content.slice(openingLength);
   const closing = closingPattern.exec(rest);
@@ -88,7 +88,7 @@ function splitFrontmatter(content: string): FrontmatterBlock | undefined {
     raw,
     body: content.slice(bodyStartOffset),
     bodyStartOffset,
-    bodyStartLine: content.slice(0, bodyStartOffset).split("\n").length
+    bodyStartLine: content.slice(0, bodyStartOffset).split(/\r\n|\n|\r/).length
   };
 }
 

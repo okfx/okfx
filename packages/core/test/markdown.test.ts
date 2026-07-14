@@ -30,6 +30,18 @@ describe("Markdown code fences", () => {
     expect(parsed.body.headings[0]).toMatchObject({ title: "\u00a0Padded\u00a0", slug: "padded" });
   });
 
+  it("parses frontmatter and locations with carriage-return line endings", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "---\rtype: Note\r---\r# Heading\r[Target](target.md)\r",
+      "concept"
+    );
+
+    expect(parsed.frontmatter).toEqual({ type: "Note" });
+    expect(parsed.body.headings[0]?.location.start).toMatchObject({ line: 4, column: 1 });
+    expect(parsed.links[0]?.location.start).toMatchObject({ line: 5, column: 1 });
+  });
+
   it("ignores headings and links inside backtick and tilde fences", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "---",
