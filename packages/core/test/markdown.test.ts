@@ -88,4 +88,14 @@ describe("Markdown code fences", () => {
       "visible-after-bang.md"
     ]);
   });
+
+  it("keeps link labels without leaking destinations into plain text", () => {
+    const parsed = parseMarkdownDocument(
+      "note.md",
+      "[Wiki](docs/foo_(bar).md \"Reference\") ![Diagram](images/diagram_(large).png) `[Code](literal.md)`\n",
+      "note"
+    );
+
+    expect(parsed.body.text).toBe("Wiki Code");
+  });
 });

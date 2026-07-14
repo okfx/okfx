@@ -196,14 +196,51 @@ export function slugifyHeading(title: string): string {
 }
 
 function plainText(markdown: string): string {
-  return maskFencedCode(markdown)
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
-    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+  return stripInlineLinks(maskFencedCode(markdown))
+    .replace(/`+/g, "")
     .replace(/^#{1,6}\s+/gm, "")
-    .replace(/[*_~>#-]/g, " ")
+    .replace(/[`*_~>#-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function stripInlineLinks(markdown: string): string {
+  const chunks: string[] = [];
+  let emittedThrough = 0;
+  let cursor = 0;
+
+  while (cursor < markdown.length) {
+    const startOffset = markdown.indexOf("[", cursor);
+    if (startOffset === -1) {
+      break;
+    }
+    if (isEscaped(markdown, startOffset)) {
+      cursor = startOffset + 1;
+      continue;
+    }
+
+    const image = markdown[startOffset - 1] === "!" && !isEscaped(markdown, startOffset - 1);
+    const labelEnd = findUnescaped(markdown, "]", startOffset + 1, true);
+    if (labelEnd === -1 || labelEnd === startOffset + 1 || markdown[labelEnd + 1] !== "(") {
+      cursor = startOffset + 1;
+      continue;
+    }
+    const destination = parseLinkDestination(markdown, labelEnd + 2);
+    if (!destination) {
+      cursor = labelEnd + 1;
+      continue;
+    }
+
+    chunks.push(markdown.slice(emittedThrough, image ? startOffset - 1 : startOffset));
+    if (!image) {
+      chunks.push(markdown.slice(startOffset + 1, labelEnd));
+    }
+    emittedThrough = destination.closingParen + 1;
+    cursor = emittedThrough;
+  }
+
+  chunks.push(markdown.slice(emittedThrough));
+  return chunks.join("");
 }
 
 function maskFencedCode(markdown: string): string {

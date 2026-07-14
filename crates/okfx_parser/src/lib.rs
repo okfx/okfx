@@ -459,7 +459,8 @@ fn plain_text(markdown: &str) -> String {
             code_fence = Some(fence);
             continue;
         }
-        let stripped = line
+        let without_links = strip_inline_links(line);
+        let stripped = without_links
             .trim_start_matches('#')
             .replace(['*', '_', '~', '`', '>', '-'], " ");
         text.push_str(&stripped);
@@ -467,6 +468,47 @@ fn plain_text(markdown: &str) -> String {
     }
 
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn strip_inline_links(markdown: &str) -> String {
+    let bytes = markdown.as_bytes();
+    let mut output = String::with_capacity(markdown.len());
+    let mut emitted_through = 0;
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        let Some(open_relative) = bytes[cursor..].iter().position(|byte| *byte == b'[') else {
+            break;
+        };
+        let open = cursor + open_relative;
+        if is_escaped_delimiter(bytes, open) {
+            cursor = open + 1;
+            continue;
+        }
+
+        let image = open > 0 && bytes[open - 1] == b'!' && !is_escaped_delimiter(bytes, open - 1);
+        let Some(close_bracket) = find_unescaped_byte(bytes, open + 1, b']') else {
+            break;
+        };
+        if close_bracket == open + 1 || !markdown[close_bracket + 1..].starts_with('(') {
+            cursor = close_bracket + 1;
+            continue;
+        }
+        let Some((_, close_paren)) = parse_link_destination(markdown, close_bracket + 2) else {
+            cursor = close_bracket + 1;
+            continue;
+        };
+
+        output.push_str(&markdown[emitted_through..if image { open - 1 } else { open }]);
+        if !image {
+            output.push_str(&markdown[open + 1..close_bracket]);
+        }
+        emitted_through = close_paren + 1;
+        cursor = emitted_through;
+    }
+
+    output.push_str(&markdown[emitted_through..]);
+    output
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -819,6 +861,18 @@ mod tests {
             ]
         );
         assert_eq!(parsed.links[0].location.end.as_ref().unwrap().offset, 37);
+    }
+
+    #[test]
+    fn keeps_link_labels_without_leaking_destinations_into_plain_text() {
+        let parsed = parse_markdown_document(
+            "note.md",
+            r#"[Wiki](docs/foo_(bar).md "Reference") ![Diagram](images/diagram_(large).png) `[Code](literal.md)`
+"#,
+            "note",
+        );
+
+        assert_eq!(parsed.body.text, "Wiki Code");
     }
 
     #[test]
