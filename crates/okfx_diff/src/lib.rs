@@ -65,16 +65,26 @@ pub fn diff_concepts(before: Vec<ConceptSnapshot>, after: Vec<ConceptSnapshot>) 
         .iter()
         .map(|concept| (concept.id.clone(), concept.clone()))
         .collect::<BTreeMap<_, _>>();
-    let added = after
+    let mut added = after
         .iter()
         .filter(|concept| !before_by_id.contains_key(&concept.id))
         .cloned()
         .collect::<Vec<_>>();
-    let removed = before
+    added.sort_by(|left, right| {
+        left.id
+            .cmp(&right.id)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    let mut removed = before
         .iter()
         .filter(|concept| !after_by_id.contains_key(&concept.id))
         .cloned()
         .collect::<Vec<_>>();
+    removed.sort_by(|left, right| {
+        left.id
+            .cmp(&right.id)
+            .then_with(|| left.path.cmp(&right.path))
+    });
     let renamed_concepts = detect_renames(&removed, &added);
     let renamed_from = renamed_concepts
         .iter()
@@ -268,6 +278,31 @@ mod tests {
         );
         assert!(diff.changed_concepts[0].resource_changed);
         assert!(diff.changed_concepts[0].tags_changed);
+    }
+
+    #[test]
+    fn produces_the_same_diff_for_permuted_inputs() {
+        let before = vec![
+            concept("removed-b", "shared"),
+            concept("removed-a", "shared"),
+        ];
+        let after = vec![concept("added-b", "shared"), concept("added-a", "shared")];
+
+        let forward = diff_concepts(before.clone(), after.clone());
+        let reverse = diff_concepts(
+            before.into_iter().rev().collect(),
+            after.into_iter().rev().collect(),
+        );
+
+        assert_eq!(forward, reverse);
+        assert_eq!(
+            forward
+                .renamed_concepts
+                .iter()
+                .map(|rename| (rename.from.as_str(), rename.to.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("removed-a", "added-a"), ("removed-b", "added-b")]
+        );
     }
 
     fn concept(id: &str, hash: &str) -> ConceptSnapshot {
