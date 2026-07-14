@@ -236,7 +236,7 @@ describe("parseMarkdownDocument", () => {
     });
   });
 
-  it.each(["1: one", "[a, b]: sequence", "metadata: {1: one}"])(
+  it.each(["1: one", "[a, b]: sequence", "metadata: {1: one}", "metadata: !!omap [{1: one}]"])(
     "rejects non-string frontmatter key %j",
     (entry) => {
       const parsed = parseMarkdownDocument(
@@ -264,6 +264,69 @@ describe("parseMarkdownDocument", () => {
     expect(parsed.diagnostics[0]).toMatchObject({
       code: "spec/invalid-frontmatter",
       message: "Frontmatter numbers must be finite."
+    });
+  });
+
+  it("normalizes YAML tags into the same JSON representation as native parsers", () => {
+    const parsed = parseMarkdownDocument("concepts/tagged.md", [
+      "---",
+      "type: Note",
+      "metadata:",
+      "  ordered: !!omap [{a: 1}, {b: 2}]",
+      "  tagged_ordered: !!omap [{a: !!timestamp 2020-01-01}, {b: !!binary SGVsbG8=}]",
+      "  pairs: !!pairs [{a: 1}, {b: 2}]",
+      "  set: !!set {a: null, b: null}",
+      "  binary: !!binary SGVsbG8=",
+      "  timestamp: !!timestamp 2020-01-01T12:34:56Z",
+      "  custom: !custom value",
+      "---",
+      "# Tagged",
+      ""
+    ].join("\n"), "concepts/tagged");
+
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.frontmatter).toEqual({
+      type: "Note",
+      metadata: {
+        ordered: [{ a: 1 }, { b: 2 }],
+        tagged_ordered: [{ a: "2020-01-01" }, { b: "SGVsbG8=" }],
+        pairs: [{ a: 1 }, { b: 2 }],
+        set: { a: null, b: null },
+        binary: "SGVsbG8=",
+        timestamp: "2020-01-01T12:34:56Z",
+        custom: { "!custom": "value" }
+      }
+    });
+  });
+
+  it.each(["!!null x", "!!bool yes", "!!int abc", "!!float abc"])(
+    "rejects invalid explicit YAML tag value %s",
+    (value) => {
+      const parsed = parseMarkdownDocument(
+        "concepts/bad.md",
+        `---\nmetadata: ${value}\n---\n# Bad\n`,
+        "concepts/bad"
+      );
+
+      expect(parsed.frontmatter).toBeUndefined();
+      expect(parsed.diagnostics[0]).toMatchObject({
+        code: "spec/invalid-frontmatter",
+        message: "Frontmatter contains an invalid explicit YAML tag value."
+      });
+    }
+  );
+
+  it("rejects a custom tag wrapped around the root frontmatter mapping", () => {
+    const parsed = parseMarkdownDocument(
+      "concepts/bad.md",
+      "---\n!custom {type: Note}\n---\n# Bad\n",
+      "concepts/bad"
+    );
+
+    expect(parsed.frontmatter).toBeUndefined();
+    expect(parsed.diagnostics[0]).toMatchObject({
+      code: "spec/invalid-frontmatter",
+      message: "Frontmatter must be a YAML mapping."
     });
   });
 

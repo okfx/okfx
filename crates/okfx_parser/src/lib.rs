@@ -1143,7 +1143,12 @@ mod tests {
 
     #[test]
     fn rejects_non_string_frontmatter_keys() {
-        for entry in ["1: one", "[a, b]: sequence", "metadata: {1: one}"] {
+        for entry in [
+            "1: one",
+            "[a, b]: sequence",
+            "metadata: {1: one}",
+            "metadata: !!omap [{1: one}]",
+        ] {
             let content = format!("---\n{entry}\n---\n# Bad\n");
             let parsed = parse_markdown_document("bad.md", content, "bad");
 
@@ -1181,6 +1186,55 @@ mod tests {
                 "Frontmatter numbers must be finite."
             );
         }
+    }
+
+    #[test]
+    fn serializes_yaml_tags_to_json_compatible_values() {
+        let parsed = parse_markdown_document(
+            "tagged.md",
+            "---\ntype: Note\nmetadata:\n  ordered: !!omap [{a: 1}, {b: 2}]\n  tagged_ordered: !!omap [{a: !!timestamp 2020-01-01}, {b: !!binary SGVsbG8=}]\n  pairs: !!pairs [{a: 1}, {b: 2}]\n  set: !!set {a: null, b: null}\n  binary: !!binary SGVsbG8=\n  timestamp: !!timestamp 2020-01-01T12:34:56Z\n  custom: !custom value\n---\n# Tagged\n",
+            "tagged",
+        );
+
+        assert!(parsed.diagnostics.is_empty());
+        assert_eq!(
+            serde_json::to_value(parsed.frontmatter).unwrap(),
+            serde_json::json!({
+                "type": "Note",
+                "metadata": {
+                    "ordered": [{"a": 1}, {"b": 2}],
+                    "tagged_ordered": [{"a": "2020-01-01"}, {"b": "SGVsbG8="}],
+                    "pairs": [{"a": 1}, {"b": 2}],
+                    "set": {"a": null, "b": null},
+                    "binary": "SGVsbG8=",
+                    "timestamp": "2020-01-01T12:34:56Z",
+                    "custom": {"!custom": "value"}
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_explicit_yaml_tag_values() {
+        for value in ["!!null x", "!!bool yes", "!!int abc", "!!float abc"] {
+            let content = format!("---\nmetadata: {value}\n---\n# Bad\n");
+            let parsed = parse_markdown_document("bad.md", content, "bad");
+
+            assert!(parsed.frontmatter.is_none());
+            assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+        }
+    }
+
+    #[test]
+    fn rejects_custom_tagged_root_mappings() {
+        let parsed =
+            parse_markdown_document("bad.md", "---\n!custom {type: Note}\n---\n# Bad\n", "bad");
+
+        assert!(parsed.frontmatter.is_none());
+        assert_eq!(
+            parsed.diagnostics[0].message,
+            "Frontmatter must be a YAML mapping."
+        );
     }
 
     #[test]

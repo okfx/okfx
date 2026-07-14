@@ -1,4 +1,4 @@
-import { isMap, isScalar, isSeq, parseDocument } from "yaml";
+import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument } from "yaml";
 
 import { contentHash } from "./hash.js";
 import { extractMarkdown } from "./markdown.js";
@@ -35,20 +35,24 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
         throw document.errors[0];
       }
 
-      if (!isMap(document.contents)) {
+      if (!isMap(document.contents) || !validRootMappingTag(document.contents.tag)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
       } else if (!hasOnlyStringMappingKeys(document.contents)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
+      } else if (!hasValidExplicitYamlTags(document.contents)) {
+        diagnostics.push(invalidFrontmatter(path, "Frontmatter contains an invalid explicit YAML tag value."));
       } else {
         const value = document.toJSON();
         if (!isPlainRecord(value)) {
           diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
+        } else if (!hasOnlyStringCollectionKeys(value)) {
+          diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
         } else if (containsReferenceCycle(value)) {
           diagnostics.push(invalidFrontmatter(path, "Frontmatter must not contain recursive YAML aliases."));
         } else if (containsNonFiniteNumber(value)) {
           diagnostics.push(invalidFrontmatter(path, "Frontmatter numbers must be finite."));
         } else {
-          frontmatter = value;
+          frontmatter = normalizeYamlJsonValue(document.contents, value, document) as Record<string, unknown>;
         }
       }
     } catch (error) {
@@ -126,7 +130,12 @@ function hasOnlyStringMappingKeys(value: unknown): boolean {
   const stack = [value];
   while (stack.length > 0) {
     const node = stack.pop();
-    if (isMap(node)) {
+    if (isPair(node)) {
+      if (!isScalar(node.key) || typeof node.key.value !== "string") {
+        return false;
+      }
+      stack.push(node.value);
+    } else if (isMap(node)) {
       for (const pair of node.items) {
         if (!isScalar(pair.key) || typeof pair.key.value !== "string") {
           return false;
@@ -140,6 +149,219 @@ function hasOnlyStringMappingKeys(value: unknown): boolean {
     }
   }
   return true;
+}
+
+function validRootMappingTag(tag: string | undefined): boolean {
+  return tag === undefined
+    || tag === "tag:yaml.org,2002:map"
+    || tag === "tag:yaml.org,2002:set";
+}
+
+function hasValidExplicitYamlTags(value: unknown): boolean {
+  const stack = [value];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (isAlias(node)) {
+      continue;
+    }
+    if (isPair(node)) {
+      stack.push(node.key, node.value);
+    } else if (isScalar(node)) {
+      if (!validScalarTagValue(node.tag, node.value)) {
+        return false;
+      }
+    } else if (isMap(node)) {
+      if (node.tag?.startsWith("tag:yaml.org,2002:")
+        && node.tag !== "tag:yaml.org,2002:map"
+        && node.tag !== "tag:yaml.org,2002:set") {
+        return false;
+      }
+      for (const pair of node.items) {
+        stack.push(pair.key, pair.value);
+      }
+    } else if (isSeq(node)) {
+      if (node.tag?.startsWith("tag:yaml.org,2002:")
+        && node.tag !== "tag:yaml.org,2002:seq"
+        && node.tag !== "tag:yaml.org,2002:omap"
+        && node.tag !== "tag:yaml.org,2002:pairs") {
+        return false;
+      }
+      for (const item of node.items) {
+        stack.push(item);
+      }
+    }
+  }
+  return true;
+}
+
+function validScalarTagValue(tag: string | undefined, value: unknown): boolean {
+  if (!tag || !tag.startsWith("tag:yaml.org,2002:")) {
+    return true;
+  }
+  switch (tag) {
+    case "tag:yaml.org,2002:str":
+      return typeof value === "string";
+    case "tag:yaml.org,2002:int":
+      return typeof value === "number" && Number.isInteger(value);
+    case "tag:yaml.org,2002:float":
+      return typeof value === "number";
+    case "tag:yaml.org,2002:bool":
+      return typeof value === "boolean";
+    case "tag:yaml.org,2002:null":
+      return value === null;
+    case "tag:yaml.org,2002:timestamp":
+      return value instanceof Date;
+    case "tag:yaml.org,2002:binary":
+      return Buffer.isBuffer(value);
+    default:
+      return false;
+  }
+}
+
+function hasOnlyStringCollectionKeys(value: unknown): boolean {
+  const stack = [value];
+  const visited = new WeakSet<object>();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (typeof current !== "object" || current === null || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    if (current instanceof Map) {
+      for (const [key, child] of current) {
+        if (typeof key !== "string") {
+          return false;
+        }
+        stack.push(child);
+      }
+    } else if (current instanceof Set) {
+      for (const key of current) {
+        if (typeof key !== "string") {
+          return false;
+        }
+      }
+    } else {
+      for (const child of Object.values(current)) {
+        stack.push(child);
+      }
+    }
+  }
+  return true;
+}
+
+function normalizeYamlJsonValue(
+  node: unknown,
+  value: unknown,
+  document: ReturnType<typeof parseDocument>
+): unknown {
+  // Match serde_yaml's JSON boundary instead of leaking Map, Set, Buffer, or Date values into the IR.
+  if (isAlias(node)) {
+    return normalizeYamlJsonValue(node.resolve(document), value, document);
+  }
+  if (isScalar(node)) {
+    const normalized = node.tag === "tag:yaml.org,2002:timestamp"
+      || node.tag === "tag:yaml.org,2002:binary"
+      ? node.source ?? String(value)
+      : value;
+    return wrapCustomYamlTag(node.tag, normalized);
+  }
+  if (isMap(node)) {
+    const normalized = createJsonRecord();
+    for (const pair of node.items) {
+      const key = isScalar(pair.key) && typeof pair.key.value === "string" ? pair.key.value : "";
+      const child = value instanceof Set
+        ? null
+        : isPlainRecord(value) && Object.hasOwn(value, key) ? value[key] : undefined;
+      defineJsonProperty(normalized, key, normalizeYamlJsonValue(pair.value, child, document));
+    }
+    return wrapCustomYamlTag(node.tag, normalized);
+  }
+  if (isSeq(node)) {
+    if (node.tag === "tag:yaml.org,2002:omap" || node.tag === "tag:yaml.org,2002:pairs") {
+      const values = value instanceof Map ? [...value].map(([key, child]) => ({ [key]: child })) : value;
+      return node.items.map((item, index) => {
+        if (!isPair(item) || !isScalar(item.key) || typeof item.key.value !== "string") {
+          return createJsonRecord();
+        }
+        const key = item.key.value;
+        const childRecord = Array.isArray(values) ? values[index] : undefined;
+        const child = isPlainRecord(childRecord) && Object.hasOwn(childRecord, key)
+          ? childRecord[key]
+          : undefined;
+        const entry = createJsonRecord();
+        defineJsonProperty(entry, key, normalizeYamlJsonValue(item.value, child, document));
+        return entry;
+      });
+    }
+    const values = Array.isArray(value) ? value : node.items;
+    const normalized = values.map((child, index) => normalizeYamlJsonValue(
+      node.items[index],
+      child,
+      document
+    ));
+    return wrapCustomYamlTag(node.tag, normalized);
+  }
+  return normalizePlainJsonValue(value);
+}
+
+function wrapCustomYamlTag(tag: string | undefined, value: unknown): unknown {
+  if (!tag || tag.startsWith("tag:yaml.org,2002:")) {
+    return value;
+  }
+  const wrapped = createJsonRecord();
+  defineJsonProperty(wrapped, tag.startsWith("!") ? tag : `!${tag}`, value);
+  return wrapped;
+}
+
+function normalizePlainJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizePlainJsonValue);
+  }
+  if (value instanceof Map) {
+    return [...value].map(([key, child]) => {
+      const entry = createJsonRecord();
+      if (typeof key === "string") {
+        defineJsonProperty(entry, key, normalizePlainJsonValue(child));
+      }
+      return entry;
+    });
+  }
+  if (value instanceof Set) {
+    const normalized = createJsonRecord();
+    for (const key of value) {
+      if (typeof key === "string") {
+        defineJsonProperty(normalized, key, null);
+      }
+    }
+    return normalized;
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.toString("base64");
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (!isPlainRecord(value)) {
+    return value;
+  }
+  const normalized = createJsonRecord();
+  for (const [key, child] of Object.entries(value)) {
+    defineJsonProperty(normalized, key, normalizePlainJsonValue(child));
+  }
+  return normalized;
+}
+
+function createJsonRecord(): Record<string, unknown> {
+  return {};
+}
+
+function defineJsonProperty(record: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  });
 }
 
 function containsReferenceCycle(value: unknown): boolean {
