@@ -72,7 +72,10 @@ export function escapeMarkdownText(value: string): string {
 
 export function markdownCodeSpan(value: string): string {
   const flattened = value.replace(/\r\n?|\n/g, " ");
-  const longestRun = Math.max(0, ...(flattened.match(/`+/g) ?? []).map((run) => run.length));
+  let longestRun = 0;
+  for (const match of flattened.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
+  }
   const delimiter = "`".repeat(longestRun + 1);
   return `${delimiter} ${flattened} ${delimiter}`;
 }

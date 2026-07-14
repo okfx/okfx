@@ -27,6 +27,8 @@ describe("@okfx/github-action", () => {
     expect(action.match(/fs\.lstatSync\(path\)/g)).toHaveLength(2);
     expect(action.match(/catch \{/g)).toHaveLength(2);
     expect(action.match(/const markdownCode = \(value\) =>/g)).toHaveLength(2);
+    expect(action.match(/for \(const match of visibleValue\.matchAll/g)).toHaveLength(2);
+    expect(action).not.toContain("Math.max(0, ...");
     expect(action).not.toContain("fs.existsSync(process.env.OKF_DOCTOR_JSON)");
     expect(action.match(/doctor \? `- Doctor JSON:/g)).toHaveLength(2);
     expect(action).toContain('default: "0.1.0"');
@@ -90,6 +92,15 @@ describe("@okfx/github-action", () => {
     expect(summary).toContain("Bundle: ``bundle` [Injected](evil)\\nnext``");
     expect(summary).toContain("- Lint JSON: ``lint` <img src=x>.json``");
     expect(summary).not.toContain("Bundle: `bundle`");
+  });
+
+  it("handles many separate backtick runs in summary values", () => {
+    const root = "`x".repeat(150_000);
+
+    const summary = formatOkfSummary({ root });
+
+    expect(summary.startsWith("## OKF Summary")).toBe(true);
+    expect(summary).toContain("Bundle: ``");
   });
 });
 

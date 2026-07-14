@@ -79,4 +79,13 @@ describe("Markdown generation helpers", () => {
     expect(markdownCodeSpan("name` [Injected](evil.md)"))
       .toBe("`` name` [Injected](evil.md) ``");
   });
+
+  it("handles many separate backtick runs without spreading function arguments", () => {
+    const value = "`x".repeat(150_000);
+
+    const span = markdownCodeSpan(value);
+
+    expect(span.startsWith("`` ")).toBe(true);
+    expect(span.endsWith(" ``")).toBe(true);
+  });
 });

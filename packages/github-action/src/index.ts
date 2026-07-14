@@ -57,7 +57,10 @@ export function formatOkfSummary(input: OkfActionSummaryInput): string {
 
 function markdownCode(value: string): string {
   const visibleValue = value.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
-  const longestFence = Math.max(0, ...[...visibleValue.matchAll(/`+/g)].map((match) => match[0].length));
+  let longestFence = 0;
+  for (const match of visibleValue.matchAll(/`+/g)) {
+    longestFence = Math.max(longestFence, match[0].length);
+  }
   const fence = "`".repeat(longestFence + 1);
   const padding = /^[ `]|[ `]$/.test(visibleValue) ? " " : "";
   return `${fence}${padding}${visibleValue}${padding}${fence}`;
