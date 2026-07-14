@@ -97,13 +97,13 @@ pub fn parse_markdown_document(
     let mut frontmatter = None;
     let mut frontmatter_raw = None;
     let mut body_raw = content;
-    let mut body_start_offset = 0;
+    let mut body_start_source_offset = 0;
     let mut body_start_line = 1;
 
     if let Some(split) = frontmatter_split {
         frontmatter_raw = Some(split.raw.to_string());
         body_raw = &content[split.body_start_offset..];
-        body_start_offset = split.body_start_offset;
+        body_start_source_offset = utf16_len(&content[..split.body_start_offset]);
         body_start_line = line_number_at(content, split.body_start_offset);
 
         match parse_frontmatter(split.raw) {
@@ -115,7 +115,7 @@ pub fn parse_markdown_document(
     let (body, links) = parse_markdown_body(
         body_raw,
         &source_concept_id,
-        body_start_offset,
+        body_start_source_offset,
         body_start_line,
     );
 
@@ -191,12 +191,12 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
 fn parse_markdown_body(
     raw: &str,
     source_concept_id: &str,
-    body_start_offset: usize,
+    body_start_source_offset: usize,
     body_start_line: usize,
 ) -> (MarkdownBody, Vec<Link>) {
     let mut headings = Vec::new();
     let mut links = Vec::new();
-    let mut line_offset = 0;
+    let mut line_source_offset = 0;
     let mut code_fence = None;
     let link_searchable = mask_inline_code(&mask_fenced_code(raw));
 
@@ -212,28 +212,29 @@ fn parse_markdown_body(
             if is_closing_code_fence(without_newline, fence) {
                 code_fence = None;
             }
-            line_offset += line.len();
+            line_source_offset += utf16_len(line);
             continue;
         }
         if let Some(fence) = opening_code_fence(without_newline) {
             code_fence = Some(fence);
-            line_offset += line.len();
+            line_source_offset += utf16_len(line);
             continue;
         }
         if let Some(heading) = parse_heading(
             without_newline,
-            body_start_offset + line_offset,
+            body_start_source_offset + line_source_offset,
             line_number,
         ) {
             headings.push(heading);
         }
         links.extend(parse_links(
             link_without_newline,
+            without_newline,
             source_concept_id,
-            body_start_offset + line_offset,
+            body_start_source_offset + line_source_offset,
             line_number,
         ));
-        line_offset += line.len();
+        line_source_offset += utf16_len(line);
     }
 
     (
@@ -267,7 +268,7 @@ fn parse_heading(line: &str, absolute_line_offset: usize, line_number: usize) ->
         .trim_end_matches('#')
         .trim()
         .to_string();
-    let end_column = line.len() + 1;
+    let line_source_length = utf16_len(line);
     Some(Heading {
         level: hashes,
         slug: slugify_heading(&title),
@@ -280,8 +281,8 @@ fn parse_heading(line: &str, absolute_line_offset: usize, line_number: usize) ->
             },
             end: Some(SourceLocation {
                 line: line_number,
-                column: end_column,
-                offset: absolute_line_offset + line.len(),
+                column: line_source_length + 1,
+                offset: absolute_line_offset + line_source_length,
             }),
         },
     })
@@ -289,6 +290,7 @@ fn parse_heading(line: &str, absolute_line_offset: usize, line_number: usize) ->
 
 fn parse_links(
     line: &str,
+    source_line: &str,
     source_concept_id: &str,
     absolute_line_offset: usize,
     line_number: usize,
@@ -337,13 +339,13 @@ fn parse_links(
             location: SourceRange {
                 start: SourceLocation {
                     line: line_number,
-                    column: open_bracket + 1,
-                    offset: absolute_line_offset + open_bracket,
+                    column: utf16_len(&source_line[..open_bracket]) + 1,
+                    offset: absolute_line_offset + utf16_len(&source_line[..open_bracket]),
                 },
                 end: Some(SourceLocation {
                     line: line_number,
-                    column: close_paren + 2,
-                    offset: absolute_line_offset + close_paren + 1,
+                    column: utf16_len(&source_line[..close_paren + 1]) + 1,
+                    offset: absolute_line_offset + utf16_len(&source_line[..close_paren + 1]),
                 }),
             },
         });
@@ -659,6 +661,10 @@ fn line_number_at(content: &str, offset: usize) -> usize {
         + 1
 }
 
+fn utf16_len(value: &str) -> usize {
+    value.encode_utf16().count()
+}
+
 fn sha256_hex(input: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input);
@@ -813,6 +819,39 @@ mod tests {
             ]
         );
         assert_eq!(parsed.links[0].location.end.as_ref().unwrap().offset, 37);
+    }
+
+    #[test]
+    fn reports_javascript_compatible_utf16_locations() {
+        let content = "---\ntitle: 文档\n---\n# 标题😀\n😀 `代码` [目标](target.md)\n";
+        let parsed = parse_markdown_document("note.md", content, "note");
+        let heading_start = content.find("# 标题").unwrap();
+        let heading_end = content[heading_start..].find('\n').unwrap() + heading_start;
+        let link_start = content.find("[目标]").unwrap();
+        let link_end = content[link_start..].find(')').unwrap() + link_start + 1;
+
+        assert_eq!(
+            parsed.body.headings[0].location.start.offset,
+            utf16_len(&content[..heading_start])
+        );
+        assert_eq!(
+            parsed.body.headings[0]
+                .location
+                .end
+                .as_ref()
+                .unwrap()
+                .offset,
+            utf16_len(&content[..heading_end])
+        );
+        assert_eq!(
+            parsed.links[0].location.start.offset,
+            utf16_len(&content[..link_start])
+        );
+        assert_eq!(parsed.links[0].location.start.column, 9);
+        assert_eq!(
+            parsed.links[0].location.end.as_ref().unwrap().offset,
+            utf16_len(&content[..link_end])
+        );
     }
 
     #[test]
