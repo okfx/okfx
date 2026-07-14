@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -105,12 +105,13 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
     await assertSafeFileTarget(out, "archive");
     archiveStagingDir = await mkdtemp(join(dirname(out), ".okfx-pack-archive-"));
     const stagedArchive = join(archiveStagingDir, basename(out));
-    const manifestFiles = await Promise.all(files.map((path) => stagePackFile(
+    const stagedFiles = await Promise.all(files.map((path) => stagePackFile(
       root,
       stagingRoot,
       path,
       conceptIdsByPath.get(path)
     )));
+    const manifestFiles = stagedFiles.filter((file): file is PackFileManifestEntry => file !== undefined);
     const createdAt = (options.createdAt ?? new Date()).toISOString();
     const source = await gitSource(root);
     const checksums: ChecksumsIR = {
@@ -151,7 +152,7 @@ export async function packBundle(rootInput: string, options: PackOptions = {}): 
       gzip: true,
       portable: true,
       noMtime: true
-    }, [...files, ...metadataFiles]);
+    }, [...manifestFiles.map((file) => file.path), ...metadataFiles]);
     await assertSafeFileTarget(out, "archive");
     await rename(stagedArchive, out);
 
@@ -175,19 +176,39 @@ async function stagePackFile(
   stagingRoot: string,
   path: string,
   conceptId: string | undefined
-): Promise<PackFileManifestEntry> {
+): Promise<PackFileManifestEntry | undefined> {
   const sourcePath = join(root, path);
-  const [content, sourceStat] = await Promise.all([readFile(sourcePath), stat(sourcePath)]);
-  const stagedPath = join(stagingRoot, path);
-  const mode = sourceStat.mode & 0o777;
-  await mkdir(dirname(stagedPath), { recursive: true });
-  await writeFile(stagedPath, content, { mode });
-  await chmod(stagedPath, mode);
-  return {
-    path,
-    sha256: sha256Hex(content),
-    concept_id: conceptId
-  };
+  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+  const handle = await open(sourcePath, constants.O_RDONLY | noFollow).catch((error: unknown) => {
+    if (isFileSystemError(error, "ELOOP")) {
+      throw new Error(`Refusing to pack symbolic link: ${path}`);
+    }
+    throw error;
+  });
+
+  try {
+    const sourceStat = await handle.stat();
+    if (!sourceStat.isFile()) {
+      throw new Error(`Refusing to pack non-file entry: ${path}`);
+    }
+    const content = await handle.readFile();
+    if (containsPrivateKeyMarker(content)) {
+      return undefined;
+    }
+
+    const stagedPath = join(stagingRoot, path);
+    const mode = sourceStat.mode & 0o777;
+    await mkdir(dirname(stagedPath), { recursive: true });
+    await writeFile(stagedPath, content, { mode });
+    await chmod(stagedPath, mode);
+    return {
+      path,
+      sha256: sha256Hex(content),
+      concept_id: conceptId
+    };
+  } finally {
+    await handle.close();
+  }
 }
 
 async function writePackMetadata(
@@ -222,11 +243,10 @@ async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: 
     .filter((entry) => resolve(entry) !== out)
     .map((entry) => relativePosixPath(root, entry))
     .sort((a, b) => a.localeCompare(b));
-  const sensitive = await Promise.all(paths.map((path) => isSensitivePackFile(root, path)));
-  return paths.filter((_, index) => !sensitive[index]);
+  return paths.filter((path) => !isSensitivePackPath(path));
 }
 
-async function isSensitivePackFile(root: string, path: string): Promise<boolean> {
+function isSensitivePackPath(path: string): boolean {
   const normalized = path.toLowerCase();
   const name = basename(path).toLowerCase();
   if (name === ".env" || (name.startsWith(".env.") && name !== ".env.example")) {
@@ -252,19 +272,12 @@ async function isSensitivePackFile(root: string, path: string): Promise<boolean>
     return true;
   }
 
-  return containsPrivateKeyMarker(join(root, path));
+  return false;
 }
 
-async function containsPrivateKeyMarker(path: string): Promise<boolean> {
-  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
-  const handle = await open(path, constants.O_RDONLY | noFollow);
-  try {
-    const buffer = Buffer.alloc(64 * 1024);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    return /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/.test(buffer.subarray(0, bytesRead).toString("utf8"));
-  } finally {
-    await handle.close();
-  }
+function containsPrivateKeyMarker(content: Buffer): boolean {
+  return /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/
+    .test(content.subarray(0, 64 * 1024).toString("utf8"));
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
