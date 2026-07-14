@@ -54,6 +54,9 @@ export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): st
   }
 
   const decodedTarget = decodePercentEncodedPath(withoutQuery);
+  if (decodedTarget.includes("\0")) {
+    return undefined;
+  }
 
   const targetPath = decodedTarget.startsWith("/")
     ? decodedTarget.slice(1)

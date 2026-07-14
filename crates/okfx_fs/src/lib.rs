@@ -199,6 +199,9 @@ pub fn resolve_markdown_target(
     }
 
     let decoded_target = decode_percent_runs(without_query);
+    if decoded_target.contains('\0') {
+        return None;
+    }
 
     let target_path = if let Some(root_relative) = decoded_target.strip_prefix('/') {
         root_relative.to_string()
@@ -531,6 +534,10 @@ mod tests {
         );
         assert_eq!(
             resolve_markdown_target("concepts/current.md", "%2e%2e/%2e%2e/outside.md"),
+            None
+        );
+        assert_eq!(
+            resolve_markdown_target("index.md", "docs/%00secret.md"),
             None
         );
     }

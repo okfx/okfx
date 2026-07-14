@@ -295,6 +295,10 @@ mod tests {
             resolve_markdown_target("concepts/current.md", "%2e%2e/%2e%2e/outside.md"),
             None
         );
+        assert_eq!(
+            resolve_markdown_target("index.md", "docs/%00secret.md"),
+            None
+        );
     }
 
     #[test]

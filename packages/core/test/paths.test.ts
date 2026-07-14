@@ -49,4 +49,8 @@ describe("relativeMarkdownTarget", () => {
     expect(resolveMarkdownTarget("concepts/current.md", "%2e%2e/%2e%2e/outside.md"))
       .toBeUndefined();
   });
+
+  it("rejects NUL bytes after decoding a Markdown destination", () => {
+    expect(resolveMarkdownTarget("index.md", "docs/%00secret.md")).toBeUndefined();
+  });
 });
