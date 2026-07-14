@@ -54,7 +54,6 @@ pub fn format_markdown_document_with_key_order(
     let normalized_frontmatter = split.raw.replace("\r\n", "\n").replace('\r', "\n");
     let frontmatter = match serde_yaml::from_str::<Value>(&normalized_frontmatter) {
         Ok(Value::Mapping(mapping)) => mapping,
-        Ok(Value::Null) => Mapping::new(),
         Ok(_) => {
             diagnostics.push(invalid_frontmatter(
                 &path,
@@ -435,6 +434,17 @@ mod tests {
         assert!(!result.changed);
         assert_eq!(result.formatted, input);
         assert_eq!(result.diagnostics[0].code, "spec/invalid-frontmatter");
+    }
+
+    #[test]
+    fn rejects_null_frontmatter_without_rewriting() {
+        for input in ["---\n---\n# Empty\n", "---\n~\n---\n# Null\n"] {
+            let result = format_markdown_document("bad.md", input);
+
+            assert!(!result.changed);
+            assert_eq!(result.formatted, input);
+            assert_eq!(result.diagnostics[0].code, "spec/invalid-frontmatter");
+        }
     }
 
     #[test]
