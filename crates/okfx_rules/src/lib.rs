@@ -1,9 +1,18 @@
 use okfx_core::find_representative_cycles;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::{IpAddr, Ipv4Addr};
+use std::sync::LazyLock;
 
 pub const CRATE_NAME: &str = "okfx_rules";
+
+static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?:^|[^A-Za-z0-9_])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:$|[^A-Za-z0-9_])",
+    )
+    .expect("email pattern must be valid")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1087,18 +1096,7 @@ fn secret_value_len(value: &str) -> usize {
 }
 
 fn contains_unredacted_email(value: &str) -> bool {
-    value.split_whitespace().any(|token| {
-        let token = token.trim_matches(|ch: char| matches!(ch, ',' | '.' | ';' | ':' | ')' | '('));
-        let Some((local, domain)) = token.split_once('@') else {
-            return false;
-        };
-        !local.is_empty()
-            && domain.contains('.')
-            && local.chars().all(is_email_local_char)
-            && domain
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '.')
-    })
+    EMAIL_PATTERN.is_match(value)
 }
 
 fn contains_internal_url(value: &str) -> bool {
@@ -1185,10 +1183,6 @@ fn top_level_frontmatter_key(line: &str) -> Option<&str> {
 
 fn logical_lines(value: &str) -> impl Iterator<Item = &str> {
     value.split(['\r', '\n'])
-}
-
-fn is_email_local_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '%' | '+' | '-')
 }
 
 fn is_private_url(value: &str) -> bool {
@@ -1710,6 +1704,27 @@ mod tests {
         assert!(!contains_token_looking_value(&format!(
             "tokenized={secret}"
         )));
+    }
+
+    #[test]
+    fn detects_emails_next_to_common_markup_and_paths() {
+        for value in [
+            "Contact <admin@corp.com>.",
+            "Owner: [admin@corp.com]",
+            "Profile admin@corp.com/path",
+            "Tagged x+alerts@sub.example.co.uk",
+        ] {
+            assert!(
+                contains_unredacted_email(value),
+                "expected email in: {value}"
+            );
+        }
+        for value in ["admin@corp.c", "admin@corp.com_suffix", "not-an-email"] {
+            assert!(
+                !contains_unredacted_email(value),
+                "unexpected email in: {value}"
+            );
+        }
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
