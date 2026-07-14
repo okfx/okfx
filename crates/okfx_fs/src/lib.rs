@@ -305,6 +305,15 @@ fn walk_directory(
 
     for entry in entries {
         let path = entry.path();
+        let relative = relative_posix_path(root, &path)?;
+
+        if !options.include_dotfiles && contains_dot_segment(&relative) {
+            continue;
+        }
+        if is_excluded(&options.exclude, &relative) {
+            continue;
+        }
+
         let canonical_path = if options.follow_symlinks {
             let canonical_path = fs::canonicalize(&path).map_err(|error| FsError::Io {
                 path: path.clone(),
@@ -329,14 +338,6 @@ fn walk_directory(
             path: path.clone(),
             message: error.to_string(),
         })?;
-        let relative = relative_posix_path(root, &path)?;
-
-        if !options.include_dotfiles && contains_dot_segment(&relative) {
-            continue;
-        }
-        if is_excluded(&options.exclude, &relative) {
-            continue;
-        }
 
         if metadata.is_dir() {
             if canonical_path
@@ -598,6 +599,30 @@ mod tests {
             discover_markdown_files(&root, &options),
             Err(FsError::OutsideRoot { .. })
         ));
+
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skips_excluded_symlinks_before_following_them() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_root("discover-excluded-symlink");
+        let outside = temp_root("discover-excluded-outside");
+        write(&root, "inside.md", "# Inside");
+        write(&outside, "outside.md", "# Outside");
+        symlink(&outside, root.join("node_modules")).unwrap();
+
+        let options = DiscoveryOptions {
+            follow_symlinks: true,
+            ..DiscoveryOptions::default()
+        };
+        assert_eq!(
+            discover_markdown_files(&root, &options).unwrap(),
+            vec!["inside.md"]
+        );
 
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside).unwrap();
