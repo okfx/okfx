@@ -67,6 +67,7 @@ function extractHeadings(bodyRaw: string, locate: SourceLocator): HeadingIR[] {
 
 function extractLinks(bodyRaw: string, sourceConceptId: string, locate: SourceLocator): LinkIR[] {
   const links: LinkIR[] = [];
+  const labelEnds = matchingLinkLabelEnds(bodyRaw);
   let cursor = 0;
 
   while (cursor < bodyRaw.length) {
@@ -83,12 +84,12 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, locate: SourceLo
       continue;
     }
 
-    const labelEnd = findLinkLabelEnd(bodyRaw, startOffset + 1);
-    if (labelEnd === -1 || bodyRaw[labelEnd + 1] !== "(") {
+    const labelEnd = labelEnds.get(startOffset);
+    if (labelEnd === undefined || bodyRaw[labelEnd + 1] !== "(") {
       cursor = startOffset + 1;
       continue;
     }
-    if (linkLabelContainsLink(bodyRaw, startOffset + 1, labelEnd)) {
+    if (linkLabelContainsLink(bodyRaw, startOffset + 1, labelEnd, labelEnds)) {
       cursor = startOffset + 1;
       continue;
     }
@@ -221,29 +222,36 @@ function parseLinkDestinationTail(
   return undefined;
 }
 
-function findLinkLabelEnd(value: string, start: number): number {
-  let depth = 0;
-  for (let cursor = start; cursor < value.length; cursor += 1) {
+function matchingLinkLabelEnds(value: string): Map<number, number> {
+  const ends = new Map<number, number>();
+  const stack: number[] = [];
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
     const character = value[cursor];
     if (character === "\r" || character === "\n") {
-      return -1;
+      stack.length = 0;
+      continue;
     }
     if (isEscaped(value, cursor)) {
       continue;
     }
     if (character === "[") {
-      depth += 1;
+      stack.push(cursor);
     } else if (character === "]") {
-      if (depth === 0) {
-        return cursor;
+      const start = stack.pop();
+      if (start !== undefined) {
+        ends.set(start, cursor);
       }
-      depth -= 1;
     }
   }
-  return -1;
+  return ends;
 }
 
-function linkLabelContainsLink(value: string, start: number, end: number): boolean {
+function linkLabelContainsLink(
+  value: string,
+  start: number,
+  end: number,
+  labelEnds: Map<number, number>
+): boolean {
   let cursor = start;
   while (cursor < end) {
     const nestedStart = value.indexOf("[", cursor);
@@ -256,8 +264,8 @@ function linkLabelContainsLink(value: string, start: number, end: number): boole
       continue;
     }
 
-    const nestedEnd = findLinkLabelEnd(value, nestedStart + 1);
-    if (nestedEnd !== -1 && nestedEnd < end && value[nestedEnd + 1] === "(") {
+    const nestedEnd = labelEnds.get(nestedStart);
+    if (nestedEnd !== undefined && nestedEnd < end && value[nestedEnd + 1] === "(") {
       const destination = parseLinkDestination(value, nestedEnd + 2);
       if (destination && destination.closingParen < end) {
         return true;
@@ -310,6 +318,7 @@ function parseAtxHeading(line: string): { level: number; title: string } | undef
 
 function stripInlineLinks(markdown: string): string {
   const chunks: string[] = [];
+  const labelEnds = matchingLinkLabelEnds(markdown);
   let emittedThrough = 0;
   let cursor = 0;
 
@@ -324,12 +333,12 @@ function stripInlineLinks(markdown: string): string {
     }
 
     const image = markdown[startOffset - 1] === "!" && !isEscaped(markdown, startOffset - 1);
-    const labelEnd = findLinkLabelEnd(markdown, startOffset + 1);
-    if (labelEnd === -1 || markdown[labelEnd + 1] !== "(") {
+    const labelEnd = labelEnds.get(startOffset);
+    if (labelEnd === undefined || markdown[labelEnd + 1] !== "(") {
       cursor = startOffset + 1;
       continue;
     }
-    if (linkLabelContainsLink(markdown, startOffset + 1, labelEnd)) {
+    if (linkLabelContainsLink(markdown, startOffset + 1, labelEnd, labelEnds)) {
       cursor = startOffset + 1;
       continue;
     }

@@ -139,6 +139,16 @@ describe("Markdown code fences", () => {
     expect(parsed.links.map((link) => link.targetRaw)).toEqual(["inner.md", "image-outer.md"]);
   });
 
+  it("finds valid links after unmatched opening brackets", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "[Unmatched [Valid](valid.md)\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual(["valid.md"]);
+  });
+
   it("parses empty and enclosed destinations with optional titles", () => {
     const parsed = parseMarkdownDocument(
       "concept.md",

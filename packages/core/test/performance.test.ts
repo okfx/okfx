@@ -60,6 +60,17 @@ describe("performance baselines", () => {
     expect(parsed.links.at(-1)?.location.start.line).toBe(count * 2);
     expect(elapsedMs).toBeLessThan(1500);
   }, 5000);
+
+  it("does not rescan the tail for every unmatched link label", () => {
+    const content = "[".repeat(25_000);
+    const started = performance.now();
+
+    const parsed = parseMarkdownDocument("malformed.md", content, "malformed");
+    const elapsedMs = performance.now() - started;
+
+    expect(parsed.links).toEqual([]);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
 });
 
 async function makeLargeBundle(count: number): Promise<string> {

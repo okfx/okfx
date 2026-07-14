@@ -311,6 +311,7 @@ fn parse_links(
     line_number: usize,
 ) -> Vec<Link> {
     let bytes = line.as_bytes();
+    let label_ends = matching_link_label_ends(line);
     let mut links = Vec::new();
     let mut cursor = 0;
 
@@ -330,14 +331,15 @@ fn parse_links(
             cursor = open_bracket + 1;
             continue;
         }
-        let Some(close_bracket) = find_link_label_end(line, open_bracket + 1) else {
-            break;
+        let Some(close_bracket) = label_ends.get(&open_bracket).copied() else {
+            cursor = open_bracket + 1;
+            continue;
         };
         if !line[close_bracket + 1..].starts_with('(') {
             cursor = close_bracket + 1;
             continue;
         }
-        if link_label_contains_link(line, open_bracket + 1, close_bracket) {
+        if link_label_contains_link(line, open_bracket + 1, close_bracket, &label_ends) {
             cursor = open_bracket + 1;
             continue;
         }
@@ -492,28 +494,30 @@ fn parse_link_destination_tail(
     None
 }
 
-fn find_link_label_end(value: &str, start: usize) -> Option<usize> {
+fn matching_link_label_ends(value: &str) -> BTreeMap<usize, usize> {
     let bytes = value.as_bytes();
-    let mut depth = 0;
-    let mut cursor = start;
-
-    while cursor < bytes.len() {
+    let mut ends = BTreeMap::new();
+    let mut stack = Vec::new();
+    for cursor in 0..bytes.len() {
         match bytes[cursor] {
-            b'[' if !is_escaped_delimiter(bytes, cursor) => depth += 1,
+            b'[' if !is_escaped_delimiter(bytes, cursor) => stack.push(cursor),
             b']' if !is_escaped_delimiter(bytes, cursor) => {
-                if depth == 0 {
-                    return Some(cursor);
+                if let Some(start) = stack.pop() {
+                    ends.insert(start, cursor);
                 }
-                depth -= 1;
             }
             _ => {}
         }
-        cursor += 1;
     }
-    None
+    ends
 }
 
-fn link_label_contains_link(value: &str, start: usize, end: usize) -> bool {
+fn link_label_contains_link(
+    value: &str,
+    start: usize,
+    end: usize,
+    label_ends: &BTreeMap<usize, usize>,
+) -> bool {
     let bytes = value.as_bytes();
     let mut cursor = start;
 
@@ -531,7 +535,7 @@ fn link_label_contains_link(value: &str, start: usize, end: usize) -> bool {
             continue;
         }
 
-        if let Some(nested_end) = find_link_label_end(value, nested_start + 1)
+        if let Some(nested_end) = label_ends.get(&nested_start).copied()
             && nested_end < end
             && value[nested_end + 1..].starts_with('(')
             && parse_link_destination(value, nested_end + 2)
@@ -622,6 +626,7 @@ fn plain_text(markdown: &str) -> String {
 
 fn strip_inline_links(markdown: &str) -> String {
     let bytes = markdown.as_bytes();
+    let label_ends = matching_link_label_ends(markdown);
     let mut output = String::with_capacity(markdown.len());
     let mut emitted_through = 0;
     let mut cursor = 0;
@@ -637,14 +642,15 @@ fn strip_inline_links(markdown: &str) -> String {
         }
 
         let image = open > 0 && bytes[open - 1] == b'!' && !is_escaped_delimiter(bytes, open - 1);
-        let Some(close_bracket) = find_link_label_end(markdown, open + 1) else {
-            break;
+        let Some(close_bracket) = label_ends.get(&open).copied() else {
+            cursor = open + 1;
+            continue;
         };
         if !markdown[close_bracket + 1..].starts_with('(') {
             cursor = close_bracket + 1;
             continue;
         }
-        if link_label_contains_link(markdown, open + 1, close_bracket) {
+        if link_label_contains_link(markdown, open + 1, close_bracket, &label_ends) {
             cursor = open + 1;
             continue;
         }
@@ -1164,6 +1170,21 @@ mod tests {
             ]
         );
         assert_eq!(parsed.body.text, "See [details] Escaped \\] label");
+    }
+
+    #[test]
+    fn finds_valid_links_after_unmatched_opening_brackets() {
+        let parsed =
+            parse_markdown_document("concept.md", "[Unmatched [Valid](valid.md)\n", "concept");
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["valid.md"]
+        );
     }
 
     #[test]
