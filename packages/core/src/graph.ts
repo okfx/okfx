@@ -119,9 +119,7 @@ export function graphToDot(graph: OkfxGraphIR): string {
 }
 
 export function graphToHtml(graph: OkfxGraphIR): string {
-  const graphJson = JSON.stringify(graph, null, 2)
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e");
+  const graphJson = escapeHtml(JSON.stringify(graph, null, 2));
 
   return `<!doctype html>
 <html lang="en">
@@ -159,11 +157,7 @@ export function graphToHtml(graph: OkfxGraphIR): string {
     </section>
   </div>
   <h2>Graph JSON</h2>
-  <pre><code id="graph-json"></code></pre>
-  <script type="application/json" id="graph-data">${graphJson}</script>
-  <script>
-    document.getElementById("graph-json").textContent = document.getElementById("graph-data").textContent;
-  </script>
+  <pre><code id="graph-json">${graphJson}</code></pre>
 </body>
 </html>
 `;

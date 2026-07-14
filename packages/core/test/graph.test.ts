@@ -155,7 +155,11 @@ describe("graph formatters", () => {
       const graph = buildGraph(await loadBundle(root, { loadConfigFile: false }));
 
       expect(graphToDot(graph)).toContain('"a" -> "b"');
-      expect(graphToHtml(graph)).toContain("<title>OKF Graph</title>");
+      const html = graphToHtml(graph);
+      expect(html).toContain("<title>OKF Graph</title>");
+      expect(html).toContain('<pre><code id="graph-json">{');
+      expect(html).toContain('"nodes"');
+      expect(html).not.toContain("<script");
       expect(graphToCytoscape(graph).elements).toMatchObject({
         nodes: expect.arrayContaining([
           { data: expect.objectContaining({ id: "a", label: "A", type: "Note" }) },
