@@ -841,8 +841,10 @@ fn frontmatter_key_order_is_stable(raw: Option<&str>, configured_order: &[String
 }
 
 fn frontmatter_key(line: &str) -> Option<String> {
+    if line.starts_with([' ', '\t']) {
+        return None;
+    }
     let (key, _) = line.split_once(':')?;
-    let key = key.trim();
     let mut chars = key.chars();
     let first = chars.next()?;
     if !(first.is_ascii_alphabetic() || first == '_') {
@@ -1563,6 +1565,23 @@ mod tests {
         assert!(codes.contains(&"style/frontmatter-key-order"));
         assert!(codes.contains(&"security/token-looking-value"));
         assert!(!codes.contains(&"security/internal-url"));
+    }
+
+    #[test]
+    fn ignores_nested_keys_when_checking_frontmatter_order() {
+        let diagnostics =
+            run_builtin_rules(RuleInput {
+                concepts: vec![concept("nested").with_frontmatter(
+                    "type: Note\ntitle: Nested\nmetadata:\n  zebra: 1\n  alpha: 2",
+                )],
+                ..RuleInput::default()
+            });
+
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "style/frontmatter-key-order")
+        );
     }
 
     #[test]
