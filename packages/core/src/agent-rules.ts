@@ -22,9 +22,10 @@ export function missingUsageDiagnostics(bundle: BundleIR): DiagnosticIR[] {
 }
 
 export function metricMissingSourceDiagnostics(bundle: BundleIR): DiagnosticIR[] {
+  const conceptsById = new Map(bundle.concepts.map((concept) => [concept.id, concept]));
   return bundle.concepts
     .filter((concept) => concept.type.toLowerCase() === "metric")
-    .filter((concept) => !linksToType(concept, bundle, "table"))
+    .filter((concept) => !linksToType(concept, conceptsById, "table"))
     .map((concept) => conceptDiagnostic("agent/metric-missing-source", "warning", concept, "Metric should link to at least one source table concept."));
 }
 
@@ -82,8 +83,11 @@ function isAuthHeading(heading: string): boolean {
   return /\b(?:auth(?:entication|orization|n|z)?|oauth2?)\b/.test(heading);
 }
 
-function linksToType(concept: ConceptIR, bundle: BundleIR, targetType: string): boolean {
-  const conceptsById = new Map(bundle.concepts.map((item) => [item.id, item]));
+function linksToType(
+  concept: ConceptIR,
+  conceptsById: ReadonlyMap<string, ConceptIR>,
+  targetType: string
+): boolean {
   return concept.links.some((link) => {
     if (link.kind !== "internal" || !link.resolved || !link.targetConceptId) {
       return false;

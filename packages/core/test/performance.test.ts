@@ -6,6 +6,8 @@ import { performance } from "node:perf_hooks";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildGraph, buildSearchIndex, lintBundle, loadBundle, parseMarkdownDocument } from "../src/index.js";
+import { metricMissingSourceDiagnostics } from "../src/agent-rules.js";
+import type { BundleIR, ConceptIR } from "../src/types.js";
 
 const roots: string[] = [];
 
@@ -94,6 +96,43 @@ describe("performance baselines", () => {
     const elapsedMs = performance.now() - started;
 
     expect(parsed.links).toEqual([]);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
+
+  it("indexes metric source types once for large bundles", () => {
+    const count = 8_000;
+    const concepts: ConceptIR[] = Array.from({ length: count }, (_, index) => ({
+      id: `metric-${index}`,
+      path: `metric-${index}.md`,
+      type: "Metric",
+      frontmatter: {},
+      body: { raw: "", text: "", headings: [] },
+      links: [],
+      contentHash: ""
+    }));
+    const bundle: BundleIR = {
+      root: "/bundle",
+      concepts,
+      indexes: [],
+      logs: [],
+      links: [],
+      diagnostics: [],
+      stats: {
+        fileCount: count,
+        conceptCount: count,
+        indexCount: 0,
+        logCount: 0,
+        linkCount: 0,
+        brokenLinkCount: 0,
+        diagnosticCount: 0
+      }
+    };
+    const started = performance.now();
+
+    const diagnostics = metricMissingSourceDiagnostics(bundle);
+    const elapsedMs = performance.now() - started;
+
+    expect(diagnostics).toHaveLength(count);
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
 });

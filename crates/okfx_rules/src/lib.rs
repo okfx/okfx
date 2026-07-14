@@ -770,11 +770,10 @@ fn circular_reference_diagnostics(context: &RuleContext<'_>) -> Vec<Diagnostic> 
 
 fn links_to_type(concept: &ConceptRuleInput, context: &RuleContext<'_>, target_type: &str) -> bool {
     context
-        .links
-        .iter()
-        .filter(|link| link.source_concept_id == concept.id)
-        .filter(|link| link.kind == LinkKind::Internal && link.resolved)
-        .filter_map(|link| link.target_concept_id.as_deref())
+        .adjacency
+        .get(concept.id.as_str())
+        .into_iter()
+        .flatten()
         .filter_map(|target_id| context.concepts_by_id.get(target_id))
         .any(|target| target.concept_type.eq_ignore_ascii_case(target_type))
 }
@@ -1530,6 +1529,24 @@ mod tests {
         assert_eq!(paths_for("agent/missing-summary"), vec!["author.md"]);
         assert_eq!(paths_for("agent/api-missing-auth-notes"), vec!["author.md"]);
         assert!(paths_for("agent/missing-usage").is_empty());
+    }
+
+    #[test]
+    fn recognizes_metric_source_table_links_from_the_graph_index() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("metric").with_type("Metric"),
+                concept("events").with_type("Table"),
+            ],
+            links: vec![link("metric", "events")],
+            ..RuleInput::default()
+        });
+
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.code != "agent/metric-missing-source")
+        );
     }
 
     #[test]
