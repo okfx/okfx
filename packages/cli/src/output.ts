@@ -50,10 +50,25 @@ ${entries.map(formatDiagnostic).join("\n")}`)
 export function formatDiagnostic(diagnostic: DiagnosticIR): string {
   const location = diagnostic.location?.start;
   const path = diagnostic.path
-    ? `${diagnostic.path}${location ? `:${location.line}:${location.column}` : ""}`
+    ? `${terminalValue(diagnostic.path)}${location ? `:${location.line}:${location.column}` : ""}`
     : "(bundle)";
 
-  return `  ${diagnostic.code}
+  return `  ${terminalValue(diagnostic.code)}
     ${path}
-    ${diagnostic.message}`;
+    ${terminalValue(diagnostic.message)}`;
+}
+
+export function terminalValue(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/gu, (character) => {
+    if (character === "\n") {
+      return "\\n";
+    }
+    if (character === "\r") {
+      return "\\r";
+    }
+    if (character === "\t") {
+      return "\\t";
+    }
+    return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+  });
 }

@@ -45,4 +45,19 @@ describe("writeOutput", () => {
     expect(formatted.match(/test\//g)).toHaveLength(count);
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
+
+  it("keeps diagnostic fields on their structural output lines", () => {
+    const formatted = formatDiagnosticGroups([{
+      code: "test/injected\n::group::code",
+      severity: "error",
+      message: "message\r\n::add-mask::secret\tend",
+      path: "concept.md\n::warning::path"
+    }]);
+
+    expect(formatted).not.toMatch(/[\r\t]/u);
+    expect(formatted).not.toContain("\n::");
+    expect(formatted).toContain("test/injected\\n::group::code");
+    expect(formatted).toContain("concept.md\\n::warning::path");
+    expect(formatted).toContain("message\\r\\n::add-mask::secret\\tend");
+  });
 });
