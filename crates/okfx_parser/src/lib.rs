@@ -749,49 +749,70 @@ fn mask_fenced_code(markdown: &str) -> String {
 fn mask_inline_code(markdown: &str) -> String {
     let bytes = markdown.as_bytes();
     let mut masked = bytes.to_vec();
-    let mut cursor = 0;
+    let runs = backtick_runs(bytes);
+    let next_same_length = next_backtick_runs_by_length(&runs);
+    let mut run_index = 0;
 
-    while cursor < bytes.len() {
-        let Some(opener_relative) = bytes[cursor..].iter().position(|byte| *byte == b'`') else {
-            break;
-        };
-        let opener = cursor + opener_relative;
-        if is_escaped_delimiter(bytes, opener) {
-            cursor = opener + 1;
-            continue;
-        }
-
-        let delimiter_length = backtick_run_length(bytes, opener);
-        let mut search_from = opener + delimiter_length;
-        let mut closing_end = None;
-        while search_from < bytes.len() {
-            let Some(candidate_relative) =
-                bytes[search_from..].iter().position(|byte| *byte == b'`')
-            else {
-                break;
-            };
-            let candidate = search_from + candidate_relative;
-            let candidate_length = backtick_run_length(bytes, candidate);
-            if candidate_length == delimiter_length {
-                closing_end = Some(candidate + candidate_length);
-                break;
-            }
-            search_from = candidate + candidate_length;
-        }
-
-        let Some(closing_end) = closing_end else {
-            cursor = opener + delimiter_length;
+    while run_index < runs.len() {
+        let opener = runs[run_index];
+        let opener_start = opener.start + usize::from(opener.escaped);
+        let Some(closing_index) = next_same_length[run_index] else {
+            run_index += 1;
             continue;
         };
-        for byte in &mut masked[opener..closing_end] {
+        let closing = runs[closing_index];
+        let closing_end = closing.start + closing.length;
+        for byte in &mut masked[opener_start..closing_end] {
             if !matches!(*byte, b'\r' | b'\n') {
                 *byte = b' ';
             }
         }
-        cursor = closing_end;
+        run_index = closing_index + 1;
     }
 
     String::from_utf8(masked).expect("masking Markdown preserves valid UTF-8")
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BacktickRun {
+    start: usize,
+    length: usize,
+    escaped: bool,
+}
+
+fn backtick_runs(value: &[u8]) -> Vec<BacktickRun> {
+    let mut runs = Vec::new();
+    let mut cursor = 0;
+    while cursor < value.len() {
+        let Some(relative_start) = value[cursor..].iter().position(|byte| *byte == b'`') else {
+            break;
+        };
+        let start = cursor + relative_start;
+        let length = value[start..]
+            .iter()
+            .take_while(|byte| **byte == b'`')
+            .count();
+        runs.push(BacktickRun {
+            start,
+            length,
+            escaped: is_escaped_delimiter(value, start),
+        });
+        cursor = start + length;
+    }
+    runs
+}
+
+fn next_backtick_runs_by_length(runs: &[BacktickRun]) -> Vec<Option<usize>> {
+    let mut next_same_length = vec![None; runs.len()];
+    let mut next_by_length = BTreeMap::new();
+    for (index, run) in runs.iter().enumerate().rev() {
+        let opener_length = run.length - usize::from(run.escaped);
+        if opener_length > 0 {
+            next_same_length[index] = next_by_length.get(&opener_length).copied();
+        }
+        next_by_length.insert(run.length, index);
+    }
+    next_same_length
 }
 
 fn mask_preserving_line_endings(value: &str) -> String {
@@ -803,13 +824,6 @@ fn mask_preserving_line_endings(value: &str) -> String {
             _ => ' ',
         })
         .collect()
-}
-
-fn backtick_run_length(value: &[u8], start: usize) -> usize {
-    value[start..]
-        .iter()
-        .take_while(|byte| **byte == b'`')
-        .count()
 }
 
 fn is_escaped_delimiter(value: &[u8], index: usize) -> bool {

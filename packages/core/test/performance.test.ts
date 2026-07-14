@@ -82,6 +82,20 @@ describe("performance baselines", () => {
     expect(parsed.links).toEqual([]);
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
+
+  it("indexes unmatched backtick runs by delimiter length", () => {
+    const content = Array.from(
+      { length: 1_600 },
+      (_, index) => `${"`".repeat(index + 1)}x`
+    ).join("");
+    const started = performance.now();
+
+    const parsed = parseMarkdownDocument("backticks.md", content, "backticks");
+    const elapsedMs = performance.now() - started;
+
+    expect(parsed.links).toEqual([]);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
 });
 
 async function makeLargeBundle(count: number): Promise<string> {
