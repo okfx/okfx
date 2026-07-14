@@ -1238,7 +1238,11 @@ fn is_private_url(value: &str) -> bool {
     let Some(host) = resource_host(value) else {
         return false;
     };
-    if host == "localhost" || host.ends_with(".localhost") {
+    if host == "localhost"
+        || host.ends_with(".localhost")
+        || host == "local"
+        || host.ends_with(".local")
+    {
         return true;
     }
     if let Some(address) = parse_ipv4_host(&host) {
@@ -1917,6 +1921,7 @@ mod tests {
             "http://[::1]/loopback",
             "http://[fc00::1]/private",
             "http://[fe80::1]/link-local",
+            "http://printer.local/admin",
             "http://[::ffff:127.0.0.1]/mapped",
             "http://2130706433/integer-loopback",
             "http://0x7f000001/hex-loopback",

@@ -395,6 +395,7 @@ resource:
   - http://[::1]/loopback
   - http://[fc00::1]/private
   - http://[fe80::1]/link-local
+  - http://printer.local/admin
   - http://2130706433/integer-loopback
   - http://0x7f000001/hex-loopback
   - http://127.1/short-loopback
@@ -415,10 +416,11 @@ resource:
         .filter((diagnostic) => diagnostic.code === "security/private-url")
         .map((diagnostic) => diagnostic.message);
 
-      expect(messages).toHaveLength(14);
+      expect(messages).toHaveLength(15);
       expect(messages.some((message) => message.includes("10.example.com"))).toBe(false);
       expect(messages.some((message) => message.includes("127.0.0.2"))).toBe(true);
       expect(messages.some((message) => message.includes("[fc00::1]"))).toBe(true);
+      expect(messages.some((message) => message.includes("printer.local"))).toBe(true);
       expect(messages.some((message) => message.includes("2130706433"))).toBe(true);
       expect(messages.some((message) => message.includes("s3://0x7f000001"))).toBe(true);
       expect(messages.some((message) => message.includes("s3://08"))).toBe(false);

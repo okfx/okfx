@@ -755,7 +755,12 @@ function isPrivateUrl(value: string): boolean {
     return false;
   }
 
-  if (host === "localhost" || host.endsWith(".localhost")) {
+  if (
+    host === "localhost"
+    || host.endsWith(".localhost")
+    || host === "local"
+    || host.endsWith(".local")
+  ) {
     return true;
   }
 
