@@ -30,7 +30,7 @@ export function produceOpenApiOkf(
       const id = operation.operationId ?? `${method}-${route}`.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
       const title = operation.summary ?? `${method.toUpperCase()} ${route}`;
       files.push({
-        path: `apis/${slug(id)}.md`,
+        path: `apis/${slug(id, "operation")}.md`,
         identity: `${method.toLowerCase()} ${route}`,
         content: concept("API", title, operation.description ?? document.info?.description ?? "Imported from OpenAPI.", [
           `# ${escapeMarkdownText(title)}`,
@@ -76,12 +76,9 @@ ${body}
 `;
 }
 
-function slug(value: string): string {
+function slug(value: string, fallback: string): string {
   const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  if (!result) {
-    throw new TypeError(`Could not derive a safe OpenAPI operation slug from ${JSON.stringify(value)}.`);
-  }
-  return result;
+  return result || fallback;
 }
 
 function assertOpenApiDocument(value: unknown): asserts value is OpenApiDocument {

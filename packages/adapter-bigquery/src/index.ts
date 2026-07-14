@@ -23,7 +23,7 @@ export function produceBigQueryOkf(
   assertBigQueryTables(tables);
   const timestamp = generationTimestamp(options.now);
   return disambiguateGeneratedPaths(tables.map((table) => ({
-    path: `tables/${slug(`${table.dataset}-${table.table}`)}.md`,
+    path: `tables/${slug(`${table.dataset}-${table.table}`, "table")}.md`,
     identity: `bigquery://${table.project}/${table.dataset}/${table.table}`,
     content: `---
 type: Table
@@ -56,12 +56,9 @@ export default definePlugin({
   }
 });
 
-function slug(value: string): string {
+function slug(value: string, fallback: string): string {
   const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  if (!result) {
-    throw new TypeError(`Could not derive a safe BigQuery table slug from ${JSON.stringify(value)}.`);
-  }
-  return result;
+  return result || fallback;
 }
 
 function assertBigQueryTables(value: unknown): asserts value is BigQueryTable[] {

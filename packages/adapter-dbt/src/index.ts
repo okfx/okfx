@@ -20,7 +20,7 @@ export function produceDbtOkf(
   return disambiguateGeneratedPaths(Object.entries(manifest.nodes ?? {})
     .filter(([, node]) => node.resource_type === "model")
     .map(([id, node]) => ({
-      path: `tables/${slug(node.name ?? "model")}.md`,
+      path: `tables/${slug(node.name ?? "model", "model")}.md`,
       identity: id,
       content: concept(
         node.name ?? "dbt model",
@@ -62,12 +62,9 @@ ${dependsOn.length === 0 ? "No upstream dbt dependencies declared." : dependsOn.
 `;
 }
 
-function slug(value: string): string {
+function slug(value: string, fallback: string): string {
   const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  if (!result) {
-    throw new TypeError(`Could not derive a safe dbt model slug from ${JSON.stringify(value)}.`);
-  }
-  return result;
+  return result || fallback;
 }
 
 function assertDbtManifest(value: unknown): asserts value is DbtManifest {

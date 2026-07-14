@@ -54,4 +54,12 @@ describe("@okfx/adapter-dbt", () => {
       }
     })).toThrow("depends_on.nodes must be an array of strings");
   });
+
+  it("uses a safe fallback path for Unicode-only model names", () => {
+    const [file] = produceDbtOkf({
+      nodes: { model: { resource_type: "model", name: "\u8ba2\u5355" } }
+    });
+
+    expect(file?.path).toBe("tables/model.md");
+  });
 });

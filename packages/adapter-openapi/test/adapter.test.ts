@@ -61,4 +61,12 @@ describe("@okfx/adapter-openapi", () => {
 
     expect(parseMarkdownDocument(file!.path, file!.content, "operation").links).toEqual([]);
   });
+
+  it("uses a safe fallback path for Unicode-only operation ids", () => {
+    const [file] = produceOpenApiOkf({
+      paths: { "/orders": { get: { operationId: "\u83b7\u53d6\u8ba2\u5355" } } }
+    });
+
+    expect(file?.path).toBe("apis/operation.md");
+  });
 });

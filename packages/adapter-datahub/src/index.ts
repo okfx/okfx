@@ -22,7 +22,7 @@ export function produceDataHubOkf(
   assertDataHubEntities(entities);
   const timestamp = generationTimestamp(options.now);
   return disambiguateGeneratedPaths(entities.map((entity) => ({
-    path: `catalog/${slug(entity.name ?? entity.urn)}.md`,
+    path: `catalog/${slug(entity.name ?? entity.urn, "dataset")}.md`,
     identity: entity.urn,
     content: `---
 type: Dataset
@@ -32,7 +32,7 @@ resource: ${yamlScalar(entity.urn)}
 tags:
   - imported
   - datahub
-  - ${yamlScalar(slug(entity.platform ?? "dataset"))}
+  - ${yamlScalar(slug(entity.platform ?? "dataset", "dataset"))}
 timestamp: ${timestamp}
 ---
 
@@ -54,12 +54,9 @@ export default definePlugin({
   }
 });
 
-function slug(value: string): string {
+function slug(value: string, fallback: string): string {
   const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  if (!result) {
-    throw new TypeError(`Could not derive a safe DataHub slug from ${JSON.stringify(value)}.`);
-  }
-  return result;
+  return result || fallback;
 }
 
 function assertDataHubEntities(value: unknown): asserts value is DataHubEntity[] {

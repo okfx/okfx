@@ -47,4 +47,14 @@ describe("@okfx/adapter-bigquery", () => {
 
     expect(parseMarkdownDocument(file!.path, file!.content, "table").links).toEqual([]);
   });
+
+  it("uses a safe fallback path for Unicode-only table names", () => {
+    const [file] = produceBigQueryOkf([{
+      project: "project",
+      dataset: "\u6570\u636e",
+      table: "\u8ba2\u5355"
+    }]);
+
+    expect(file?.path).toBe("tables/table.md");
+  });
 });

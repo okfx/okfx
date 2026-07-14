@@ -33,4 +33,15 @@ describe("@okfx/adapter-datahub", () => {
 
     expect(parseMarkdownDocument(file!.path, file!.content, "dataset").links).toEqual([]);
   });
+
+  it("uses safe fallbacks for Unicode-only names and platforms", () => {
+    const [file] = produceDataHubOkf([{
+      urn: "urn:li:dataset:orders",
+      name: "\u8ba2\u5355\u6570\u636e",
+      platform: "\u6570\u636e\u5e73\u53f0"
+    }]);
+
+    expect(file?.path).toBe("catalog/dataset.md");
+    expect(file?.content).toContain('  - "dataset"');
+  });
 });
