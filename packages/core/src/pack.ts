@@ -371,9 +371,18 @@ function sanitizeGitRemote(remote: string | undefined): string | undefined {
 
   try {
     const parsed = new URL(remote);
+    let changed = false;
     if (parsed.username || parsed.password) {
       parsed.username = "";
       parsed.password = "";
+      changed = true;
+    }
+    if (parsed.search || parsed.hash) {
+      parsed.search = "";
+      parsed.hash = "";
+      changed = true;
+    }
+    if (changed) {
       return parsed.toString();
     }
   } catch {

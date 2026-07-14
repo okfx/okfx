@@ -192,7 +192,12 @@ describe("packBundle", () => {
       await git(root, ["config", "user.email", "okfx@example.com"]);
       await git(root, ["add", "concept.md"]);
       await git(root, ["commit", "-m", "initial"]);
-      await git(root, ["remote", "add", "origin", "https://user:secret@example.com/org/repo.git"]);
+      await git(root, [
+        "remote",
+        "add",
+        "origin",
+        "https://user:password-secret@example.com/org/repo.git?access_token=query-secret#fragment-secret"
+      ]);
 
       const result = await packBundle(root, { out, writeMetadata: false });
 
