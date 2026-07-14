@@ -340,6 +340,10 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(index["terms"]["beta"][0], "a");
+        assert_eq!(index["generated_from"]["okf_version"], "0.1");
+        assert_eq!(index["generated_from"]["concept_count"], 1);
+        assert_eq!(index["documents"][0]["type"], "Note");
+        assert!(index["documents"][0].get("concept_type").is_none());
 
         let pack = parse_value(
             &build_pack_metadata_json(

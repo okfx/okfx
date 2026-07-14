@@ -20,6 +20,7 @@ pub struct IndexDocumentInput {
 pub struct SearchIndexDocument {
     pub id: String,
     pub path: String,
+    #[serde(rename = "type")]
     pub concept_type: String,
     pub title: Option<String>,
     pub description: Option<String>,
@@ -30,10 +31,16 @@ pub struct SearchIndexDocument {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedFrom {
+    pub okf_version: Option<String>,
+    pub concept_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchIndex {
     pub schema_version: u8,
     pub mode: String,
-    pub okf_version: Option<String>,
+    pub generated_from: GeneratedFrom,
     pub documents: Vec<SearchIndexDocument>,
     pub terms: BTreeMap<String, Vec<String>>,
 }
@@ -62,11 +69,15 @@ pub fn build_search_index(
         .collect::<Vec<_>>();
     documents.sort_by(|left, right| left.id.cmp(&right.id));
     let terms = build_term_map(&documents);
+    let concept_count = documents.len();
 
     SearchIndex {
         schema_version: 1,
         mode: "full-text".to_string(),
-        okf_version,
+        generated_from: GeneratedFrom {
+            okf_version,
+            concept_count,
+        },
         documents,
         terms,
     }
@@ -151,6 +162,8 @@ mod tests {
 
         assert_eq!(index.schema_version, 1);
         assert_eq!(index.mode, "full-text");
+        assert_eq!(index.generated_from.okf_version.as_deref(), Some("0.1"));
+        assert_eq!(index.generated_from.concept_count, 1);
         assert_eq!(index.documents[0].id, "metrics/wau");
         assert_eq!(index.terms["weekly"], vec!["metrics/wau"]);
         assert_eq!(index.terms["analytics"], vec!["metrics/wau"]);
