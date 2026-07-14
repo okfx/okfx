@@ -164,17 +164,18 @@ describe("Markdown code fences", () => {
   it("parses empty and enclosed destinations with optional titles", () => {
     const parsed = parseMarkdownDocument(
       "concept.md",
-      "[Empty]() [Spaced]( ) [Angle](<docs/a b.md> \"Reference\") [Title](docs/title.md (Reference))\n",
+      "[Empty]() [Spaced]( ) [Blank angle](< >) [Angle](<docs/a b.md> \"Reference\") [Title](docs/title.md (Reference))\n",
       "concept"
     );
 
     expect(parsed.links.map((link) => ({ target: link.targetRaw, kind: link.kind }))).toEqual([
       { target: "", kind: "unknown" },
       { target: "", kind: "unknown" },
+      { target: " ", kind: "unknown" },
       { target: "docs/a b.md", kind: "internal" },
       { target: "docs/title.md", kind: "internal" }
     ]);
-    expect(parsed.body.text).toBe("Empty Spaced Angle Title");
+    expect(parsed.body.text).toBe("Empty Spaced Blank angle Angle Title");
   });
 
   it("requires whitespace before an enclosed destination title", () => {

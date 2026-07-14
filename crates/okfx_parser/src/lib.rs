@@ -582,7 +582,7 @@ fn link_label_contains_link(
 
 fn classify_link_target(target: &str) -> LinkKind {
     let target = unescape_markdown_destination(target);
-    if target.is_empty() {
+    if target.trim().is_empty() {
         LinkKind::Unknown
     } else if target.starts_with('#') {
         LinkKind::Anchor
@@ -1274,7 +1274,7 @@ mod tests {
     fn parses_empty_and_enclosed_destinations_with_titles() {
         let parsed = parse_markdown_document(
             "concept.md",
-            "[Empty]() [Spaced]( ) [Angle](<docs/a b.md> \"Reference\") [Title](docs/title.md (Reference))\n",
+            "[Empty]() [Spaced]( ) [Blank angle](< >) [Angle](<docs/a b.md> \"Reference\") [Title](docs/title.md (Reference))\n",
             "concept",
         );
 
@@ -1287,11 +1287,12 @@ mod tests {
             vec![
                 ("", LinkKind::Unknown),
                 ("", LinkKind::Unknown),
+                (" ", LinkKind::Unknown),
                 ("docs/a b.md", LinkKind::Internal),
                 ("docs/title.md", LinkKind::Internal)
             ]
         );
-        assert_eq!(parsed.body.text, "Empty Spaced Angle Title");
+        assert_eq!(parsed.body.text, "Empty Spaced Blank angle Angle Title");
     }
 
     #[test]
