@@ -266,6 +266,12 @@ resource:
   - http://[::1]/loopback
   - http://[fc00::1]/private
   - http://[fe80::1]/link-local
+  - http://2130706433/integer-loopback
+  - http://0x7f000001/hex-loopback
+  - http://127.1/short-loopback
+  - http://192.168.1/short-private
+  - http://[::ffff:127.0.0.1]/mapped-loopback
+  - http://[::ffff:8.8.8.8]/mapped-public
 ---
 # Concept
 `
@@ -275,10 +281,12 @@ resource:
         .filter((diagnostic) => diagnostic.code === "security/private-url")
         .map((diagnostic) => diagnostic.message);
 
-      expect(messages).toHaveLength(6);
+      expect(messages).toHaveLength(11);
       expect(messages.some((message) => message.includes("10.example.com"))).toBe(false);
       expect(messages.some((message) => message.includes("127.0.0.2"))).toBe(true);
       expect(messages.some((message) => message.includes("[fc00::1]"))).toBe(true);
+      expect(messages.some((message) => message.includes("2130706433"))).toBe(true);
+      expect(messages.some((message) => message.includes("[::ffff:8.8.8.8]"))).toBe(false);
     });
   });
 

@@ -1121,6 +1121,9 @@ fn is_private_url(value: &str) -> bool {
     if host == "localhost" || host.ends_with(".localhost") {
         return true;
     }
+    if let Some(address) = parse_ipv4_host(&host) {
+        return is_private_ipv4(address);
+    }
 
     match host.parse::<IpAddr>() {
         Ok(IpAddr::V4(address)) => is_private_ipv4(address),
@@ -1136,6 +1139,53 @@ fn is_private_url(value: &str) -> bool {
         }
         Err(_) => false,
     }
+}
+
+fn parse_ipv4_host(host: &str) -> Option<Ipv4Addr> {
+    let parts = host.split('.').collect::<Vec<_>>();
+    if parts.is_empty() || parts.len() > 4 || parts.iter().any(|part| part.is_empty()) {
+        return None;
+    }
+    let numbers = parts
+        .iter()
+        .map(|part| parse_ipv4_number(part))
+        .collect::<Option<Vec<_>>>()?;
+    if numbers[..numbers.len() - 1]
+        .iter()
+        .any(|number| *number > 255)
+    {
+        return None;
+    }
+
+    let final_bits = 8 * (5 - numbers.len());
+    let final_limit = 1_u64 << final_bits;
+    let final_number = *numbers.last()?;
+    if final_number >= final_limit {
+        return None;
+    }
+
+    let mut address = final_number;
+    for (index, number) in numbers[..numbers.len() - 1].iter().enumerate() {
+        address += number << (8 * (3 - index));
+    }
+    Some(Ipv4Addr::from(address as u32))
+}
+
+fn parse_ipv4_number(value: &str) -> Option<u64> {
+    if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        return (!hex.is_empty())
+            .then(|| u64::from_str_radix(hex, 16).ok())
+            .flatten();
+    }
+    let radix = if value.len() > 1 && value.starts_with('0') {
+        8
+    } else {
+        10
+    };
+    u64::from_str_radix(value, radix).ok()
 }
 
 fn is_private_ipv4(address: Ipv4Addr) -> bool {
@@ -1488,6 +1538,11 @@ mod tests {
             "http://[fc00::1]/private",
             "http://[fe80::1]/link-local",
             "http://[::ffff:127.0.0.1]/mapped",
+            "http://2130706433/integer-loopback",
+            "http://0x7f000001/hex-loopback",
+            "http://127.1/short-loopback",
+            "http://192.168.1/short-private",
+            "http://0177.0.0.1/octal-loopback",
             "HTTP://127.0.0.2/uppercase-scheme",
         ] {
             assert!(is_private_url(url), "expected private URL: {url}");
@@ -1496,6 +1551,7 @@ mod tests {
             "http://10.example.com/public",
             "http://100.128.0.1/public",
             "http://[2001:db8::1]/documentation",
+            "http://[::ffff:8.8.8.8]/mapped-public",
         ] {
             assert!(!is_private_url(url), "unexpected private URL: {url}");
         }

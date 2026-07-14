@@ -529,8 +529,23 @@ function isPrivateUrl(value: string): boolean {
     return true;
   }
 
+  const mappedIpv4 = ipv4MappedAddress(host);
+  if (mappedIpv4) {
+    return PRIVATE_IP_RANGES.check(mappedIpv4, "ipv4");
+  }
+
   const family = isIP(host);
   return family !== 0 && PRIVATE_IP_RANGES.check(host, family === 4 ? "ipv4" : "ipv6");
+}
+
+function ipv4MappedAddress(host: string): string | undefined {
+  const match = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(host);
+  if (!match) {
+    return undefined;
+  }
+  const high = Number.parseInt(match[1] ?? "", 16);
+  const low = Number.parseInt(match[2] ?? "", 16);
+  return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
 }
 
 function resourceHost(value: string): string | undefined {
