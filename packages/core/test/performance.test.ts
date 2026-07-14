@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildGraph, buildSearchIndex, lintBundle, loadBundle } from "../src/index.js";
+import { buildGraph, buildSearchIndex, lintBundle, loadBundle, parseMarkdownDocument } from "../src/index.js";
 
 const roots: string[] = [];
 
@@ -43,6 +43,23 @@ describe("performance baselines", () => {
     expect(lint.counts.error).toBeGreaterThan(100);
     expect(elapsedMs).toBeLessThan(8000);
   }, 12000);
+
+  it("indexes source locations once for link-heavy documents", () => {
+    const count = 5_000;
+    const content = Array.from(
+      { length: count },
+      (_, index) => `# Heading ${index}\n[Target](target.md)`
+    ).join("\n");
+    const started = performance.now();
+
+    const parsed = parseMarkdownDocument("large.md", content, "large");
+    const elapsedMs = performance.now() - started;
+
+    expect(parsed.body.headings).toHaveLength(count);
+    expect(parsed.links).toHaveLength(count);
+    expect(parsed.links.at(-1)?.location.start.line).toBe(count * 2);
+    expect(elapsedMs).toBeLessThan(1500);
+  }, 5000);
 });
 
 async function makeLargeBundle(count: number): Promise<string> {

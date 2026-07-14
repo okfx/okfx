@@ -14,13 +14,14 @@ export function extractMarkdown(
 ): ExtractedMarkdown {
   const searchableBody = maskFencedCode(bodyRaw);
   const linkSearchableBody = maskInlineCode(searchableBody);
+  const locate = createSourceLocator(bodyRaw, bodyStartOffset, bodyStartLine);
   return {
     body: {
       raw: bodyRaw,
       text: plainText(bodyRaw),
-      headings: extractHeadings(searchableBody, bodyStartOffset, bodyStartLine)
+      headings: extractHeadings(searchableBody, locate)
     },
-    links: extractLinks(linkSearchableBody, sourceConceptId, bodyStartOffset, bodyStartLine)
+    links: extractLinks(linkSearchableBody, sourceConceptId, locate)
   };
 }
 
@@ -41,7 +42,7 @@ export function classifyLinkTarget(targetRaw: string): LinkKind {
   return "internal";
 }
 
-function extractHeadings(bodyRaw: string, bodyStartOffset: number, bodyStartLine: number): HeadingIR[] {
+function extractHeadings(bodyRaw: string, locate: SourceLocator): HeadingIR[] {
   const headings: HeadingIR[] = [];
   const headingPattern = /^ {0,3}#+[^\r\n]*$/gm;
 
@@ -50,14 +51,13 @@ function extractHeadings(bodyRaw: string, bodyStartOffset: number, bodyStartLine
     if (!heading) {
       continue;
     }
-    const startOffset = bodyStartOffset + (match.index ?? 0);
     headings.push({
       level: heading.level,
       title: heading.title,
       slug: slugifyHeading(heading.title),
       location: {
-        start: locationFromOffset(bodyRaw, match.index ?? 0, bodyStartOffset, bodyStartLine),
-        end: locationFromOffset(bodyRaw, (match.index ?? 0) + match[0].length, bodyStartOffset, bodyStartLine)
+        start: locate(match.index ?? 0),
+        end: locate((match.index ?? 0) + match[0].length)
       }
     });
   }
@@ -65,7 +65,7 @@ function extractHeadings(bodyRaw: string, bodyStartOffset: number, bodyStartLine
   return headings;
 }
 
-function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset: number, bodyStartLine: number): LinkIR[] {
+function extractLinks(bodyRaw: string, sourceConceptId: string, locate: SourceLocator): LinkIR[] {
   const links: LinkIR[] = [];
   let cursor = 0;
 
@@ -107,8 +107,8 @@ function extractLinks(bodyRaw: string, sourceConceptId: string, bodyStartOffset:
       kind: classifyLinkTarget(targetRaw),
       resolved: false,
       location: {
-        start: locationFromOffset(bodyRaw, startOffset, bodyStartOffset, bodyStartLine),
-        end: locationFromOffset(bodyRaw, destination.closingParen + 1, bodyStartOffset, bodyStartLine)
+        start: locate(startOffset),
+        end: locate(destination.closingParen + 1)
       }
     });
     cursor = destination.closingParen + 1;
@@ -453,18 +453,38 @@ function isClosingFence(line: string, fence: { marker: "`" | "~"; length: number
   return Boolean(match && match[1][0] === fence.marker && match[1].length >= fence.length);
 }
 
-function locationFromOffset(
+type SourceLocator = (bodyOffset: number) => SourceLocationIR;
+
+function createSourceLocator(
   bodyRaw: string,
-  bodyOffset: number,
   bodyStartOffset: number,
   bodyStartLine: number
-): SourceLocationIR {
-  const absoluteOffset = bodyStartOffset + bodyOffset;
-  const prefix = bodyRaw.slice(0, bodyOffset);
-  const lines = prefix.split(/\r\n|\n|\r/);
-  return {
-    line: bodyStartLine + lines.length - 1,
-    column: lines[lines.length - 1]!.length + 1,
-    offset: absoluteOffset
+): SourceLocator {
+  const lineStarts = [0];
+  for (let cursor = 0; cursor < bodyRaw.length; cursor += 1) {
+    if (bodyRaw[cursor] === "\r" && bodyRaw[cursor + 1] === "\n") {
+      cursor += 1;
+      lineStarts.push(cursor + 1);
+    } else if (bodyRaw[cursor] === "\r" || bodyRaw[cursor] === "\n") {
+      lineStarts.push(cursor + 1);
+    }
+  }
+
+  return (bodyOffset) => {
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (lineStarts[middle]! <= bodyOffset) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return {
+      line: bodyStartLine + low,
+      column: bodyOffset - lineStarts[low]! + 1,
+      offset: bodyStartOffset + bodyOffset
+    };
   };
 }
