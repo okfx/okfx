@@ -170,7 +170,6 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
         .map_err(|error| error.to_string())?;
     let mapping = match value {
         serde_yaml::Value::Mapping(mapping) => mapping,
-        serde_yaml::Value::Null => serde_yaml::Mapping::new(),
         _ => return Err("Frontmatter must be a YAML mapping.".to_string()),
     };
 
@@ -1035,6 +1034,20 @@ mod tests {
             parsed.diagnostics[0].message,
             "Frontmatter must be a YAML mapping."
         );
+    }
+
+    #[test]
+    fn rejects_null_frontmatter() {
+        for content in ["---\n---\n# Empty\n", "---\n~\n---\n# Null\n"] {
+            let parsed = parse_markdown_document("bad.md", content, "bad");
+
+            assert_eq!(parsed.frontmatter, None);
+            assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+            assert_eq!(
+                parsed.diagnostics[0].message,
+                "Frontmatter must be a YAML mapping."
+            );
+        }
     }
 
     #[test]
