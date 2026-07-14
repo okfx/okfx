@@ -256,15 +256,15 @@ function isSensitivePackPath(path: string): boolean {
     return true;
   }
   if (
-    normalized.startsWith(".ssh/")
-    || normalized.startsWith(".gnupg/")
-    || normalized === ".aws/credentials"
-    || normalized === ".docker/config.json"
-    || normalized === ".kube/config"
-    || normalized === ".cargo/credentials"
-    || normalized === ".cargo/credentials.toml"
-    || normalized === ".composer/auth.json"
-    || normalized.endsWith("/application_default_credentials.json")
+    containsPathDirectory(normalized, ".ssh")
+    || containsPathDirectory(normalized, ".gnupg")
+    || hasPathSuffix(normalized, ".aws/credentials")
+    || hasPathSuffix(normalized, ".docker/config.json")
+    || hasPathSuffix(normalized, ".kube/config")
+    || hasPathSuffix(normalized, ".cargo/credentials")
+    || hasPathSuffix(normalized, ".cargo/credentials.toml")
+    || hasPathSuffix(normalized, ".composer/auth.json")
+    || hasPathSuffix(normalized, "application_default_credentials.json")
     || name.endsWith(".tfstate")
     || name.includes(".tfstate.")
     || /\.(?:p12|pfx|jks|keystore)$/.test(name)
@@ -273,6 +273,14 @@ function isSensitivePackPath(path: string): boolean {
   }
 
   return false;
+}
+
+function containsPathDirectory(path: string, directory: string): boolean {
+  return path.startsWith(`${directory}/`) || path.includes(`/${directory}/`);
+}
+
+function hasPathSuffix(path: string, suffix: string): boolean {
+  return path === suffix || path.endsWith(`/${suffix}`);
 }
 
 function containsPrivateKeyMarker(content: Buffer): boolean {

@@ -102,8 +102,15 @@ describe("packBundle", () => {
       await writeFile(join(root, ".env.local"), "TOKEN=local-secret\n", "utf8");
       await writeFile(join(root, ".env.example"), "TOKEN=\n", "utf8");
       await writeFile(join(root, ".npmrc"), "//registry.example/:_authToken=secret\n", "utf8");
+      await writeFile(join(root, "application_default_credentials.json"), "{\"private_key\":\"secret\"}\n", "utf8");
       await mkdir(join(root, ".aws"));
       await writeFile(join(root, ".aws/credentials"), "aws_secret_access_key=secret\n", "utf8");
+      await mkdir(join(root, "nested/.aws"), { recursive: true });
+      await mkdir(join(root, "nested/.ssh"), { recursive: true });
+      await mkdir(join(root, "nested/.kube"), { recursive: true });
+      await writeFile(join(root, "nested/.aws/credentials"), "aws_secret_access_key=nested-secret\n", "utf8");
+      await writeFile(join(root, "nested/.ssh/custom-key"), "nested ssh secret\n", "utf8");
+      await writeFile(join(root, "nested/.kube/config"), "nested kube secret\n", "utf8");
       await writeFile(join(root, "terraform.tfstate"), JSON.stringify({ secret: "value" }), "utf8");
       await writeFile(join(root, "server.pem"), "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----\n", "utf8");
       await writeFile(
