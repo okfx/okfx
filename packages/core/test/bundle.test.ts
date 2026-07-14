@@ -25,6 +25,26 @@ afterEach(async () => {
 });
 
 describe("loadBundle", () => {
+  it("ignores inherited frontmatter fields", async () => {
+    const root = await tempBundle();
+    await write(root, "concept.md", "---\ntitle: Concept\n---\n# Concept\n");
+    Object.defineProperty(Object.prototype, "type", {
+      configurable: true,
+      value: "Inherited",
+      writable: true
+    });
+
+    const bundle = await (async () => {
+      try {
+        return await loadBundle(root, { loadConfigFile: false });
+      } finally {
+        delete (Object.prototype as Record<string, unknown>).type;
+      }
+    })();
+
+    expect(bundle.concepts[0]?.type).toBe("");
+  });
+
   it("rejects missing roots and roots that are not directories", async () => {
     const root = await tempBundle();
     const file = join(root, "bundle.md");

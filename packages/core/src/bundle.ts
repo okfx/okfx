@@ -88,12 +88,12 @@ export async function loadBundle(rootInput: string, options: LoadBundleOptions =
     const concept: ConceptIR = {
       id: sourceConceptId,
       path,
-      type: stringValue(frontmatter.type) ?? "",
-      title: stringValue(frontmatter.title),
-      description: stringValue(frontmatter.description),
-      resource: stringOrStringArray(frontmatter.resource),
-      tags: stringArray(frontmatter.tags),
-      timestamp: stringValue(frontmatter.timestamp),
+      type: stringValue(ownFrontmatterValue(frontmatter, "type")) ?? "",
+      title: stringValue(ownFrontmatterValue(frontmatter, "title")),
+      description: stringValue(ownFrontmatterValue(frontmatter, "description")),
+      resource: stringOrStringArray(ownFrontmatterValue(frontmatter, "resource")),
+      tags: stringArray(ownFrontmatterValue(frontmatter, "tags")),
+      timestamp: stringValue(ownFrontmatterValue(frontmatter, "timestamp")),
       frontmatter,
       frontmatterRaw: parsed.frontmatterRaw,
       body: parsed.body,
@@ -176,6 +176,10 @@ function resolveLinks(
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function ownFrontmatterValue(frontmatter: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(frontmatter, key) ? frontmatter[key] : undefined;
 }
 
 function stringArray(value: unknown): string[] | undefined {

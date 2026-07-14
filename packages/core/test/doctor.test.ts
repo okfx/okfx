@@ -210,4 +210,21 @@ Use a bearer token.
       ]);
     });
   });
+
+  it("ignores inherited deprecation replacement fields", async () => {
+    await withBundle({
+      "old.md": "---\ntype: Note\ntitle: Old\nstatus: deprecated\n---\n# Old\n"
+    }, async (root) => {
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      bundle.concepts[0]!.frontmatter = Object.assign(
+        Object.create({ replacement: "inherited" }),
+        bundle.concepts[0]!.frontmatter
+      );
+
+      const result = doctorBundle(bundle);
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code))
+        .toContain("agent/deprecated-missing-replacement");
+    });
+  });
 });

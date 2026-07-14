@@ -112,6 +112,8 @@ function hasDeprecationPath(concept: ConceptIR): boolean {
 }
 
 function stringFrontmatter(concept: ConceptIR, key: string): string {
-  const value = concept.frontmatter[key];
+  const value = Object.hasOwn(concept.frontmatter, key)
+    ? concept.frontmatter[key]
+    : undefined;
   return typeof value === "string" ? value : "";
 }
