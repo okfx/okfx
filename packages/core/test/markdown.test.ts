@@ -38,4 +38,22 @@ describe("Markdown code fences", () => {
     expect(parsed.body.headings.map((heading) => heading.title)).toEqual(["Visible"]);
     expect(parsed.links).toEqual([]);
   });
+
+  it("ignores links inside inline code spans", () => {
+    const parsed = parseMarkdownDocument("concept.md", [
+      "# Visible",
+      "`[single](hidden-single.md)`",
+      "``before",
+      "[multiline](hidden-multiline.md)",
+      "after``",
+      "\\`[literal](visible.md)",
+      "[Also visible](also-visible.md)",
+      ""
+    ].join("\n"), "concept");
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual([
+      "visible.md",
+      "also-visible.md"
+    ]);
+  });
 });

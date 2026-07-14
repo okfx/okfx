@@ -198,10 +198,16 @@ fn parse_markdown_body(
     let mut links = Vec::new();
     let mut line_offset = 0;
     let mut code_fence = None;
+    let link_searchable = mask_inline_code(&mask_fenced_code(raw));
 
-    for (line_index, line) in raw.split_inclusive('\n').enumerate() {
+    for (line_index, (line, link_line)) in raw
+        .split_inclusive('\n')
+        .zip(link_searchable.split_inclusive('\n'))
+        .enumerate()
+    {
         let line_number = body_start_line + line_index;
         let without_newline = line.trim_end_matches(['\r', '\n']);
+        let link_without_newline = link_line.trim_end_matches(['\r', '\n']);
         if let Some(fence) = code_fence {
             if is_closing_code_fence(without_newline, fence) {
                 code_fence = None;
@@ -222,7 +228,7 @@ fn parse_markdown_body(
             headings.push(heading);
         }
         links.extend(parse_links(
-            without_newline,
+            link_without_newline,
             source_concept_id,
             body_start_offset + line_offset,
             line_number,
@@ -445,6 +451,106 @@ fn strip_fence_indent(line: &str) -> Option<&str> {
     (spaces <= 3).then_some(&line[spaces..])
 }
 
+fn mask_fenced_code(markdown: &str) -> String {
+    let mut masked = String::with_capacity(markdown.len());
+    let mut code_fence = None;
+
+    for line in markdown.split_inclusive('\n') {
+        let without_newline = line.trim_end_matches(['\r', '\n']);
+        if let Some(fence) = code_fence {
+            masked.push_str(&mask_preserving_line_endings(line));
+            if is_closing_code_fence(without_newline, fence) {
+                code_fence = None;
+            }
+            continue;
+        }
+        if let Some(fence) = opening_code_fence(without_newline) {
+            code_fence = Some(fence);
+            masked.push_str(&mask_preserving_line_endings(line));
+            continue;
+        }
+        masked.push_str(line);
+    }
+
+    masked
+}
+
+fn mask_inline_code(markdown: &str) -> String {
+    let bytes = markdown.as_bytes();
+    let mut masked = bytes.to_vec();
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        let Some(opener_relative) = bytes[cursor..].iter().position(|byte| *byte == b'`') else {
+            break;
+        };
+        let opener = cursor + opener_relative;
+        if is_escaped_backtick(bytes, opener) {
+            cursor = opener + 1;
+            continue;
+        }
+
+        let delimiter_length = backtick_run_length(bytes, opener);
+        let mut search_from = opener + delimiter_length;
+        let mut closing_end = None;
+        while search_from < bytes.len() {
+            let Some(candidate_relative) =
+                bytes[search_from..].iter().position(|byte| *byte == b'`')
+            else {
+                break;
+            };
+            let candidate = search_from + candidate_relative;
+            let candidate_length = backtick_run_length(bytes, candidate);
+            if candidate_length == delimiter_length {
+                closing_end = Some(candidate + candidate_length);
+                break;
+            }
+            search_from = candidate + candidate_length;
+        }
+
+        let Some(closing_end) = closing_end else {
+            cursor = opener + delimiter_length;
+            continue;
+        };
+        for byte in &mut masked[opener..closing_end] {
+            if !matches!(*byte, b'\r' | b'\n') {
+                *byte = b' ';
+            }
+        }
+        cursor = closing_end;
+    }
+
+    String::from_utf8(masked).expect("masking Markdown preserves valid UTF-8")
+}
+
+fn mask_preserving_line_endings(value: &str) -> String {
+    value
+        .bytes()
+        .map(|byte| match byte {
+            b'\r' => '\r',
+            b'\n' => '\n',
+            _ => ' ',
+        })
+        .collect()
+}
+
+fn backtick_run_length(value: &[u8], start: usize) -> usize {
+    value[start..]
+        .iter()
+        .take_while(|byte| **byte == b'`')
+        .count()
+}
+
+fn is_escaped_backtick(value: &[u8], index: usize) -> bool {
+    value[..index]
+        .iter()
+        .rev()
+        .take_while(|byte| **byte == b'\\')
+        .count()
+        % 2
+        == 1
+}
+
 fn slugify_heading(title: &str) -> String {
     let mut slug = String::new();
     let mut previous_dash = false;
@@ -603,5 +709,23 @@ mod tests {
             vec!["visible.md"]
         );
         assert!(!parsed.body.text.contains("Hidden"));
+    }
+
+    #[test]
+    fn ignores_links_inside_inline_code_spans() {
+        let parsed = parse_markdown_document(
+            "note.md",
+            "# Visible\n`[single](hidden-single.md)`\n``before\n[multiline](hidden-multiline.md)\nafter``\n\\`[literal](visible.md)\n[Also visible](also-visible.md)\n",
+            "note",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["visible.md", "also-visible.md"]
+        );
     }
 }

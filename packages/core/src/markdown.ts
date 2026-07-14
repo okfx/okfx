@@ -12,13 +12,14 @@ export function extractMarkdown(
   bodyStartLine = 1
 ): ExtractedMarkdown {
   const searchableBody = maskFencedCode(bodyRaw);
+  const linkSearchableBody = maskInlineCode(searchableBody);
   return {
     body: {
       raw: bodyRaw,
       text: plainText(bodyRaw),
       headings: extractHeadings(searchableBody, bodyStartOffset, bodyStartLine)
     },
-    links: extractLinks(searchableBody, sourceConceptId, bodyStartOffset, bodyStartLine)
+    links: extractLinks(linkSearchableBody, sourceConceptId, bodyStartOffset, bodyStartLine)
   };
 }
 
@@ -126,6 +127,68 @@ function maskFencedCode(markdown: string): string {
     fence = openingFence;
     return " ".repeat(segment.length);
   }).join("");
+}
+
+function maskInlineCode(markdown: string): string {
+  const chunks: string[] = [];
+  let emittedThrough = 0;
+  let cursor = 0;
+
+  while (cursor < markdown.length) {
+    const opener = markdown.indexOf("`", cursor);
+    if (opener === -1) {
+      break;
+    }
+    if (isEscaped(markdown, opener)) {
+      cursor = opener + 1;
+      continue;
+    }
+
+    const delimiterLength = backtickRunLength(markdown, opener);
+    let searchFrom = opener + delimiterLength;
+    let closingEnd: number | undefined;
+    while (searchFrom < markdown.length) {
+      const candidate = markdown.indexOf("`", searchFrom);
+      if (candidate === -1) {
+        break;
+      }
+      const candidateLength = backtickRunLength(markdown, candidate);
+      if (candidateLength === delimiterLength) {
+        closingEnd = candidate + candidateLength;
+        break;
+      }
+      searchFrom = candidate + candidateLength;
+    }
+
+    if (closingEnd === undefined) {
+      cursor = opener + delimiterLength;
+      continue;
+    }
+
+    chunks.push(markdown.slice(emittedThrough, opener));
+    chunks.push(markdown.slice(opener, closingEnd).replace(/[^\r\n]/g, " "));
+    emittedThrough = closingEnd;
+    cursor = closingEnd;
+  }
+
+  chunks.push(markdown.slice(emittedThrough));
+  return chunks.join("");
+}
+
+function backtickRunLength(value: string, start: number): number {
+  let end = start;
+  while (value[end] === "`") {
+    end += 1;
+  }
+  return end - start;
+}
+
+function isEscaped(value: string, index: number): boolean {
+  let backslashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === "\\"; cursor -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
 }
 
 function parseOpeningFence(line: string): { marker: "`" | "~"; length: number } | undefined {
