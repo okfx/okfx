@@ -15,6 +15,19 @@ describe("@okfx/adapter-dbt", () => {
     expect(files[0]?.content).toContain("timestamp: 2024-03-02T01:02:03.000Z");
   });
 
+  it("ignores inherited manifest and node fields", () => {
+    const inheritedManifest = Object.create({
+      nodes: { model: { resource_type: "model", name: "inherited" } }
+    });
+    const inheritedNodeType = Object.assign(
+      Object.create({ resource_type: "model" }),
+      { name: "inherited" }
+    );
+
+    expect(produceDbtOkf(inheritedManifest)).toEqual([]);
+    expect(produceDbtOkf({ nodes: { model: inheritedNodeType } })).toEqual([]);
+  });
+
   it("disambiguates models that share a name", () => {
     const files = produceDbtOkf({
       nodes: {

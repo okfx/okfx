@@ -13,6 +13,19 @@ describe("@okfx/adapter-markdown", () => {
     expect(files[0]?.content).toContain("timestamp: 2024-03-02T01:02:03.000Z");
   });
 
+  it("requires own source fields and ignores inherited optional metadata", () => {
+    const inheritedSource = Object.create({ path: "note", body: "# Note\n" });
+    const source = Object.assign(
+      Object.create({ title: "Inherited", tags: ["inherited"] }),
+      { path: "notes/own", body: "# Own\n" }
+    );
+
+    expect(() => produceMarkdownOkf([inheritedSource])).toThrow("must include string path and body");
+    const [file] = produceMarkdownOkf([source]);
+    expect(file?.content).toContain('title: "Own"');
+    expect(file?.content).toContain('  - "imported"');
+  });
+
   it("rejects paths outside the output root", () => {
     expect(() => produceMarkdownOkf([{ path: "../../escaped", body: "# Escaped\n" }]))
       .toThrow("escapes the output root");

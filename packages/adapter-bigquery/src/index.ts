@@ -22,7 +22,18 @@ export function produceBigQueryOkf(
 ): Array<{ path: string; content: string }> {
   assertBigQueryTables(tables);
   const timestamp = generationTimestamp(options.now);
-  return disambiguateGeneratedPaths(tables.map((table) => ({
+  const normalizedTables = tables.map((table) => ({
+    project: ownProperty(table, "project")!,
+    dataset: ownProperty(table, "dataset")!,
+    table: ownProperty(table, "table")!,
+    description: ownProperty(table, "description"),
+    columns: ownProperty(table, "columns")?.map((column) => ({
+      name: ownProperty(column, "name")!,
+      type: ownProperty(column, "type"),
+      description: ownProperty(column, "description")
+    }))
+  }));
+  return disambiguateGeneratedPaths(normalizedTables.map((table) => ({
     path: `tables/${slug(`${table.dataset}-${table.table}`, "table")}.md`,
     identity: `bigquery://${table.project}/${table.dataset}/${table.table}`,
     content: `---
@@ -67,21 +78,27 @@ function assertBigQueryTables(value: unknown): asserts value is BigQueryTable[] 
   }
 
   for (const [index, table] of value.entries()) {
-    if (!isRecord(table) || !nonEmptyString(table.project) || !nonEmptyString(table.dataset) || !nonEmptyString(table.table)) {
+    if (!isRecord(table)
+      || !nonEmptyString(ownProperty(table, "project"))
+      || !nonEmptyString(ownProperty(table, "dataset"))
+      || !nonEmptyString(ownProperty(table, "table"))) {
       throw new TypeError(`BigQuery table at index ${index} must include non-empty string project, dataset, and table fields.`);
     }
-    if (table.description !== undefined && typeof table.description !== "string") {
+    const description = ownProperty(table, "description");
+    if (description !== undefined && typeof description !== "string") {
       throw new TypeError(`BigQuery table description at index ${index} must be a string.`);
     }
-    if (table.columns !== undefined && !Array.isArray(table.columns)) {
+    const columns = ownProperty(table, "columns");
+    if (columns !== undefined && !Array.isArray(columns)) {
       throw new TypeError(`BigQuery table columns at index ${index} must be an array.`);
     }
-    for (const [columnIndex, column] of (table.columns ?? []).entries()) {
-      if (!isRecord(column) || !nonEmptyString(column.name)) {
+    for (const [columnIndex, column] of (columns ?? []).entries()) {
+      if (!isRecord(column) || !nonEmptyString(ownProperty(column, "name"))) {
         throw new TypeError(`BigQuery column at table index ${index}, column index ${columnIndex} must include a non-empty string name.`);
       }
       for (const field of ["type", "description"] as const) {
-        if (column[field] !== undefined && typeof column[field] !== "string") {
+        const fieldValue = ownProperty(column, field);
+        if (fieldValue !== undefined && typeof fieldValue !== "string") {
           throw new TypeError(`BigQuery column ${field} at table index ${index}, column index ${columnIndex} must be a string.`);
         }
       }
@@ -99,4 +116,8 @@ function nonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function ownProperty<T extends object, K extends keyof T>(value: T, key: K): T[K] | undefined {
+  return Object.hasOwn(value, key) ? value[key] : undefined;
 }

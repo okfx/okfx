@@ -15,6 +15,18 @@ describe("@okfx/adapter-openapi", () => {
     expect(files[0]?.content).toContain("timestamp: 2024-03-02T01:02:03.000Z");
   });
 
+  it("ignores inherited document and operation fields", () => {
+    const inheritedDocument = Object.create({
+      paths: { "/inherited": { get: { summary: "Inherited" } } }
+    });
+    const operation = Object.create({ summary: "Inherited summary" });
+
+    expect(produceOpenApiOkf(inheritedDocument)).toEqual([]);
+    const [file] = produceOpenApiOkf({ paths: { "/orders": { get: operation } } });
+    expect(file?.content).toContain('title: "GET /orders"');
+    expect(file?.content).not.toContain("Inherited summary");
+  });
+
   it("ignores non-operation path item fields and quotes metadata", () => {
     const files = produceOpenApiOkf({
       paths: {

@@ -15,6 +15,18 @@ describe("@okfx/adapter-bigquery", () => {
     expect(files[0]?.content).toContain("timestamp: 2024-03-02T01:02:03.000Z");
   });
 
+  it("requires own table fields and ignores inherited optional metadata", () => {
+    const inheritedTable = Object.create({ project: "p", dataset: "d", table: "orders" });
+    const ownTable = Object.assign(
+      Object.create({ description: "Inherited", columns: [{ name: "inherited" }] }),
+      { project: "p", dataset: "d", table: "orders" }
+    );
+
+    expect(() => produceBigQueryOkf([inheritedTable])).toThrow("must include non-empty string project");
+    expect(produceBigQueryOkf([ownTable])[0]?.content).toContain("Imported from BigQuery metadata");
+    expect(produceBigQueryOkf([ownTable])[0]?.content).toContain("No columns provided");
+  });
+
   it.each(["type", "description"] as const)("rejects a non-string column %s", (field) => {
     expect(() => produceBigQueryOkf([{
       project: "p",

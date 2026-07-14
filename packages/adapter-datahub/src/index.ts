@@ -21,7 +21,13 @@ export function produceDataHubOkf(
 ): Array<{ path: string; content: string }> {
   assertDataHubEntities(entities);
   const timestamp = generationTimestamp(options.now);
-  return disambiguateGeneratedPaths(entities.map((entity) => ({
+  const normalizedEntities = entities.map((entity) => ({
+    urn: ownProperty(entity, "urn")!,
+    name: ownProperty(entity, "name"),
+    description: ownProperty(entity, "description"),
+    platform: ownProperty(entity, "platform")
+  }));
+  return disambiguateGeneratedPaths(normalizedEntities.map((entity) => ({
     path: `catalog/${slug(entity.name ?? entity.urn, "dataset")}.md`,
     identity: entity.urn,
     content: `---
@@ -65,11 +71,12 @@ function assertDataHubEntities(value: unknown): asserts value is DataHubEntity[]
   }
 
   for (const [index, entity] of value.entries()) {
-    if (!isRecord(entity) || !nonEmptyString(entity.urn)) {
+    if (!isRecord(entity) || !nonEmptyString(ownProperty(entity, "urn"))) {
       throw new TypeError(`DataHub entity at index ${index} must include a non-empty string urn.`);
     }
     for (const field of ["name", "description", "platform"] as const) {
-      if (entity[field] !== undefined && typeof entity[field] !== "string") {
+      const fieldValue = ownProperty(entity, field);
+      if (fieldValue !== undefined && typeof fieldValue !== "string") {
         throw new TypeError(`DataHub entity ${field} at index ${index} must be a string.`);
       }
     }
@@ -86,4 +93,8 @@ function nonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function ownProperty<T extends object, K extends keyof T>(value: T, key: K): T[K] | undefined {
+  return Object.hasOwn(value, key) ? value[key] : undefined;
 }

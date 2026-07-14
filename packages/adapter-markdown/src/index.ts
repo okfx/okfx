@@ -23,7 +23,13 @@ export function produceMarkdownOkf(
 ): ProducedOkfFile[] {
   assertMarkdownSources(sources);
   const timestamp = generationTimestamp(options.now);
-  return disambiguateGeneratedPaths(sources.map((source) => ({
+  const normalizedSources = sources.map((source) => ({
+    path: ownProperty(source, "path")!,
+    title: ownProperty(source, "title"),
+    body: ownProperty(source, "body")!,
+    tags: ownProperty(source, "tags")
+  }));
+  return disambiguateGeneratedPaths(normalizedSources.map((source) => ({
     path: normalizeConceptPath(source.path),
     identity: source.path,
     content: concept({
@@ -147,13 +153,17 @@ function assertMarkdownSources(value: unknown): asserts value is MarkdownSource[
   }
 
   for (const [index, source] of value.entries()) {
-    if (!isRecord(source) || typeof source.path !== "string" || typeof source.body !== "string") {
+    if (!isRecord(source)
+      || typeof ownProperty(source, "path") !== "string"
+      || typeof ownProperty(source, "body") !== "string") {
       throw new TypeError(`Markdown source at index ${index} must include string path and body fields.`);
     }
-    if (source.title !== undefined && typeof source.title !== "string") {
+    const title = ownProperty(source, "title");
+    if (title !== undefined && typeof title !== "string") {
       throw new TypeError(`Markdown source title at index ${index} must be a string.`);
     }
-    if (source.tags !== undefined && (!Array.isArray(source.tags) || Array.from(source.tags).some((tag) => typeof tag !== "string"))) {
+    const tags = ownProperty(source, "tags");
+    if (tags !== undefined && (!Array.isArray(tags) || Array.from(tags).some((tag) => typeof tag !== "string"))) {
       throw new TypeError(`Markdown source tags at index ${index} must be an array of strings.`);
     }
   }
@@ -165,4 +175,8 @@ function yamlScalar(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function ownProperty<T extends object, K extends keyof T>(value: T, key: K): T[K] | undefined {
+  return Object.hasOwn(value, key) ? value[key] : undefined;
 }

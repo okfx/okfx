@@ -17,18 +17,24 @@ export function produceDbtOkf(
 ): Array<{ path: string; content: string }> {
   assertDbtManifest(manifest);
   const timestamp = generationTimestamp(options.now);
-  return disambiguateGeneratedPaths(Object.entries(manifest.nodes ?? {})
-    .filter(([, node]) => node.resource_type === "model")
-    .map(([id, node]) => ({
-      path: `tables/${slug(node.name ?? "model", "model")}.md`,
-      identity: id,
-      content: concept(
-        node.name ?? "dbt model",
-        node.description ?? "Imported from dbt manifest.",
-        node.depends_on?.nodes ?? [],
-        timestamp
-      )
-    })))
+  const nodes = ownProperty(manifest, "nodes") ?? {};
+  return disambiguateGeneratedPaths(Object.entries(nodes)
+    .filter(([, node]) => ownProperty(node, "resource_type") === "model")
+    .map(([id, node]) => {
+      const name = ownProperty(node, "name");
+      const description = ownProperty(node, "description");
+      const dependsOn = ownProperty(node, "depends_on");
+      return {
+        path: `tables/${slug(name ?? "model", "model")}.md`,
+        identity: id,
+        content: concept(
+          name ?? "dbt model",
+          description ?? "Imported from dbt manifest.",
+          dependsOn ? ownProperty(dependsOn, "nodes") ?? [] : [],
+          timestamp
+        )
+      };
+    }))
     .sort((a, b) => compareStrings(a.path, b.path));
 }
 
@@ -71,21 +77,25 @@ function assertDbtManifest(value: unknown): asserts value is DbtManifest {
   if (!isRecord(value)) {
     throw new TypeError("dbt adapter input must be an object.");
   }
-  if (value.nodes !== undefined && !isRecord(value.nodes)) {
+  const nodes = ownProperty(value, "nodes");
+  if (nodes !== undefined && !isRecord(nodes)) {
     throw new TypeError("dbt manifest nodes must be an object.");
   }
 
-  for (const [id, node] of Object.entries(value.nodes ?? {})) {
+  for (const [id, node] of Object.entries(nodes ?? {})) {
     if (!isRecord(node)) {
       throw new TypeError(`dbt node ${JSON.stringify(id)} must be an object.`);
     }
     for (const field of ["resource_type", "name", "description"] as const) {
-      if (node[field] !== undefined && typeof node[field] !== "string") {
+      const fieldValue = ownProperty(node, field);
+      if (fieldValue !== undefined && typeof fieldValue !== "string") {
         throw new TypeError(`dbt node ${JSON.stringify(id)} field ${field} must be a string.`);
       }
     }
-    if (node.depends_on !== undefined) {
-      if (!isRecord(node.depends_on) || (node.depends_on.nodes !== undefined && (!Array.isArray(node.depends_on.nodes) || Array.from(node.depends_on.nodes).some((entry) => typeof entry !== "string")))) {
+    const dependsOn = ownProperty(node, "depends_on");
+    if (dependsOn !== undefined) {
+      const dependencyNodes = isRecord(dependsOn) ? ownProperty(dependsOn, "nodes") : undefined;
+      if (!isRecord(dependsOn) || (dependencyNodes !== undefined && (!Array.isArray(dependencyNodes) || Array.from(dependencyNodes).some((entry) => typeof entry !== "string")))) {
         throw new TypeError(`dbt node ${JSON.stringify(id)} depends_on.nodes must be an array of strings.`);
       }
     }
@@ -98,4 +108,8 @@ function yamlScalar(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function ownProperty<T extends object, K extends keyof T>(value: T, key: K): T[K] | undefined {
+  return Object.hasOwn(value, key) ? value[key] : undefined;
 }

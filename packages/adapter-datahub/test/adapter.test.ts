@@ -15,6 +15,19 @@ describe("@okfx/adapter-datahub", () => {
     expect(files[0]?.content).toContain("timestamp: 2024-03-02T01:02:03.000Z");
   });
 
+  it("requires an own URN and ignores inherited optional metadata", () => {
+    const inheritedUrn = Object.create({ urn: "urn:inherited" });
+    const entity = Object.assign(
+      Object.create({ name: "Inherited Name", platform: "inherited" }),
+      { urn: "urn:own" }
+    );
+
+    expect(() => produceDataHubOkf([inheritedUrn])).toThrow("must include a non-empty string urn");
+    const [file] = produceDataHubOkf([entity]);
+    expect(file?.path).toBe("catalog/urn-own.md");
+    expect(file?.content).toContain('  - "dataset"');
+  });
+
   it("disambiguates entities that share a display name", () => {
     const files = produceDataHubOkf([
       { urn: "urn:li:dataset:(snowflake,orders,PROD)", name: "orders" },
