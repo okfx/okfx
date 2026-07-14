@@ -45,6 +45,8 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
           diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
         } else if (containsReferenceCycle(value)) {
           diagnostics.push(invalidFrontmatter(path, "Frontmatter must not contain recursive YAML aliases."));
+        } else if (containsNonFiniteNumber(value)) {
+          diagnostics.push(invalidFrontmatter(path, "Frontmatter numbers must be finite."));
         } else {
           frontmatter = value;
         }
@@ -169,6 +171,28 @@ function containsReferenceCycle(value: unknown): boolean {
     }
   }
 
+  return false;
+}
+
+function containsNonFiniteNumber(value: unknown): boolean {
+  const stack = [value];
+  const visited = new WeakSet<object>();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (typeof current === "number") {
+      if (!Number.isFinite(current)) {
+        return true;
+      }
+      continue;
+    }
+    if (typeof current !== "object" || current === null || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    for (const child of referenceChildren(current)) {
+      stack.push(child);
+    }
+  }
   return false;
 }
 

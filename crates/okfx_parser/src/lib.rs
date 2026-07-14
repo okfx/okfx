@@ -172,6 +172,9 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
     if !has_only_string_mapping_keys(&value) {
         return Err("Frontmatter keys must be strings.".to_string());
     }
+    if contains_non_finite_number(&value) {
+        return Err("Frontmatter numbers must be finite.".to_string());
+    }
     let mapping = match value {
         serde_yaml::Value::Mapping(mapping) => mapping,
         _ => return Err("Frontmatter must be a YAML mapping.".to_string()),
@@ -198,6 +201,20 @@ fn has_only_string_mapping_keys(value: &serde_yaml::Value) -> bool {
         serde_yaml::Value::Sequence(sequence) => sequence.iter().all(has_only_string_mapping_keys),
         serde_yaml::Value::Tagged(tagged) => has_only_string_mapping_keys(&tagged.value),
         _ => true,
+    }
+}
+
+fn contains_non_finite_number(value: &serde_yaml::Value) -> bool {
+    match value {
+        serde_yaml::Value::Number(number) => {
+            number.as_f64().is_some_and(|number| !number.is_finite())
+        }
+        serde_yaml::Value::Sequence(sequence) => sequence.iter().any(contains_non_finite_number),
+        serde_yaml::Value::Mapping(mapping) => mapping.iter().any(|(key, value)| {
+            contains_non_finite_number(key) || contains_non_finite_number(value)
+        }),
+        serde_yaml::Value::Tagged(tagged) => contains_non_finite_number(&tagged.value),
+        _ => false,
     }
 }
 
@@ -1149,6 +1166,21 @@ mod tests {
 
         assert!(parsed.frontmatter.is_none());
         assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+    }
+
+    #[test]
+    fn rejects_non_finite_frontmatter_numbers() {
+        for value in [".nan", ".inf", "-.inf"] {
+            let content = format!("---\nmetadata: [{value}]\n---\n# Bad\n");
+            let parsed = parse_markdown_document("bad.md", content, "bad");
+
+            assert!(parsed.frontmatter.is_none());
+            assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+            assert_eq!(
+                parsed.diagnostics[0].message,
+                "Frontmatter numbers must be finite."
+            );
+        }
     }
 
     #[test]

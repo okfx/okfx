@@ -253,6 +253,20 @@ describe("parseMarkdownDocument", () => {
     }
   );
 
+  it.each([".nan", ".inf", "-.inf"])("rejects non-finite frontmatter number %s", (value) => {
+    const parsed = parseMarkdownDocument(
+      "concepts/bad.md",
+      `---\nmetadata: [${value}]\n---\n# Bad\n`,
+      "concepts/bad"
+    );
+
+    expect(parsed.frontmatter).toBeUndefined();
+    expect(parsed.diagnostics[0]).toMatchObject({
+      code: "spec/invalid-frontmatter",
+      message: "Frontmatter numbers must be finite."
+    });
+  });
+
   it("extracts heading locations after frontmatter", () => {
     const parsed = parseMarkdownDocument("concepts/wau.md", "---\ntype: Metric\n---\n\n# Heading\n", "concepts/wau");
 
