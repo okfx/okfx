@@ -769,9 +769,9 @@ function isPrivateUrl(value: string): boolean {
     return PRIVATE_IP_RANGES.check(ipv4, "ipv4");
   }
 
-  const mappedIpv4 = ipv4MappedAddress(host);
-  if (mappedIpv4) {
-    return PRIVATE_IP_RANGES.check(mappedIpv4, "ipv4");
+  const embeddedIpv4 = ipv4EmbeddedAddress(host);
+  if (embeddedIpv4) {
+    return PRIVATE_IP_RANGES.check(embeddedIpv4, "ipv4");
   }
 
   const family = isIP(host);
@@ -824,8 +824,8 @@ function parseIpv4Number(value: string): number | undefined {
   return number <= 0xffff_ffff ? number : undefined;
 }
 
-function ipv4MappedAddress(host: string): string | undefined {
-  const match = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(host);
+function ipv4EmbeddedAddress(host: string): string | undefined {
+  const match = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/iu.exec(host);
   if (!match) {
     return undefined;
   }

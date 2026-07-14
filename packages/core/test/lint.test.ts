@@ -407,6 +407,8 @@ resource:
   - s3://10.example.com/public
   - http://[::ffff:127.0.0.1]/mapped-loopback
   - http://[::ffff:8.8.8.8]/mapped-public
+  - http://[::127.0.0.1]/compatible-loopback
+  - http://[::8.8.8.8]/compatible-public
 ---
 # Concept
 `
@@ -416,7 +418,7 @@ resource:
         .filter((diagnostic) => diagnostic.code === "security/private-url")
         .map((diagnostic) => diagnostic.message);
 
-      expect(messages).toHaveLength(15);
+      expect(messages).toHaveLength(16);
       expect(messages.some((message) => message.includes("10.example.com"))).toBe(false);
       expect(messages.some((message) => message.includes("127.0.0.2"))).toBe(true);
       expect(messages.some((message) => message.includes("[fc00::1]"))).toBe(true);
@@ -425,20 +427,23 @@ resource:
       expect(messages.some((message) => message.includes("s3://0x7f000001"))).toBe(true);
       expect(messages.some((message) => message.includes("s3://08"))).toBe(false);
       expect(messages.some((message) => message.includes("[::ffff:8.8.8.8]"))).toBe(false);
+      expect(messages.some((message) => message.includes("[::127.0.0.1]"))).toBe(true);
+      expect(messages.some((message) => message.includes("[::8.8.8.8]"))).toBe(false);
     });
   });
 
   it("detects bracketed private IPv6 URLs in body text", async () => {
     await withBundle({
       "ipv6.md": "---\ntype: Note\ntitle: IPv6\n---\n# IPv6\n\nSee http://[::1]/admin.\n",
-      "mapped.md": "---\ntype: Note\ntitle: Mapped\n---\n# Mapped\n\n[Local](HTTP://[::ffff:127.0.0.1]/admin)\n"
+      "mapped.md": "---\ntype: Note\ntitle: Mapped\n---\n# Mapped\n\n[Local](HTTP://[::ffff:127.0.0.1]/admin)\n",
+      "compatible.md": "---\ntype: Note\ntitle: Compatible\n---\n# Compatible\n\nSee http://[::127.0.0.1]/admin.\n"
     }, async (root) => {
       const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
 
       expect(result.diagnostics
         .filter((diagnostic) => diagnostic.code === "security/internal-url")
         .map((diagnostic) => diagnostic.path))
-        .toEqual(["ipv6.md", "mapped.md"]);
+        .toEqual(["compatible.md", "ipv6.md", "mapped.md"]);
     });
   });
 

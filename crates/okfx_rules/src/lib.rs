@@ -1252,14 +1252,14 @@ fn is_private_url(value: &str) -> bool {
     match host.parse::<IpAddr>() {
         Ok(IpAddr::V4(address)) => is_private_ipv4(address),
         Ok(IpAddr::V6(address)) => {
-            if let Some(mapped) = address.to_ipv4_mapped() {
-                return is_private_ipv4(mapped);
+            if address.is_unspecified() || address.is_loopback() {
+                return true;
+            }
+            if let Some(embedded) = address.to_ipv4() {
+                return is_private_ipv4(embedded);
             }
             let first = address.segments()[0];
-            address.is_unspecified()
-                || address.is_loopback()
-                || first & 0xfe00 == 0xfc00
-                || first & 0xffc0 == 0xfe80
+            first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
         }
         Err(_) => false,
     }
@@ -1923,6 +1923,7 @@ mod tests {
             "http://[fe80::1]/link-local",
             "http://printer.local/admin",
             "http://[::ffff:127.0.0.1]/mapped",
+            "http://[::127.0.0.1]/compatible",
             "http://2130706433/integer-loopback",
             "http://0x7f000001/hex-loopback",
             "http://127.1/short-loopback",
@@ -1940,6 +1941,7 @@ mod tests {
             "http://100.128.0.1/public",
             "http://[2001:db8::1]/documentation",
             "http://[::ffff:8.8.8.8]/mapped-public",
+            "http://[::8.8.8.8]/compatible-public",
             "s3://08/not-valid-octal",
             "s3://10.example.com/public",
         ] {
@@ -1954,6 +1956,9 @@ mod tests {
         ));
         assert!(contains_internal_url(
             "See [Mapped](http://[::ffff:127.0.0.1]/admin)."
+        ));
+        assert!(contains_internal_url(
+            "See [Compatible](http://[::127.0.0.1]/admin)."
         ));
         assert!(!contains_internal_url(
             "See [Public](https://[2001:db8::1]/guide)."
