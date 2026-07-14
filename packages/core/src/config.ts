@@ -158,32 +158,52 @@ export function defineConfig<TConfig extends OkfxConfig>(config: TConfig): TConf
 
 export function resolveConfig(config: OkfxConfig = {}, configPath?: string): ResolvedOkfxConfig {
   assertConfig(config);
-  const presets = config.presets ?? [...defaultConfig.presets];
+  const configuredPresets = ownProperty(config, "presets");
+  const configuredFrontmatter = ownProperty(config, "frontmatter");
+  const configuredResourcePolicy = ownProperty(config, "resourcePolicy");
+  const configuredMcp = ownProperty(config, "mcp");
+  const presets = configuredPresets ?? [...defaultConfig.presets];
   const presetConfigs = presets.map(resolvePreset);
-  const presetRules = Object.assign({}, ...presetConfigs.map((preset) => preset.rules ?? {})) as Record<string, RuleConfig>;
-  const presetFailOn = [...presetConfigs].reverse().find((preset) => preset.failOn)?.failOn;
+  const presetRules = Object.assign(
+    {},
+    ...presetConfigs.map((preset) => ownProperty(preset, "rules") ?? {})
+  ) as Record<string, RuleConfig>;
+  const presetFailOn = presetConfigs
+    .map((preset) => ownProperty(preset, "failOn"))
+    .reverse()
+    .find((failOn) => failOn !== undefined);
 
   return {
-    okfVersion: config.okfVersion ?? defaultConfig.okfVersion,
-    include: config.include ?? [...defaultConfig.include],
-    exclude: config.exclude ?? [...defaultConfig.exclude],
+    okfVersion: ownProperty(config, "okfVersion") ?? defaultConfig.okfVersion,
+    include: ownProperty(config, "include") ?? [...defaultConfig.include],
+    exclude: ownProperty(config, "exclude") ?? [...defaultConfig.exclude],
     presets,
-    plugins: normalizePluginReferences(config.plugins ?? []),
+    plugins: normalizePluginReferences(ownProperty(config, "plugins") ?? []),
     rules: {
       ...presetRules,
-      ...(config.rules ?? {})
+      ...(ownProperty(config, "rules") ?? {})
     },
-    failOn: config.failOn ?? presetFailOn ?? defaultConfig.failOn,
+    failOn: ownProperty(config, "failOn") ?? presetFailOn ?? defaultConfig.failOn,
     frontmatter: {
-      keyOrder: config.frontmatter?.keyOrder ?? [...defaultConfig.frontmatter.keyOrder]
+      keyOrder: configuredFrontmatter
+        ? ownProperty(configuredFrontmatter, "keyOrder") ?? [...defaultConfig.frontmatter.keyOrder]
+        : [...defaultConfig.frontmatter.keyOrder]
     },
     resourcePolicy: {
-      allowHosts: (config.resourcePolicy?.allowHosts ?? []).map(normalizeConfiguredHost)
+      allowHosts: (configuredResourcePolicy
+        ? ownProperty(configuredResourcePolicy, "allowHosts") ?? []
+        : []).map(normalizeConfiguredHost)
     },
     mcp: {
-      readonly: config.mcp?.readonly ?? defaultConfig.mcp.readonly,
-      exposeDiagnostics: config.mcp?.exposeDiagnostics ?? defaultConfig.mcp.exposeDiagnostics,
-      exposeGraph: config.mcp?.exposeGraph ?? defaultConfig.mcp.exposeGraph
+      readonly: configuredMcp
+        ? ownProperty(configuredMcp, "readonly") ?? defaultConfig.mcp.readonly
+        : defaultConfig.mcp.readonly,
+      exposeDiagnostics: configuredMcp
+        ? ownProperty(configuredMcp, "exposeDiagnostics") ?? defaultConfig.mcp.exposeDiagnostics
+        : defaultConfig.mcp.exposeDiagnostics,
+      exposeGraph: configuredMcp
+        ? ownProperty(configuredMcp, "exposeGraph") ?? defaultConfig.mcp.exposeGraph
+        : defaultConfig.mcp.exposeGraph
     },
     configPath
   };
@@ -202,34 +222,49 @@ export function mergeConfig(
   override: OkfxConfig | ResolvedOkfxConfig = {}
 ): ResolvedOkfxConfig {
   const resolvedOverride = resolveConfig(override, base.configPath);
-  const overridePresets = override.presets !== undefined;
+  const configuredPresets = ownProperty(override, "presets");
+  const configuredPlugins = ownProperty(override, "plugins");
+  const configuredRules = ownProperty(override, "rules");
+  const configuredFrontmatter = ownProperty(override, "frontmatter");
+  const configuredResourcePolicy = ownProperty(override, "resourcePolicy");
+  const configuredMcp = ownProperty(override, "mcp");
+  const overridePresets = configuredPresets !== undefined;
 
   return {
     ...base,
-    okfVersion: override.okfVersion ?? base.okfVersion,
-    include: override.include ?? base.include,
-    exclude: override.exclude ?? base.exclude,
-    presets: override.presets ?? base.presets,
-    plugins: override.plugins !== undefined ? resolvedOverride.plugins : base.plugins,
+    okfVersion: ownProperty(override, "okfVersion") ?? base.okfVersion,
+    include: ownProperty(override, "include") ?? base.include,
+    exclude: ownProperty(override, "exclude") ?? base.exclude,
+    presets: configuredPresets ?? base.presets,
+    plugins: configuredPlugins !== undefined ? resolvedOverride.plugins : base.plugins,
     rules: overridePresets
       ? resolvedOverride.rules
       : {
           ...base.rules,
-          ...(override.rules ?? {})
+          ...(configuredRules ?? {})
         },
-    failOn: override.failOn ?? (overridePresets ? resolvedOverride.failOn : base.failOn),
+    failOn: ownProperty(override, "failOn") ?? (overridePresets ? resolvedOverride.failOn : base.failOn),
     frontmatter: {
-      keyOrder: override.frontmatter?.keyOrder ?? base.frontmatter.keyOrder
+      keyOrder: configuredFrontmatter
+        ? ownProperty(configuredFrontmatter, "keyOrder") ?? base.frontmatter.keyOrder
+        : base.frontmatter.keyOrder
     },
     resourcePolicy: {
-      allowHosts: override.resourcePolicy?.allowHosts !== undefined
+      allowHosts: configuredResourcePolicy
+        && ownProperty(configuredResourcePolicy, "allowHosts") !== undefined
         ? resolvedOverride.resourcePolicy.allowHosts
         : base.resourcePolicy.allowHosts
     },
     mcp: {
-      readonly: override.mcp?.readonly ?? base.mcp.readonly,
-      exposeDiagnostics: override.mcp?.exposeDiagnostics ?? base.mcp.exposeDiagnostics,
-      exposeGraph: override.mcp?.exposeGraph ?? base.mcp.exposeGraph
+      readonly: configuredMcp
+        ? ownProperty(configuredMcp, "readonly") ?? base.mcp.readonly
+        : base.mcp.readonly,
+      exposeDiagnostics: configuredMcp
+        ? ownProperty(configuredMcp, "exposeDiagnostics") ?? base.mcp.exposeDiagnostics
+        : base.mcp.exposeDiagnostics,
+      exposeGraph: configuredMcp
+        ? ownProperty(configuredMcp, "exposeGraph") ?? base.mcp.exposeGraph
+        : base.mcp.exposeGraph
     },
     configPath: base.configPath
   };
@@ -245,38 +280,47 @@ function assertConfig(value: unknown): asserts value is OkfxConfig {
   optionalStringArray(value, "exclude");
   optionalStringArray(value, "presets");
 
-  if (value.failOn !== undefined && !isDiagnosticSeverity(value.failOn)) {
+  const failOn = ownProperty(value, "failOn");
+  if (failOn !== undefined && !isDiagnosticSeverity(failOn)) {
     invalidConfig("failOn", "one of error, warning, advice, or info");
   }
 
-  if (value.plugins !== undefined) {
-    if (!Array.isArray(value.plugins)) {
+  const plugins = ownProperty(value, "plugins");
+  if (plugins !== undefined) {
+    if (!Array.isArray(plugins)) {
       invalidConfig("plugins", "an array");
     }
-    for (const [index, plugin] of value.plugins.entries()) {
+    for (const [index, plugin] of plugins.entries()) {
       if (typeof plugin === "string") {
         if (!plugin.trim()) {
           invalidConfig(`plugins[${index}]`, "a non-empty package string or plugin object");
         }
         continue;
       }
-      if (!isRecord(plugin) || typeof plugin.package !== "string" || !plugin.package.trim()) {
+      if (!isRecord(plugin)) {
         invalidConfig(`plugins[${index}].package`, "a non-empty string");
       }
-      if (plugin.enabled !== undefined && typeof plugin.enabled !== "boolean") {
+      const packageName = ownProperty(plugin, "package");
+      if (typeof packageName !== "string" || !packageName.trim()) {
+        invalidConfig(`plugins[${index}].package`, "a non-empty string");
+      }
+      const enabled = ownProperty(plugin, "enabled");
+      if (enabled !== undefined && typeof enabled !== "boolean") {
         invalidConfig(`plugins[${index}].enabled`, "a boolean");
       }
-      if (plugin.options !== undefined && !isRecord(plugin.options)) {
+      const options = ownProperty(plugin, "options");
+      if (options !== undefined && !isRecord(options)) {
         invalidConfig(`plugins[${index}].options`, "an object");
       }
     }
   }
 
-  if (value.rules !== undefined) {
-    if (!isRecord(value.rules)) {
+  const rules = ownProperty(value, "rules");
+  if (rules !== undefined) {
+    if (!isRecord(rules)) {
       invalidConfig("rules", "an object");
     }
-    for (const [id, rule] of Object.entries(value.rules)) {
+    for (const [id, rule] of Object.entries(rules)) {
       if (Array.isArray(rule)) {
         if (rule.length !== 2 || !isRuleLevel(rule[0]) || !isRecord(rule[1])) {
           invalidConfig(`rules.${id}`, "a rule level or [rule level, options] tuple");
@@ -287,26 +331,30 @@ function assertConfig(value: unknown): asserts value is OkfxConfig {
     }
   }
 
-  if (value.frontmatter !== undefined) {
-    if (!isRecord(value.frontmatter)) {
+  const frontmatter = ownProperty(value, "frontmatter");
+  if (frontmatter !== undefined) {
+    if (!isRecord(frontmatter)) {
       invalidConfig("frontmatter", "an object");
     }
-    optionalStringArray(value.frontmatter, "keyOrder", "frontmatter.keyOrder");
+    optionalStringArray(frontmatter, "keyOrder", "frontmatter.keyOrder");
   }
 
-  if (value.resourcePolicy !== undefined) {
-    if (!isRecord(value.resourcePolicy)) {
+  const resourcePolicy = ownProperty(value, "resourcePolicy");
+  if (resourcePolicy !== undefined) {
+    if (!isRecord(resourcePolicy)) {
       invalidConfig("resourcePolicy", "an object");
     }
-    optionalStringArray(value.resourcePolicy, "allowHosts", "resourcePolicy.allowHosts");
+    optionalStringArray(resourcePolicy, "allowHosts", "resourcePolicy.allowHosts");
   }
 
-  if (value.mcp !== undefined) {
-    if (!isRecord(value.mcp)) {
+  const mcp = ownProperty(value, "mcp");
+  if (mcp !== undefined) {
+    if (!isRecord(mcp)) {
       invalidConfig("mcp", "an object");
     }
     for (const key of ["readonly", "exposeDiagnostics", "exposeGraph"] as const) {
-      if (value.mcp[key] !== undefined && typeof value.mcp[key] !== "boolean") {
+      const setting = ownProperty(mcp, key);
+      if (setting !== undefined && typeof setting !== "boolean") {
         invalidConfig(`mcp.${key}`, "a boolean");
       }
     }
@@ -314,13 +362,14 @@ function assertConfig(value: unknown): asserts value is OkfxConfig {
 }
 
 function optionalString(record: Record<string, unknown>, key: string): void {
-  if (record[key] !== undefined && typeof record[key] !== "string") {
+  const value = ownProperty(record, key);
+  if (value !== undefined && typeof value !== "string") {
     invalidConfig(key, "a string");
   }
 }
 
 function optionalStringArray(record: Record<string, unknown>, key: string, path = key): void {
-  const value = record[key];
+  const value = ownProperty(record, key);
   if (value !== undefined
     && (!Array.isArray(value) || Array.from(value).some((entry) => typeof entry !== "string"))) {
     invalidConfig(path, "an array of strings");
@@ -339,6 +388,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function ownProperty<T extends object, K extends keyof T>(record: T, key: K): T[K] | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 function invalidConfig(path: string, expected: string): never {
   throw new TypeError(`Invalid okfx config: ${path} must be ${expected}.`);
 }
@@ -353,10 +406,15 @@ function normalizePluginReferences(plugins: OkfxPluginReference[]): ResolvedOkfx
       };
     }
 
+    const packageName = ownProperty(plugin, "package");
+    if (packageName === undefined) {
+      invalidConfig("plugins[].package", "a non-empty string");
+    }
+
     return {
-      package: plugin.package,
-      enabled: plugin.enabled ?? true,
-      options: plugin.options ?? {}
+      package: packageName,
+      enabled: ownProperty(plugin, "enabled") ?? true,
+      options: ownProperty(plugin, "options") ?? {}
     };
   });
 }

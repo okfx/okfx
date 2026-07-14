@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { findConfigFile, loadBundle, parseMarkdownDocument, resolveConfig } from "../src/index.js";
+import { findConfigFile, loadBundle, mergeConfig, parseMarkdownDocument, resolveConfig } from "../src/index.js";
 
 const roots: string[] = [];
 
@@ -296,6 +296,92 @@ describe("resolveConfig", () => {
         .toThrow(`Unknown okfx preset "${preset}"`);
     }
   );
+
+  it("ignores inherited top-level and nested config fields", () => {
+    const inheritedConfig = Object.create({
+      include: ["inherited.md"],
+      presets: ["strict"],
+      plugins: ["./inherited-plugin.ts"],
+      rules: {
+        "hygiene/missing-title": "off"
+      },
+      failOn: "warning",
+      frontmatter: {
+        keyOrder: ["title"]
+      },
+      resourcePolicy: {
+        allowHosts: ["inherited.example"]
+      },
+      mcp: {
+        readonly: false
+      }
+    });
+    const nestedConfig = {
+      frontmatter: Object.create({ keyOrder: ["title"] }),
+      resourcePolicy: Object.create({ allowHosts: ["inherited.example"] }),
+      mcp: Object.create({ readonly: false, exposeDiagnostics: false, exposeGraph: false })
+    };
+
+    const resolvedInherited = resolveConfig(inheritedConfig);
+    const resolvedNested = resolveConfig(nestedConfig);
+
+    expect(resolvedInherited).toMatchObject({
+      include: ["**/*.md"],
+      presets: ["recommended"],
+      plugins: [],
+      failOn: "error",
+      resourcePolicy: {
+        allowHosts: []
+      },
+      mcp: {
+        readonly: true
+      }
+    });
+    expect(resolvedInherited.rules["hygiene/missing-title"]).toBe("warning");
+    expect(resolvedInherited.frontmatter.keyOrder[0]).toBe("type");
+    expect(resolvedNested.frontmatter.keyOrder[0]).toBe("type");
+    expect(resolvedNested.resourcePolicy.allowHosts).toEqual([]);
+    expect(resolvedNested.mcp).toEqual({
+      readonly: true,
+      exposeDiagnostics: true,
+      exposeGraph: true
+    });
+  });
+
+  it("ignores inherited fields while merging config overrides", () => {
+    const base = resolveConfig({
+      include: ["base.md"],
+      presets: [],
+      failOn: "info"
+    });
+    const inheritedOverride = Object.create({
+      include: ["inherited.md"],
+      presets: ["strict"],
+      failOn: "warning"
+    });
+
+    const merged = mergeConfig(base, inheritedOverride);
+
+    expect(merged.include).toEqual(["base.md"]);
+    expect(merged.presets).toEqual([]);
+    expect(merged.failOn).toBe("info");
+  });
+
+  it("requires plugin reference fields to be own properties", () => {
+    const inheritedPackage = Object.create({ package: "./inherited-plugin.ts" });
+    const inheritedSettings = Object.assign(
+      Object.create({ enabled: false, options: { inherited: true } }),
+      { package: "./local-plugin.ts" }
+    );
+
+    expect(() => resolveConfig({ plugins: [inheritedPackage] }))
+      .toThrow("Invalid okfx config: plugins[0].package");
+    expect(resolveConfig({ plugins: [inheritedSettings] }).plugins).toEqual([{
+      package: "./local-plugin.ts",
+      enabled: true,
+      options: {}
+    }]);
+  });
 
   it.each([
     [{ failOn: "never" }, "failOn"],
