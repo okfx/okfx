@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { buildSearchIndex, loadBundle } from "../src/index.js";
+import { buildSearchIndex, loadBundle, tokenizeSearchText } from "../src/index.js";
 
 describe("buildSearchIndex", () => {
   it("builds deterministic full-text documents and terms", async () => {
@@ -37,5 +37,9 @@ Counts active users.
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("measures minimum term length in Unicode code points", () => {
+    expect(tokenizeSearchText("中 中国 𐐀 𐐀𐐁")).toEqual(["中国", "𐐨𐐩"]);
   });
 });

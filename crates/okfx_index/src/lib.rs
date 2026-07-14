@@ -121,13 +121,13 @@ pub fn tokenize(value: &str) -> Vec<String> {
     for character in value.to_lowercase().chars() {
         if character.is_alphanumeric() || matches!(character, '_' | '-') {
             current.push(character);
-        } else if current.len() >= 2 {
+        } else if current.chars().count() >= 2 {
             terms.insert(std::mem::take(&mut current));
         } else {
             current.clear();
         }
     }
-    if current.len() >= 2 {
+    if current.chars().count() >= 2 {
         terms.insert(current);
     }
 
@@ -172,5 +172,6 @@ mod tests {
             tokenize("A weekly-active user's metric"),
             vec!["metric", "user", "weekly-active"]
         );
+        assert_eq!(tokenize("中 中国 𐐀 𐐀𐐁"), vec!["中国", "𐐨𐐩"]);
     }
 }

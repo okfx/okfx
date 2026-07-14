@@ -55,7 +55,7 @@ function buildTermMap(documents: SearchIndexDocumentIR[]): Record<string, string
   const idsByTerm = new Map<string, Set<string>>();
 
   for (const document of documents) {
-    for (const term of tokenize([
+    for (const term of tokenizeSearchText([
       document.id,
       document.title,
       document.description,
@@ -75,10 +75,10 @@ function buildTermMap(documents: SearchIndexDocumentIR[]): Record<string, string
     .map(([term, ids]) => [term, [...ids].sort()]));
 }
 
-function tokenize(value: string): string[] {
+export function tokenizeSearchText(value: string): string[] {
   return [...new Set(value
     .toLowerCase()
     .split(/[^\p{L}\p{N}_-]+/u)
     .map((term) => term.trim())
-    .filter((term) => term.length >= 2))];
+    .filter((term) => [...term].length >= 2))];
 }

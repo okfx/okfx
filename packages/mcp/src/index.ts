@@ -15,6 +15,7 @@ import {
   loadConfig,
   loadConfiguredPlugins,
   okfxVersion,
+  tokenizeSearchText,
   validateBundle,
   type BundleIR,
   type BundleDiffIR,
@@ -133,7 +134,7 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
     async searchConcepts(query, limit = 10) {
       const { bundle } = await loadContext();
       const index = buildSearchIndex(bundle);
-      const terms = tokenize(query);
+      const terms = tokenizeSearchText(query);
       const scores = new Map<string, number>();
 
       for (const term of terms) {
@@ -441,14 +442,6 @@ function jsonResource(uri: string, value: unknown) {
       text: `${JSON.stringify(value, null, 2)}\n`
     }]
   };
-}
-
-function tokenize(value: string): string[] {
-  return [...new Set(value
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}_-]+/u)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 2))];
 }
 
 async function resolveSafeComparisonRoot(currentRoot: string, comparisonRoot: string): Promise<string> {
