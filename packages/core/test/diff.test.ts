@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { diffBundles, loadBundle } from "../src/index.js";
 
@@ -24,6 +24,35 @@ async function bundle(files: Record<string, string>) {
 }
 
 describe("diffBundles", () => {
+  it("uses one readiness timestamp for both sides of a diff", async () => {
+    const current = await bundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\ntimestamp: 2025-01-01T00:00:00Z\n---\n# Concept\n"
+    });
+    const OriginalDate = Date;
+    const staleBoundary = OriginalDate.parse("2025-01-01T00:00:00Z") + 180 * 24 * 60 * 60 * 1000;
+    let noArgumentCalls = 0;
+    class AdvancingDate extends OriginalDate {
+      constructor(value?: string | number) {
+        if (arguments.length === 0) {
+          super(noArgumentCalls++ < 2 ? staleBoundary : staleBoundary + 1);
+        } else {
+          super(value!);
+        }
+      }
+    }
+    vi.stubGlobal("Date", AdvancingDate);
+
+    try {
+      const diff = diffBundles(current.loaded, current.loaded);
+
+      expect(diff.agentReadiness).toMatchObject({ delta: 0, changed: false });
+      expect(diff.stats.readinessChanged).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+      await current.cleanup();
+    }
+  });
+
   it("reports added, removed, renamed, and changed concepts", async () => {
     const before = await bundle({
       "same.md": "---\ntype: Note\ntitle: Same\n---\n# Same\n[Old](old-link.md)\n",

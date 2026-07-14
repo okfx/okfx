@@ -45,6 +45,10 @@ export interface DiffOptions {
 }
 
 export function diffBundles(before: BundleIR, after: BundleIR, options: DiffOptions = {}): BundleDiffIR {
+  const doctorOptions: DoctorOptions = {
+    ...options.doctor,
+    now: options.doctor?.now ?? new Date()
+  };
   const beforeById = new Map(before.concepts.map((concept) => [concept.id, concept]));
   const afterById = new Map(after.concepts.map((concept) => [concept.id, concept]));
   const added = after.concepts
@@ -63,8 +67,8 @@ export function diffBundles(before: BundleIR, after: BundleIR, options: DiffOpti
     .map(([id, afterConcept]) => changedConcept(beforeById.get(id)!, afterConcept))
     .filter((change): change is ConceptChangeIR => change !== undefined)
     .sort((a, b) => compareStrings(a.id, b.id));
-  const beforeReadiness = doctorBundle(before, options.doctor);
-  const afterReadiness = doctorBundle(after, options.doctor);
+  const beforeReadiness = doctorBundle(before, doctorOptions);
+  const afterReadiness = doctorBundle(after, doctorOptions);
   const readinessDelta = afterReadiness.score - beforeReadiness.score;
 
   return {
