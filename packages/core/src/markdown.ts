@@ -274,7 +274,7 @@ export function slugifyHeading(title: string): string {
     .trim()
     .toLowerCase()
     .replace(/[`*_~]/g, "")
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/[^\p{Alphabetic}\p{N}\s-]/gu, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");

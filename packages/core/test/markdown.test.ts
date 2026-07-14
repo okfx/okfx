@@ -25,9 +25,10 @@ describe("Markdown code fences", () => {
   });
 
   it("preserves Unicode whitespace in ATX heading content", () => {
-    const parsed = parseMarkdownDocument("concept.md", "# \u00a0Padded\u00a0\n", "concept");
+    const parsed = parseMarkdownDocument("concept.md", "# \u00a0Padded\u00a0\n# हिंदी\n", "concept");
 
     expect(parsed.body.headings[0]).toMatchObject({ title: "\u00a0Padded\u00a0", slug: "padded" });
+    expect(parsed.body.headings[1]).toMatchObject({ title: "हिंदी", slug: "हिंदी" });
   });
 
   it("parses frontmatter and locations with carriage-return line endings", () => {

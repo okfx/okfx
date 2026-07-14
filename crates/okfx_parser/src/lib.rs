@@ -947,10 +947,13 @@ mod tests {
 
     #[test]
     fn preserves_unicode_whitespace_in_atx_heading_content() {
-        let parsed = parse_markdown_document("concept.md", "# \u{a0}Padded\u{a0}\n", "concept");
+        let parsed =
+            parse_markdown_document("concept.md", "# \u{a0}Padded\u{a0}\n# हिंदी\n", "concept");
 
         assert_eq!(parsed.body.headings[0].title, "\u{a0}Padded\u{a0}");
         assert_eq!(parsed.body.headings[0].slug, "padded");
+        assert_eq!(parsed.body.headings[1].title, "हिंदी");
+        assert_eq!(parsed.body.headings[1].slug, "हिंदी");
     }
 
     #[test]
