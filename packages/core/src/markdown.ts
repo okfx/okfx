@@ -46,10 +46,8 @@ export function classifyLinkTarget(targetRaw: string): LinkKind {
 
 function extractHeadings(bodyRaw: string, locate: SourceLocator): HeadingIR[] {
   const headings: HeadingIR[] = [];
-  const headingPattern = /^ {0,3}#+[^\r\n]*$/gm;
-
-  for (const match of bodyRaw.matchAll(headingPattern)) {
-    const heading = parseAtxHeading(match[0]);
+  for (const line of markdownLines(bodyRaw)) {
+    const heading = parseAtxHeading(line.text);
     if (!heading) {
       continue;
     }
@@ -58,8 +56,8 @@ function extractHeadings(bodyRaw: string, locate: SourceLocator): HeadingIR[] {
       title: heading.title,
       slug: slugifyHeading(heading.title),
       location: {
-        start: locate(match.index ?? 0),
-        end: locate((match.index ?? 0) + match[0].length)
+        start: locate(line.start),
+        end: locate(line.end)
       }
     });
   }
@@ -300,16 +298,40 @@ export function slugifyHeading(title: string): string {
 }
 
 function plainText(markdown: string): string {
-  return stripInlineLinks(maskFencedCode(markdown))
-    .replace(/^ {0,3}#+[^\r\n]*$/gm, (line) => parseAtxHeading(line)?.title ?? line)
+  return replaceAtxHeadings(stripInlineLinks(maskFencedCode(markdown)))
     .replace(/`+/g, "")
     .replace(/[`*_~>-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+function replaceAtxHeadings(markdown: string): string {
+  const chunks: string[] = [];
+  for (const line of markdownLines(markdown)) {
+    chunks.push(parseAtxHeading(line.text)?.title ?? line.text);
+    chunks.push(markdown.slice(line.end, line.nextStart));
+  }
+  return chunks.join("");
+}
+
+function* markdownLines(markdown: string): Generator<{
+  text: string;
+  start: number;
+  end: number;
+  nextStart: number;
+}> {
+  let start = 0;
+  for (const ending of markdown.matchAll(/\r\n|\n|\r/g)) {
+    const end = ending.index;
+    const nextStart = end + ending[0].length;
+    yield { text: markdown.slice(start, end), start, end, nextStart };
+    start = nextStart;
+  }
+  yield { text: markdown.slice(start), start, end: markdown.length, nextStart: markdown.length };
+}
+
 function parseAtxHeading(line: string): { level: number; title: string } | undefined {
-  const match = /^ {0,3}(#+)(.*)$/.exec(line);
+  const match = /^ {0,3}(#+)([^\r\n]*)$/.exec(line);
   if (!match || match[1].length > 6) {
     return undefined;
   }

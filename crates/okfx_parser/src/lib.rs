@@ -502,7 +502,7 @@ fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usi
                 return Some((destination_start, cursor, cursor));
             }
             depth -= 1;
-        } else if character.is_whitespace() {
+        } else if is_ecmascript_whitespace(character) {
             if depth != 0 {
                 return None;
             }
@@ -622,7 +622,7 @@ fn link_label_contains_link(
 
 fn classify_link_target(target: &str) -> LinkKind {
     let target = unescape_markdown_destination(target);
-    if target.trim().is_empty() {
+    if target.trim_matches(is_ecmascript_whitespace).is_empty() {
         LinkKind::Unknown
     } else if target.starts_with('#') {
         LinkKind::Anchor
@@ -692,7 +692,10 @@ fn plain_text(markdown: &str) -> String {
         text.push(' ');
     }
 
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    text.split(is_ecmascript_whitespace)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn strip_inline_links(markdown: &str) -> String {
@@ -903,15 +906,25 @@ fn is_escaped_delimiter(value: &[u8], index: usize) -> bool {
         == 1
 }
 
+fn is_ecmascript_whitespace(character: char) -> bool {
+    // ECMAScript's `\s`/String#trim set differs from Unicode White_Space at
+    // exactly these two code points: it includes BOM and excludes NEL.
+    character == '\u{feff}' || (character.is_whitespace() && character != '\u{0085}')
+}
+
 fn slugify_heading(title: &str) -> String {
     let mut slug = String::new();
     let mut previous_dash = false;
 
-    for character in title.trim().to_lowercase().chars() {
+    for character in title
+        .trim_matches(is_ecmascript_whitespace)
+        .to_lowercase()
+        .chars()
+    {
         if character.is_alphanumeric() {
             slug.push(character);
             previous_dash = false;
-        } else if (character.is_whitespace() || character == '-')
+        } else if (is_ecmascript_whitespace(character) || character == '-')
             && !previous_dash
             && !slug.is_empty()
         {
@@ -1044,6 +1057,54 @@ mod tests {
         assert_eq!(parsed.body.headings[0].slug, "padded");
         assert_eq!(parsed.body.headings[1].title, "हिंदी");
         assert_eq!(parsed.body.headings[1].slug, "हिंदी");
+    }
+
+    #[test]
+    fn matches_ecmascript_whitespace_semantics() {
+        assert_eq!(
+            plain_text("alpha\u{feff}beta gamma\u{0085}delta"),
+            "alpha beta gamma\u{0085}delta"
+        );
+        assert_eq!(slugify_heading("alpha\u{feff}beta"), "alpha-beta");
+        assert_eq!(slugify_heading("alpha\u{0085}beta"), "alphabeta");
+        assert_eq!(classify_link_target("\u{feff}"), LinkKind::Unknown);
+        assert_eq!(classify_link_target("\u{0085}"), LinkKind::Internal);
+
+        let headings = parse_markdown_document(
+            "concept.md",
+            "# alpha\u{2028}beta\n# gamma\u{2029}delta\n",
+            "concept",
+        );
+        assert_eq!(
+            headings
+                .body
+                .headings
+                .iter()
+                .map(|heading| (heading.title.as_str(), heading.slug.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("alpha\u{2028}beta", "alpha-beta"),
+                ("gamma\u{2029}delta", "gamma-delta")
+            ]
+        );
+
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "[BOM](<\u{feff}>) [NEL](<\u{0085}>) [BOM tail](target\u{feff}) [NEL target](target\u{0085})",
+            "concept",
+        );
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| (link.text.as_deref(), link.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some("BOM"), LinkKind::Unknown),
+                (Some("NEL"), LinkKind::Internal),
+                (Some("NEL target"), LinkKind::Internal),
+            ]
+        );
     }
 
     #[test]

@@ -45,6 +45,26 @@ describe("Markdown code fences", () => {
     expect(parsed.body.headings[1]).toMatchObject({ title: "हिंदी", slug: "हिंदी" });
   });
 
+  it("matches ECMAScript whitespace without treating Unicode separators as Markdown lines", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "# alpha\u2028beta\n# gamma\u2029delta\nalpha\ufeffbeta gamma\u0085delta\n"
+        + "[BOM](<\ufeff>) [NEL](<\u0085>) [BOM tail](target\ufeff) [NEL target](target\u0085)",
+      "concept"
+    );
+
+    expect(parsed.body.headings.map(({ title, slug }) => ({ title, slug }))).toEqual([
+      { title: "alpha\u2028beta", slug: "alpha-beta" },
+      { title: "gamma\u2029delta", slug: "gamma-delta" }
+    ]);
+    expect(parsed.body.text).toContain("alpha beta gamma\u0085delta");
+    expect(parsed.links.map(({ text, kind }) => ({ text, kind }))).toEqual([
+      { text: "BOM", kind: "unknown" },
+      { text: "NEL", kind: "internal" },
+      { text: "NEL target", kind: "internal" }
+    ]);
+  });
+
   it("parses frontmatter and locations with carriage-return line endings", () => {
     const parsed = parseMarkdownDocument(
       "concept.md",
