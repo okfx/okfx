@@ -134,6 +134,7 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
       }];
     },
     async searchConcepts(query, limit = 10) {
+      validateSearchLimit(limit);
       const { bundle } = await loadContext();
       const index = buildSearchIndex(bundle);
       const terms = tokenizeSearchText(query);
@@ -225,6 +226,12 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
       });
     }
   };
+}
+
+function validateSearchLimit(limit: number): void {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+    throw new TypeError("Search limit must be an integer between 1 and 50.");
+  }
 }
 
 export async function createOkfMcpServer(options: OkfMcpServerOptions): Promise<McpServer> {
