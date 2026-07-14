@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 import fg from "fast-glob";
 
@@ -32,7 +32,18 @@ export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxCo
     ignore: config.exclude
   });
 
-  return entries.map((entry) => relativePosixPath(root, entry)).sort((a, b) => a.localeCompare(b));
+  return entries.map((entry) => {
+    const relativePath = relative(root, entry);
+    if (
+      !relativePath
+      || relativePath === ".."
+      || relativePath.startsWith(`..${sep}`)
+      || isAbsolute(relativePath)
+    ) {
+      throw new Error(`Discovered Markdown file escapes the OKF bundle root: ${entry}`);
+    }
+    return relativePosixPath(root, entry);
+  }).sort((a, b) => a.localeCompare(b));
 }
 
 export async function loadBundle(rootInput: string, options: LoadBundleOptions = {}): Promise<BundleIR> {

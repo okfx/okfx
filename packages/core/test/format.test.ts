@@ -163,4 +163,22 @@ describe("formatBundle", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("does not format files discovered outside the bundle root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-fmt-contained-"));
+    const outside = join(root, "..", `okfx-fmt-outside-${Date.now()}.md`);
+    const content = "---\ntitle: Outside\ntype: Note\n---\n# Outside   ";
+    try {
+      await writeFile(outside, content, "utf8");
+
+      await expect(formatBundle(root, {
+        loadConfigFile: false,
+        config: { include: [outside] }
+      })).rejects.toThrow("escapes the OKF bundle root");
+      expect(await readFile(outside, "utf8")).toBe(content);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { force: true });
+    }
+  });
 });

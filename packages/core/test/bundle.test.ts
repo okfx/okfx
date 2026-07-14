@@ -150,6 +150,21 @@ type: Metric
     expect(bundle.concepts.map((concept) => concept.path)).toEqual(["knowledge/kept.md"]);
   });
 
+  it("rejects include globs that discover files outside the bundle root", async () => {
+    const root = await tempBundle();
+    const outside = join(root, "..", `okfx-outside-${Date.now()}.md`);
+    try {
+      await writeFile(outside, "---\ntype: Note\n---\n# Outside\n", "utf8");
+
+      await expect(loadBundle(root, {
+        loadConfigFile: false,
+        config: { include: [outside] }
+      })).rejects.toThrow("escapes the OKF bundle root");
+    } finally {
+      await rm(outside, { force: true });
+    }
+  });
+
   it("loads okfx.config.ts files", async () => {
     const root = await tempBundle();
     await write(
