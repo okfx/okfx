@@ -69,4 +69,18 @@ describe("@okfx/adapter-markdown", () => {
     expect(new Set(files.map((file) => file.path))).toHaveLength(2);
     expect(files.every((file) => file.path.startsWith("notes/demo-"))).toBe(true);
   });
+
+  it("normalizes source names to portable generated paths", () => {
+    const files = produceMarkdownOkf([
+      { path: "CON", body: "# Reserved\n" },
+      { path: "guides./danger*", body: "# Invalid characters\n" },
+      { path: "...", body: "# Dots\n" }
+    ]);
+
+    expect(files.map((file) => file.path)).toEqual([
+      "_CON.md",
+      "guides/danger-.md",
+      "concept.md"
+    ]);
+  });
 });

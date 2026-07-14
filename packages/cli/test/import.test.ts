@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -106,7 +106,7 @@ describe("okf import", () => {
     expect(output.stderr()).toContain("escapes the output root");
   });
 
-  it("rejects output paths that collide on case-insensitive filesystems", async () => {
+  it("disambiguates output paths that collide on case-insensitive filesystems", async () => {
     const root = await tempRoot();
     const input = join(root, "markdown.json");
     await writeFile(input, JSON.stringify([
@@ -124,8 +124,11 @@ describe("okf import", () => {
       join(root, "knowledge"),
       "--write",
       "--force"
-    ], output.io)).toBe(2);
-    expect(output.stderr()).toContain("duplicate output path");
+    ], output.io)).toBe(0);
+    expect(output.stderr()).toBe("");
+    const names = await readdir(join(root, "knowledge", "notes"));
+    expect(names).toHaveLength(2);
+    expect(new Set(names.map((name) => name.normalize("NFC").toLowerCase()))).toHaveLength(2);
   });
 
   it("refuses to write through symlinked output directories even when forced", async () => {

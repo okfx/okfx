@@ -80,8 +80,36 @@ function normalizeConceptPath(path: string): string {
     segments.push(segment);
   }
 
-  const relativePath = segments.join("/");
-  return /\.md$/i.test(relativePath) ? `${relativePath.slice(0, -3)}.md` : `${relativePath}.md`;
+  const sourceName = segments.pop()!;
+  const sourceStem = /\.md$/i.test(sourceName) ? sourceName.slice(0, -3) : sourceName;
+  const outputSegments = [
+    ...segments.map((segment) => portableSegment(segment, "segment")),
+    `${portableSegment(sourceStem, "concept")}.md`
+  ];
+  return outputSegments.join("/");
+}
+
+function portableSegment(value: string, fallback: string): string {
+  let segment = value
+    .replace(/[<>:"|?*\u0000-\u001f]/g, "-")
+    .replace(/[ .]+$/g, "");
+  if (!segment) {
+    segment = fallback;
+  }
+
+  const deviceName = segment.split(".", 1)[0]?.toUpperCase();
+  if (
+    deviceName === "CON"
+    || deviceName === "PRN"
+    || deviceName === "AUX"
+    || deviceName === "NUL"
+    || /^COM[1-9]$/.test(deviceName ?? "")
+    || /^LPT[1-9]$/.test(deviceName ?? "")
+  ) {
+    segment = `_${segment}`;
+  }
+
+  return segment;
 }
 
 function titleFromPath(path: string): string {
