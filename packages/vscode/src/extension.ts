@@ -1,4 +1,4 @@
-import { basename, relative, sep } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 
 import * as vscode from "vscode";
 
@@ -283,7 +283,7 @@ async function provideDefinition(
     return undefined;
   }
 
-  return new vscode.Location(vscode.Uri.file(`${root}/${concept.path}`), new vscode.Position(0, 0));
+  return new vscode.Location(vscode.Uri.file(join(root, concept.path)), new vscode.Position(0, 0));
 }
 
 function provideQuickFixes(
@@ -361,7 +361,7 @@ function publishDiagnostics(root: string, entries: DiagnosticIR[]): void {
 
   const currentPaths = new Set<string>();
   for (const [path, pathDiagnostics] of byPath) {
-    const absolutePath = `${root}/${path}`;
+    const absolutePath = join(root, path);
     currentPaths.add(absolutePath);
     diagnostics.set(vscode.Uri.file(absolutePath), pathDiagnostics.map(toVsCodeDiagnostic));
   }
