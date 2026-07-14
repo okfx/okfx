@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { buildGraph, buildSearchIndex, lintBundle, loadBundle, parseMarkdownDocument } from "../src/index.js";
+import { buildGraph, buildSearchIndex, diffBundles, lintBundle, loadBundle, parseMarkdownDocument } from "../src/index.js";
 import { metricMissingSourceDiagnostics } from "../src/agent-rules.js";
 import type { BundleIR, ConceptIR } from "../src/types.js";
 
@@ -150,6 +150,39 @@ describe("performance baselines", () => {
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === "hygiene/duplicate-title"))
       .toHaveLength(count);
     expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
+
+  it("pairs large same-hash rename groups without shifting arrays", () => {
+    const count = 40_000;
+    const concepts = (prefix: string): ConceptIR[] => Array.from({ length: count }, (_, index) => ({
+      id: `${prefix}-${index}`,
+      path: `${prefix}-${index}.md`,
+      type: "Note",
+      title: `Title ${index}`,
+      description: "Description",
+      frontmatter: { type: "Note", title: `Title ${index}`, description: "Description" },
+      frontmatterRaw: `type: Note\ntitle: Title ${index}\ndescription: Description`,
+      body: { raw: "# Body", text: "# Body", headings: [] },
+      links: [],
+      contentHash: "shared"
+    }));
+    const before = bundleWithConcepts(concepts("before"));
+    const after = bundleWithConcepts(concepts("after"));
+    const started = performance.now();
+
+    const diff = diffBundles(before, after, {
+      doctor: {
+        config: {
+          rules: {
+            "graph/orphan-concept": "off"
+          }
+        }
+      }
+    });
+    const elapsedMs = performance.now() - started;
+
+    expect(diff.renamedConcepts).toHaveLength(count);
+    expect(elapsedMs).toBeLessThan(1500);
   }, 5000);
 });
 

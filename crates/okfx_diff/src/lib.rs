@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub const CRATE_NAME: &str = "okfx_diff";
 
@@ -128,12 +128,12 @@ pub fn diff_concepts(before: Vec<ConceptSnapshot>, after: Vec<ConceptSnapshot>) 
 }
 
 fn detect_renames(removed: &[ConceptSnapshot], added: &[ConceptSnapshot]) -> Vec<ConceptRename> {
-    let mut added_by_hash = BTreeMap::<String, Vec<&ConceptSnapshot>>::new();
+    let mut added_by_hash = BTreeMap::<String, VecDeque<&ConceptSnapshot>>::new();
     for concept in added {
         added_by_hash
             .entry(concept.content_hash.clone())
             .or_default()
-            .push(concept);
+            .push_back(concept);
     }
 
     let mut renames = Vec::new();
@@ -141,10 +141,9 @@ fn detect_renames(removed: &[ConceptSnapshot], added: &[ConceptSnapshot]) -> Vec
         let Some(candidates) = added_by_hash.get_mut(&concept.content_hash) else {
             continue;
         };
-        if candidates.is_empty() {
+        let Some(candidate) = candidates.pop_front() else {
             continue;
-        }
-        let candidate = candidates.remove(0);
+        };
         renames.push(ConceptRename {
             from: concept.id.clone(),
             to: candidate.id.clone(),

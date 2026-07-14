@@ -91,16 +91,24 @@ export function diffBundles(before: BundleIR, after: BundleIR, options: DiffOpti
 function detectRenames(removed: ConceptIR[], added: ConceptIR[]): ConceptRenameIR[] {
   const addedByHash = new Map<string, ConceptIR[]>();
   for (const concept of added) {
-    addedByHash.set(concept.contentHash, [...(addedByHash.get(concept.contentHash) ?? []), concept]);
+    const candidates = addedByHash.get(concept.contentHash);
+    if (candidates) {
+      candidates.push(concept);
+    } else {
+      addedByHash.set(concept.contentHash, [concept]);
+    }
   }
 
   const renames: ConceptRenameIR[] = [];
+  const nextCandidateByHash = new Map<string, number>();
   for (const concept of removed) {
     const candidates = addedByHash.get(concept.contentHash) ?? [];
-    const candidate = candidates.shift();
+    const nextCandidate = nextCandidateByHash.get(concept.contentHash) ?? 0;
+    const candidate = candidates[nextCandidate];
     if (!candidate) {
       continue;
     }
+    nextCandidateByHash.set(concept.contentHash, nextCandidate + 1);
     renames.push({
       from: concept.id,
       to: candidate.id,
