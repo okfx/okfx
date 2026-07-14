@@ -23,7 +23,7 @@ export function markdownTargetAtDocument(
 export function markdownTargetAt(line: string, character: number): string | undefined {
   const cursor = Math.max(0, Math.min(character, line.length));
   const searchableLine = maskInlineCode(line);
-  const labelStarts = matchingLinkLabelStarts(searchableLine);
+  const labels = matchingLinkLabels(searchableLine);
   let searchFrom = cursor - 1;
   while (searchFrom >= 0) {
     const linkStart = searchableLine.lastIndexOf("](", searchFrom);
@@ -31,10 +31,10 @@ export function markdownTargetAt(line: string, character: number): string | unde
       return undefined;
     }
     searchFrom = linkStart - 1;
-    const labelStart = labelStarts.get(linkStart);
+    const labelStart = labels.startsByEnd.get(linkStart);
     if (labelStart === undefined
       || (searchableLine[labelStart - 1] === "!" && !isEscaped(searchableLine, labelStart - 1))
-      || linkLabelContainsLink(searchableLine, labelStart + 1, linkStart)) {
+      || linkLabelContainsLink(searchableLine, labelStart + 1, linkStart, labels.endsByStart)) {
       continue;
     }
 
@@ -153,9 +153,13 @@ function isClosingFence(line: string, fence: { marker: "`" | "~"; length: number
   return Boolean(match && match[1]![0] === fence.marker && match[1]!.length >= fence.length);
 }
 
-function matchingLinkLabelStarts(line: string): Map<number, number> {
+function matchingLinkLabels(line: string): {
+  startsByEnd: Map<number, number>;
+  endsByStart: Map<number, number>;
+} {
   const starts: number[] = [];
-  const matchingStarts = new Map<number, number>();
+  const startsByEnd = new Map<number, number>();
+  const endsByStart = new Map<number, number>();
   for (let cursor = 0; cursor < line.length; cursor += 1) {
     const character = line[cursor];
     if ((character !== "[" && character !== "]") || isEscaped(line, cursor)) {
@@ -166,14 +170,20 @@ function matchingLinkLabelStarts(line: string): Map<number, number> {
     } else {
       const start = starts.pop();
       if (start !== undefined) {
-        matchingStarts.set(cursor, start);
+        startsByEnd.set(cursor, start);
+        endsByStart.set(start, cursor);
       }
     }
   }
-  return matchingStarts;
+  return { startsByEnd, endsByStart };
 }
 
-function linkLabelContainsLink(line: string, start: number, end: number): boolean {
+function linkLabelContainsLink(
+  line: string,
+  start: number,
+  end: number,
+  labelEnds: ReadonlyMap<number, number>
+): boolean {
   let cursor = start;
   while (cursor < end) {
     const nestedStart = line.indexOf("[", cursor);
@@ -186,8 +196,8 @@ function linkLabelContainsLink(line: string, start: number, end: number): boolea
       continue;
     }
 
-    const nestedEnd = findLinkLabelEnd(line, nestedStart + 1, end);
-    if (nestedEnd !== undefined && line[nestedEnd + 1] === "(") {
+    const nestedEnd = labelEnds.get(nestedStart);
+    if (nestedEnd !== undefined && nestedEnd < end && line[nestedEnd + 1] === "(") {
       const destination = parseDestination(line, nestedEnd + 2);
       if (destination && destination.closingParen < end) {
         return true;
@@ -197,24 +207,6 @@ function linkLabelContainsLink(line: string, start: number, end: number): boolea
   }
 
   return false;
-}
-
-function findLinkLabelEnd(line: string, start: number, end: number): number | undefined {
-  let depth = 0;
-  for (let cursor = start; cursor < end; cursor += 1) {
-    if (isEscaped(line, cursor)) {
-      continue;
-    }
-    if (line[cursor] === "[") {
-      depth += 1;
-    } else if (line[cursor] === "]") {
-      if (depth === 0) {
-        return cursor;
-      }
-      depth -= 1;
-    }
-  }
-  return undefined;
 }
 
 function parseDestination(

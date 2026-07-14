@@ -122,6 +122,15 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.length)).toBeUndefined();
     expect(performance.now() - started).toBeLessThan(1000);
   }, 5000);
+
+  it("reuses bracket matches for deeply nested link labels", () => {
+    const depth = 20_000;
+    const line = `[${"[".repeat(depth)}x${"]".repeat(depth)}](target.md)`;
+    const started = performance.now();
+
+    expect(markdownTargetAt(line, line.indexOf("target"))).toBe("target.md");
+    expect(performance.now() - started).toBeLessThan(1000);
+  }, 5000);
 });
 
 describe("resolveDefinitionTarget", () => {
