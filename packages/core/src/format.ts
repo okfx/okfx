@@ -50,7 +50,7 @@ export function formatMarkdownFile(
 
   let document: ReturnType<typeof parseDocument>;
   try {
-    document = parseDocument(split.raw, { prettyErrors: false });
+    document = parseDocument(split.raw.replace(/\r\n?/g, "\n"), { prettyErrors: false });
     if (document.errors.length > 0) {
       throw document.errors[0];
     }
@@ -318,17 +318,18 @@ interface FrontmatterSplit {
 }
 
 function splitFrontmatter(content: string): FrontmatterSplit | undefined {
-  if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) {
+  const opening = /^---(\r\n|\n|\r)/.exec(content);
+  if (!opening) {
     return undefined;
   }
 
-  const rest = content.slice(content.startsWith("---\r\n") ? 5 : 4);
+  const rest = content.slice(opening[0].length);
   const closing = /^---[ \t]*\r?$/m.exec(rest);
   if (!closing || closing.index === undefined) {
     return undefined;
   }
 
   const raw = rest.slice(0, closing.index);
-  const body = rest.slice(closing.index + closing[0].length).replace(/^\r?\n/, "");
+  const body = rest.slice(closing.index + closing[0].length).replace(/^(?:\r\n|\n|\r)/, "");
   return { raw, body };
 }

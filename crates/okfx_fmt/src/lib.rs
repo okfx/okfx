@@ -51,7 +51,8 @@ pub fn format_markdown_document_with_key_order(
     };
 
     let mut diagnostics = Vec::new();
-    let frontmatter = match serde_yaml::from_str::<Value>(split.raw) {
+    let normalized_frontmatter = split.raw.replace("\r\n", "\n").replace('\r', "\n");
+    let frontmatter = match serde_yaml::from_str::<Value>(&normalized_frontmatter) {
         Ok(Value::Mapping(mapping)) => mapping,
         Ok(Value::Null) => Mapping::new(),
         Ok(_) => {
@@ -75,8 +76,8 @@ pub fn format_markdown_document_with_key_order(
         }
     };
 
-    let formatted_frontmatter = if requires_lossless_frontmatter(split.raw) {
-        preserve_frontmatter(split.raw)
+    let formatted_frontmatter = if requires_lossless_frontmatter(&normalized_frontmatter) {
+        preserve_frontmatter(&normalized_frontmatter)
     } else {
         stringify_ordered_frontmatter(frontmatter, key_order)
     };
@@ -102,7 +103,7 @@ struct FrontmatterSplit<'a> {
 fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     let opening_len = if content.starts_with("---\r\n") {
         5
-    } else if content.starts_with("---\n") {
+    } else if content.starts_with("---\n") || content.starts_with("---\r") {
         4
     } else {
         return None;
@@ -110,7 +111,7 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     let rest = &content[opening_len..];
     let mut offset = opening_len;
 
-    for line in rest.split_inclusive('\n') {
+    for line in split_lines_inclusive(rest) {
         if line
             .trim_end_matches(['\r', '\n'])
             .trim_end_matches([' ', '\t'])
@@ -125,6 +126,32 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     }
 
     None
+}
+
+fn split_lines_inclusive(value: &str) -> Vec<&str> {
+    let bytes = value.as_bytes();
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        let end = match bytes[cursor] {
+            b'\r' if bytes.get(cursor + 1) == Some(&b'\n') => cursor + 2,
+            b'\r' | b'\n' => cursor + 1,
+            _ => {
+                cursor += 1;
+                continue;
+            }
+        };
+        lines.push(&value[start..end]);
+        start = end;
+        cursor = end;
+    }
+
+    if start < value.len() {
+        lines.push(&value[start..]);
+    }
+    lines
 }
 
 fn requires_lossless_frontmatter(raw: &str) -> bool {
@@ -383,6 +410,20 @@ mod tests {
         assert_eq!(
             normalize_timestamp_value(Value::String("July 7, 2026".to_string())),
             Value::String("July 7, 2026".to_string())
+        );
+    }
+
+    #[test]
+    fn formats_frontmatter_with_carriage_return_line_endings() {
+        let result = format_markdown_document(
+            "concept.md",
+            "---\rtitle: Example\rtype: Note\r---\r# Example\r",
+        );
+
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(
+            result.formatted,
+            "---\ntype: Note\ntitle: Example\n---\n\n# Example\n"
         );
     }
 

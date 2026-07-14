@@ -52,6 +52,16 @@ timestamp: ${timestamp}
     expect(formatTimestamp("July 7, 2026")).toContain("timestamp: July 7, 2026\n");
   });
 
+  it("formats frontmatter with carriage-return line endings", () => {
+    const result = formatMarkdownFile(
+      "concept.md",
+      "---\rtitle: Example\rtype: Note\r---\r# Example\r"
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.formatted).toBe("---\ntype: Note\ntitle: Example\n---\n\n# Example\n");
+  });
+
   it("preserves YAML comments and anchor relationships while ordering keys", () => {
     const result = formatMarkdownFile("concept.md", `---
 description: &summary Shared description # keep anchor comment
