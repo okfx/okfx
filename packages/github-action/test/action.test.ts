@@ -15,6 +15,10 @@ describe("@okfx/github-action", () => {
     expect(action).toContain("okf doctor");
     expect(action).toContain("GITHUB_STEP_SUMMARY");
     expect(action).toContain("actions/github-script@v7");
+    expect(action).toContain("<!-- okfx-summary -->");
+    expect(action).toContain("github.paginate(github.rest.issues.listComments");
+    expect(action).toContain("github.rest.issues.updateComment");
+    expect(action).toContain("github.rest.issues.createComment");
     expect(action).toContain("OKF quality gate");
     expect(action.match(/const graph = readJson\(process\.env\.OKF_GRAPH_JSON\);/g)).toHaveLength(2);
     expect(action.match(/\.\.\.\(lint\?\.stats \?\? \{\}\)/g)).toHaveLength(2);
