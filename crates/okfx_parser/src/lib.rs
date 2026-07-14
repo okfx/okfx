@@ -1,11 +1,27 @@
+use regex::Regex;
 use saphyr::{LoadableYamlNode, Scalar, Yaml};
+use saphyr::{ScalarStyle, Tag, YamlLoader};
 use saphyr_parser::{Event, EventReceiver, Parser};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 pub const CRATE_NAME: &str = "okfx_parser";
 const MAX_LINK_DESTINATION_NESTING: usize = 64;
+static EXPLICIT_FLOAT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+|[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*))$",
+    )
+    .expect("explicit float regex is valid")
+});
+static TIMESTAMP_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:(?:t|T|[ \t]+)[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}(?:\.[0-9]+)?(?:[ \t]*(?:Z|[-+][012]?[0-9](?::[0-9]{2})?))?)?$",
+    )
+    .expect("timestamp regex is valid")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -177,9 +193,8 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
         return Err(error.to_string());
     }
 
-    let saphyr_input = match prepare_saphyr_input(&normalized) {
-        Ok((_, true)) => return finish_frontmatter(legacy.map_err(|error| error.to_string())?),
-        Ok((input, false)) => input,
+    let (saphyr_input, explicit_tags) = match prepare_saphyr_input(&normalized) {
+        Ok(prepared) => prepared,
         Err(error) => {
             return match legacy {
                 Ok(value) => finish_frontmatter(value),
@@ -188,7 +203,11 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
         }
     };
 
-    let mut documents = match Yaml::load_from_str(&saphyr_input) {
+    if explicit_tags.invalid_collection_tag {
+        return Err("Frontmatter contains an invalid explicit YAML tag value.".to_string());
+    }
+
+    let mut documents = match load_saphyr_documents(&saphyr_input, explicit_tags.found) {
         Ok(documents) => documents,
         Err(error) => {
             return match legacy {
@@ -203,7 +222,12 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
     if documents.len() > 1 {
         return Err("Frontmatter must contain exactly one YAML document.".to_string());
     }
-    let value = saphyr_to_serde(documents.pop().unwrap_or(Yaml::BadValue))?;
+    let document = documents.pop().unwrap_or(Yaml::BadValue);
+    let value = if explicit_tags.found {
+        tagged_saphyr_document_to_serde(document)?
+    } else {
+        saphyr_to_serde(document)?
+    };
     finish_frontmatter(value)
 }
 
@@ -237,32 +261,58 @@ fn finish_frontmatter(
 #[derive(Default)]
 struct ExplicitTagDetector {
     found: bool,
+    invalid_collection_tag: bool,
 }
 
 impl<'input> EventReceiver<'input> for ExplicitTagDetector {
     fn on_event(&mut self, event: Event<'input>) {
-        self.found |= match event {
-            Event::Scalar(_, _, _, tag)
-            | Event::SequenceStart(_, tag)
-            | Event::MappingStart(_, tag) => tag.is_some(),
-            _ => false,
-        };
+        match event {
+            Event::Scalar(_, _, _, tag) => self.found |= tag.is_some(),
+            Event::SequenceStart(_, tag) => {
+                self.found |= tag.is_some();
+                self.invalid_collection_tag |= tag.as_deref().is_some_and(|tag| {
+                    tag.is_yaml_core_schema()
+                        && !matches!(tag.suffix.as_str(), "seq" | "omap" | "pairs")
+                });
+            }
+            Event::MappingStart(_, tag) => {
+                self.found |= tag.is_some();
+                self.invalid_collection_tag |= tag.as_deref().is_some_and(|tag| {
+                    tag.is_yaml_core_schema() && !matches!(tag.suffix.as_str(), "map" | "set")
+                });
+            }
+            _ => {}
+        }
     }
 }
 
-fn prepare_saphyr_input(raw: &str) -> Result<(String, bool), String> {
+fn prepare_saphyr_input(raw: &str) -> Result<(String, ExplicitTagDetector), String> {
     let mut input = normalize_yaml_separator_tabs(raw);
     loop {
         let mut parser = Parser::new_from_str(&input);
         let mut detector = ExplicitTagDetector::default();
         match parser.load(&mut detector, true) {
-            Ok(()) => return Ok((input, detector.found)),
+            Ok(()) => return Ok((input, detector)),
             Err(error)
                 if error.info() == "':' must be followed by a valid YAML whitespace"
                     && replace_separator_tab(&mut input, error.marker()) => {}
             Err(error) => return Err(error.to_string()),
         }
     }
+}
+
+fn load_saphyr_documents(raw: &str, preserve_scalar_tags: bool) -> Result<Vec<Yaml<'_>>, String> {
+    if !preserve_scalar_tags {
+        return Yaml::load_from_str(raw).map_err(|error| error.to_string());
+    }
+
+    let mut parser = Parser::new_from_str(raw);
+    let mut loader = YamlLoader::<Yaml>::default();
+    loader.early_parse(false);
+    parser
+        .load(&mut loader, true)
+        .map_err(|error| error.to_string())?;
+    Ok(loader.into_documents())
 }
 
 fn normalize_yaml_separator_tabs(raw: &str) -> String {
@@ -507,6 +557,172 @@ fn saphyr_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
             Err("Frontmatter must not contain unresolved YAML aliases.".to_string())
         }
     }
+}
+
+fn tagged_saphyr_document_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
+    match value {
+        Yaml::Mapping(mapping) => tagged_saphyr_mapping_to_serde(mapping),
+        _ => Err("Frontmatter must be a YAML mapping.".to_string()),
+    }
+}
+
+fn tagged_saphyr_to_serde(value: Yaml<'_>) -> Result<serde_yaml::Value, String> {
+    match value {
+        Yaml::Representation(value, style, tag) => {
+            tagged_scalar_to_serde(value, style, tag.as_deref())
+        }
+        Yaml::Value(value) => scalar_to_serde(value),
+        Yaml::Sequence(sequence) => sequence
+            .into_iter()
+            .map(tagged_saphyr_to_serde)
+            .collect::<Result<Vec<_>, _>>()
+            .map(serde_yaml::Value::Sequence),
+        Yaml::Mapping(mapping) => tagged_saphyr_mapping_to_serde(mapping),
+        Yaml::Tagged(tag, value) => {
+            let value = tagged_saphyr_to_serde(*value)?;
+            Ok(wrap_custom_yaml_tag(&tag, value))
+        }
+        Yaml::Alias(_) | Yaml::BadValue => {
+            Err("Frontmatter must not contain unresolved YAML aliases.".to_string())
+        }
+    }
+}
+
+fn tagged_saphyr_mapping_to_serde(
+    mapping: saphyr::Mapping<'_>,
+) -> Result<serde_yaml::Value, String> {
+    let mut converted = serde_yaml::Mapping::new();
+    for (key, value) in mapping {
+        let key = tagged_saphyr_to_serde(key)?;
+        if !matches!(key, serde_yaml::Value::String(_)) {
+            return Err("Frontmatter keys must be strings.".to_string());
+        }
+        converted.insert(key, tagged_saphyr_to_serde(value)?);
+    }
+    Ok(serde_yaml::Value::Mapping(converted))
+}
+
+fn tagged_scalar_to_serde(
+    value: Cow<'_, str>,
+    style: ScalarStyle,
+    tag: Option<&Tag>,
+) -> Result<serde_yaml::Value, String> {
+    let Some(tag) = tag else {
+        return if style == ScalarStyle::Plain {
+            scalar_to_serde(Scalar::parse_from_cow(value))
+        } else {
+            Ok(serde_yaml::Value::String(value.into_owned()))
+        };
+    };
+
+    if !tag.is_yaml_core_schema() {
+        return Ok(wrap_custom_yaml_tag(
+            tag,
+            serde_yaml::Value::String(value.into_owned()),
+        ));
+    }
+
+    match tag.suffix.as_str() {
+        "str" => Ok(serde_yaml::Value::String(value.into_owned())),
+        "int" => resolve_explicit_integer(&value),
+        "float" if EXPLICIT_FLOAT_PATTERN.is_match(&value) => value
+            .parse::<f64>()
+            .ok()
+            .or_else(|| match value.as_ref() {
+                ".inf" | ".Inf" | ".INF" | "+.inf" | "+.Inf" | "+.INF" => Some(f64::INFINITY),
+                "-.inf" | "-.Inf" | "-.INF" => Some(f64::NEG_INFINITY),
+                ".nan" | ".NaN" | ".NAN" => Some(f64::NAN),
+                _ => None,
+            })
+            .map(serde_yaml::Number::from)
+            .map(serde_yaml::Value::Number)
+            .ok_or_else(invalid_explicit_yaml_tag),
+        "bool" => match value.as_ref() {
+            "true" | "True" | "TRUE" => Ok(serde_yaml::Value::Bool(true)),
+            "false" | "False" | "FALSE" => Ok(serde_yaml::Value::Bool(false)),
+            _ => Err(invalid_explicit_yaml_tag()),
+        },
+        "null" if matches!(value.as_ref(), "" | "~" | "null" | "Null" | "NULL") => {
+            Ok(serde_yaml::Value::Null)
+        }
+        "timestamp" if TIMESTAMP_PATTERN.is_match(&value) => {
+            Ok(serde_yaml::Value::String(value.into_owned()))
+        }
+        "binary" => Ok(serde_yaml::Value::String(value.into_owned())),
+        _ => Err(invalid_explicit_yaml_tag()),
+    }
+}
+
+fn scalar_to_serde(value: Scalar<'_>) -> Result<serde_yaml::Value, String> {
+    match value {
+        Scalar::Null => Ok(serde_yaml::Value::Null),
+        Scalar::Boolean(value) => Ok(serde_yaml::Value::Bool(value)),
+        Scalar::Integer(value) => Ok(serde_yaml::Value::Number(value.into())),
+        Scalar::FloatingPoint(value) => Ok(serde_yaml::Value::Number(serde_yaml::Number::from(
+            value.into_inner(),
+        ))),
+        Scalar::String(value) => Ok(serde_yaml::Value::String(value.into_owned())),
+    }
+}
+
+fn resolve_explicit_integer(value: &str) -> Result<serde_yaml::Value, String> {
+    let (digits, radix) = if let Some(digits) = value.strip_prefix("0o") {
+        (digits, 8)
+    } else if let Some(digits) = value.strip_prefix("0x") {
+        (digits, 16)
+    } else {
+        let digits = value.strip_prefix(['-', '+']).unwrap_or(value);
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(invalid_explicit_yaml_tag());
+        }
+        if let Ok(integer) = value.parse::<i64>() {
+            return Ok(serde_yaml::Value::Number(integer.into()));
+        }
+        return value
+            .parse::<f64>()
+            .ok()
+            .map(serde_yaml::Number::from)
+            .map(serde_yaml::Value::Number)
+            .ok_or_else(invalid_explicit_yaml_tag);
+    };
+
+    if digits.is_empty() || !digits.bytes().all(|byte| char::from(byte).is_digit(radix)) {
+        return Err(invalid_explicit_yaml_tag());
+    }
+    if let Ok(integer) = i64::from_str_radix(digits, radix) {
+        return Ok(serde_yaml::Value::Number(integer.into()));
+    }
+    let number = digits.bytes().try_fold(0.0, |number, byte| {
+        char::from(byte)
+            .to_digit(radix)
+            .map(|digit| number * f64::from(radix) + f64::from(digit))
+    });
+    number
+        .map(serde_yaml::Number::from)
+        .map(serde_yaml::Value::Number)
+        .ok_or_else(invalid_explicit_yaml_tag)
+}
+
+fn wrap_custom_yaml_tag(tag: &Tag, value: serde_yaml::Value) -> serde_yaml::Value {
+    let name = if tag.handle == "!" {
+        format!("!{}", tag.suffix)
+    } else if tag.handle.is_empty() {
+        tag.suffix.clone()
+    } else {
+        format!("{}{}", tag.handle, tag.suffix)
+    };
+    let name = if name.starts_with('!') {
+        name
+    } else {
+        format!("!{name}")
+    };
+    let mut wrapped = serde_yaml::Mapping::new();
+    wrapped.insert(serde_yaml::Value::String(name), value);
+    serde_yaml::Value::Mapping(wrapped)
+}
+
+fn invalid_explicit_yaml_tag() -> String {
+    "Frontmatter contains an invalid explicit YAML tag value.".to_string()
 }
 
 fn has_only_string_mapping_keys(value: &serde_yaml::Value) -> bool {
@@ -1645,7 +1861,7 @@ mod tests {
     fn serializes_yaml_tags_to_json_compatible_values() {
         let parsed = parse_markdown_document(
             "tagged.md",
-            "---\ntype: Note\nmetadata:\n  ordered: !!omap [{a: 1}, {b: 2}]\n  tagged_ordered: !!omap [{a: !!timestamp 2020-01-01}, {b: !!binary SGVsbG8=}]\n  pairs: !!pairs [{a: 1}, {b: 2}]\n  set: !!set {a: null, b: null}\n  binary: !!binary SGVsbG8=\n  timestamp: !!timestamp 2020-01-01T12:34:56Z\n  custom: !custom value\n---\n# Tagged\n",
+            "---\ntype: Note\nmetadata:\n  ordered: !!omap [{a: 1}, {b: 2}]\n  tagged_ordered: !!omap [{a: !!timestamp 2020-01-01}, {b: !!binary SGVsbG8=}]\n  pairs: !!pairs [{a: 1}, {b: 2}]\n  set: !!set {a: null, b: null}\n  binary: !!binary SGVsbG8=\n  timestamp: !!timestamp 2020-01-01T12:34:56Z\n  custom: !custom value\n  custom_number: !custom 42\n  uri_custom: !<tag:example.com,2026:foo> value\n  encoded_custom: !<tag:example.com,2026:foo%2Fbar> value\n  non_specific: ! value\n---\n# Tagged\n",
             "tagged",
         );
 
@@ -1661,7 +1877,11 @@ mod tests {
                     "set": {"a": null, "b": null},
                     "binary": "SGVsbG8=",
                     "timestamp": "2020-01-01T12:34:56Z",
-                    "custom": {"!custom": "value"}
+                    "custom": {"!custom": "value"},
+                    "custom_number": {"!custom": "42"},
+                    "uri_custom": {"!tag:example.com,2026:foo": "value"},
+                    "encoded_custom": {"!tag:example.com,2026:foo/bar": "value"},
+                    "non_specific": {"!": "value"}
                 }
             })
         );
@@ -1669,7 +1889,16 @@ mod tests {
 
     #[test]
     fn rejects_invalid_explicit_yaml_tag_values() {
-        for value in ["!!null x", "!!bool yes", "!!int abc", "!!float abc"] {
+        for value in [
+            "!!null x",
+            "!!bool yes",
+            "!!int abc",
+            "!!float abc",
+            "!!float 42",
+            "!!set [x, y]",
+            "!!str [x, y]",
+            "!!unknown x",
+        ] {
             let content = format!("---\nmetadata: {value}\n---\n# Bad\n");
             let parsed = parse_markdown_document("bad.md", content, "bad");
 

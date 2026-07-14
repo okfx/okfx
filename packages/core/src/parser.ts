@@ -308,9 +308,18 @@ function wrapCustomYamlTag(tag: string | undefined, value: unknown): unknown {
   if (!tag || tag.startsWith("tag:yaml.org,2002:")) {
     return value;
   }
+  const normalizedTag = decodeYamlTag(tag);
   const wrapped = createJsonRecord();
-  defineJsonProperty(wrapped, tag.startsWith("!") ? tag : `!${tag}`, value);
+  defineJsonProperty(wrapped, normalizedTag.startsWith("!") ? normalizedTag : `!${normalizedTag}`, value);
   return wrapped;
+}
+
+function decodeYamlTag(tag: string): string {
+  try {
+    return decodeURIComponent(tag);
+  } catch {
+    return tag;
+  }
 }
 
 function normalizePlainJsonValue(value: unknown): unknown {

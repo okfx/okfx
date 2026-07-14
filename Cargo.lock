@@ -466,6 +466,7 @@ dependencies = [
 name = "okfx_parser"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "saphyr",
  "saphyr-parser",
  "serde",

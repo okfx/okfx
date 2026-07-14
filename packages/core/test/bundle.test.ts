@@ -290,6 +290,7 @@ describe("parseMarkdownDocument", () => {
       "  binary: !!binary SGVsbG8=",
       "  timestamp: !!timestamp 2020-01-01T12:34:56Z",
       "  custom: !custom value",
+      "  encoded_custom: !<tag:example.com,2026:foo%2Fbar> value",
       "---",
       "# Tagged",
       ""
@@ -305,12 +306,22 @@ describe("parseMarkdownDocument", () => {
         set: { a: null, b: null },
         binary: "SGVsbG8=",
         timestamp: "2020-01-01T12:34:56Z",
-        custom: { "!custom": "value" }
+        custom: { "!custom": "value" },
+        encoded_custom: { "!tag:example.com,2026:foo/bar": "value" }
       }
     });
   });
 
-  it.each(["!!null x", "!!bool yes", "!!int abc", "!!float abc"])(
+  it.each([
+    "!!null x",
+    "!!bool yes",
+    "!!int abc",
+    "!!float abc",
+    "!!float 42",
+    "!!set [x, y]",
+    "!!str [x, y]",
+    "!!unknown x"
+  ])(
     "rejects invalid explicit YAML tag value %s",
     (value) => {
       const parsed = parseMarkdownDocument(
