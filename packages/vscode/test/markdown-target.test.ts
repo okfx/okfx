@@ -60,10 +60,17 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.indexOf(".md"))).toBe("docs/foo](bar).md");
   });
 
-  it("recognizes image labels nested inside links", () => {
+  it("ignores images while recognizing image labels nested inside links", () => {
     const line = "[![Diagram](diagram.png)](guide.md)";
 
-    expect(markdownTargetAt(line, line.indexOf("diagram.png"))).toBe("diagram.png");
+    expect(markdownTargetAt(line, line.indexOf("diagram.png"))).toBeUndefined();
     expect(markdownTargetAt(line, line.indexOf("guide.md"))).toBe("guide.md");
+  });
+
+  it("keeps inner links from becoming nested outer links", () => {
+    const line = "[Outer [Inner](inner.md)](outer.md)";
+
+    expect(markdownTargetAt(line, line.indexOf("inner.md"))).toBe("inner.md");
+    expect(markdownTargetAt(line, line.indexOf("outer.md"))).toBeUndefined();
   });
 });

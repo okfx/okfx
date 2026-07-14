@@ -7,7 +7,10 @@ export function markdownTargetAt(line: string, character: number): string | unde
       return undefined;
     }
     searchFrom = linkStart - 1;
-    if (!hasLinkLabel(line, linkStart)) {
+    const labelStart = findLinkLabelStart(line, linkStart);
+    if (labelStart === undefined
+      || (line[labelStart - 1] === "!" && !isEscaped(line, labelStart - 1))
+      || linkLabelContainsLink(line, labelStart + 1, linkStart)) {
       continue;
     }
 
@@ -22,7 +25,7 @@ export function markdownTargetAt(line: string, character: number): string | unde
   return undefined;
 }
 
-function hasLinkLabel(line: string, closingBracket: number): boolean {
+function findLinkLabelStart(line: string, closingBracket: number): number | undefined {
   let nestedBrackets = 0;
   for (let cursor = closingBracket - 1; cursor >= 0; cursor -= 1) {
     if (isEscaped(line, cursor)) {
@@ -32,12 +35,56 @@ function hasLinkLabel(line: string, closingBracket: number): boolean {
       nestedBrackets += 1;
     } else if (line[cursor] === "[") {
       if (nestedBrackets === 0) {
-        return true;
+        return cursor;
       }
       nestedBrackets -= 1;
     }
   }
+  return undefined;
+}
+
+function linkLabelContainsLink(line: string, start: number, end: number): boolean {
+  let cursor = start;
+  while (cursor < end) {
+    const nestedStart = line.indexOf("[", cursor);
+    if (nestedStart === -1 || nestedStart >= end) {
+      return false;
+    }
+    if (isEscaped(line, nestedStart)
+      || (line[nestedStart - 1] === "!" && !isEscaped(line, nestedStart - 1))) {
+      cursor = nestedStart + 1;
+      continue;
+    }
+
+    const nestedEnd = findLinkLabelEnd(line, nestedStart + 1, end);
+    if (nestedEnd !== undefined && line[nestedEnd + 1] === "(") {
+      const destination = parseDestination(line, nestedEnd + 2);
+      if (destination && destination.closingParen < end) {
+        return true;
+      }
+    }
+    cursor = nestedStart + 1;
+  }
+
   return false;
+}
+
+function findLinkLabelEnd(line: string, start: number, end: number): number | undefined {
+  let depth = 0;
+  for (let cursor = start; cursor < end; cursor += 1) {
+    if (isEscaped(line, cursor)) {
+      continue;
+    }
+    if (line[cursor] === "[") {
+      depth += 1;
+    } else if (line[cursor] === "]") {
+      if (depth === 0) {
+        return cursor;
+      }
+      depth -= 1;
+    }
+  }
+  return undefined;
 }
 
 function parseDestination(
