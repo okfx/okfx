@@ -384,6 +384,9 @@ function bindingFunction(
   names: string[]
 ): ((...args: string[]) => string) | undefined {
   for (const name of names) {
+    if (!binding || !Object.hasOwn(binding, name)) {
+      continue;
+    }
     const value = binding?.[name];
     if (typeof value === "function") {
       return (...args: string[]) => {
@@ -400,7 +403,7 @@ function bindingFunction(
 }
 
 function normalizeBindingModule(module: unknown, initialized?: unknown): NativeJsonBinding {
-  const binding: NativeJsonBinding = {};
+  const binding = Object.create(null) as NativeJsonBinding;
   if (isRecord(module) && isRecord(module.default)) {
     Object.assign(binding, module.default);
   }
@@ -421,7 +424,9 @@ function normalizeBindingModule(module: unknown, initialized?: unknown): NativeJ
     "formatMarkdownDocumentJson",
     "format_markdown_document_json"
   ];
-  if (!supportedFunctions.some((name) => typeof binding[name] === "function")) {
+  if (!supportedFunctions.some(
+    (name) => Object.hasOwn(binding, name) && typeof binding[name] === "function"
+  )) {
     throw new TypeError("Binding module does not expose a supported okfx JSON function.");
   }
   return binding;

@@ -57,6 +57,23 @@ describe("native wrapper", () => {
     expect(formatMarkdownFileAccelerated("native.md", "", {}, { binding }).formatted).toBe("native");
   });
 
+  it("ignores binding functions inherited through the prototype chain", () => {
+    const binding = Object.create({
+      parseMarkdownDocumentJson: () => {
+        throw new Error("inherited binding function was called");
+      }
+    }) as NativeJsonBinding;
+
+    const parsed = parseMarkdownDocumentAccelerated(
+      "fallback.md",
+      "# Fallback\n",
+      "fallback",
+      { binding }
+    );
+
+    expect(parsed.body.headings[0]?.title).toBe("Fallback");
+  });
+
   it("supports WASM-style async bindings and normalizes Rust JSON field names", async () => {
     const content = "---\ntype: Note\n---\n# WASM\n[Other](other.md)\n";
     const binding: NativeJsonBinding = {
