@@ -66,8 +66,12 @@ function parseDestinationTail(
   while (cursor < line.length && /[ \t]/u.test(line[cursor] ?? "")) {
     cursor += 1;
   }
+  const hasTitleSeparator = cursor > tailStart;
   if (line[cursor] === ")") {
     return { targetEnd, closingParen: cursor };
+  }
+  if (!hasTitleSeparator) {
+    return undefined;
   }
 
   const quote = line[cursor];

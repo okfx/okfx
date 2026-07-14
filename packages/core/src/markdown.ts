@@ -167,8 +167,12 @@ function parseLinkDestinationTail(
   while (cursor < markdown.length && /[ \t]/u.test(markdown[cursor] ?? "")) {
     cursor += 1;
   }
+  const hasTitleSeparator = cursor > tailStart;
   if (markdown[cursor] === ")") {
     return { targetStart, targetEnd, closingParen: cursor };
+  }
+  if (!hasTitleSeparator) {
+    return undefined;
   }
 
   const quote = markdown[cursor];

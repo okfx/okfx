@@ -428,8 +428,12 @@ fn parse_link_destination_tail(
     {
         cursor += 1;
     }
+    let has_title_separator = cursor > tail_start;
     if bytes.get(cursor) == Some(&b')') {
         return Some((target_start, target_end, cursor));
+    }
+    if !has_title_separator {
+        return None;
     }
 
     let quote = *bytes.get(cursor)?;
@@ -993,6 +997,24 @@ mod tests {
             ]
         );
         assert_eq!(parsed.body.text, "Empty Spaced Angle Title");
+    }
+
+    #[test]
+    fn requires_whitespace_before_an_enclosed_destination_title() {
+        let parsed = parse_markdown_document(
+            "concept.md",
+            "[Invalid](<docs/invalid.md>\"Title\") [Valid](<docs/valid.md> \"Title\")\n",
+            "concept",
+        );
+
+        assert_eq!(
+            parsed
+                .links
+                .iter()
+                .map(|link| link.target_raw.as_str())
+                .collect::<Vec<_>>(),
+            vec!["docs/valid.md"]
+        );
     }
 
     #[test]

@@ -29,4 +29,12 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(enclosed, enclosed.indexOf("a b"))).toBe("docs/a b.md");
     expect(markdownTargetAt("[Empty]()", 8)).toBe("");
   });
+
+  it("requires whitespace before an enclosed destination title", () => {
+    const invalid = "[Invalid](<docs/invalid.md>\"Title\")";
+    const valid = "[Valid](<docs/valid.md> \"Title\")";
+
+    expect(markdownTargetAt(invalid, invalid.indexOf("invalid.md"))).toBeUndefined();
+    expect(markdownTargetAt(valid, valid.indexOf("valid.md"))).toBe("docs/valid.md");
+  });
 });

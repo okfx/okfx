@@ -126,6 +126,16 @@ describe("Markdown code fences", () => {
     expect(parsed.body.text).toBe("Empty Spaced Angle Title");
   });
 
+  it("requires whitespace before an enclosed destination title", () => {
+    const parsed = parseMarkdownDocument(
+      "concept.md",
+      "[Invalid](<docs/invalid.md>\"Title\") [Valid](<docs/valid.md> \"Title\")\n",
+      "concept"
+    );
+
+    expect(parsed.links.map((link) => link.targetRaw)).toEqual(["docs/valid.md"]);
+  });
+
   it("honors escaped link and image markers", () => {
     const parsed = parseMarkdownDocument("concept.md", [
       "\\[Escaped](hidden.md)",
