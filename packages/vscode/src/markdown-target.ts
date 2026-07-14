@@ -1,3 +1,11 @@
+import { classifyLinkTarget, resolveMarkdownTarget } from "@okfx/core";
+
+export function resolveDefinitionTarget(sourcePath: string, targetRaw: string): string | undefined {
+  return classifyLinkTarget(targetRaw) === "internal"
+    ? resolveMarkdownTarget(sourcePath, targetRaw)
+    : undefined;
+}
+
 export function markdownTargetAt(line: string, character: number): string | undefined {
   const cursor = Math.max(0, Math.min(character, line.length));
   const searchableLine = maskInlineCode(line);

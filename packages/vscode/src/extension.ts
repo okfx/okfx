@@ -13,14 +13,13 @@ import {
   loadConfig,
   loadConfiguredPlugins,
   relativeMarkdownTarget,
-  resolveMarkdownTarget,
   validateBundle,
   type BundleIR,
   type DiagnosticIR,
   type DiagnosticSeverity
 } from "@okfx/core";
 
-import { markdownTargetAt } from "./markdown-target.js";
+import { markdownTargetAt, resolveDefinitionTarget } from "./markdown-target.js";
 
 let diagnostics: vscode.DiagnosticCollection | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
@@ -272,7 +271,7 @@ async function provideDefinition(
   }
 
   const sourcePath = relativePosix(root, document.uri.fsPath);
-  const targetId = resolveMarkdownTarget(sourcePath, targetRaw);
+  const targetId = resolveDefinitionTarget(sourcePath, targetRaw);
   if (!targetId) {
     return undefined;
   }

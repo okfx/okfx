@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { markdownTargetAt } from "../src/markdown-target.js";
+import { markdownTargetAt, resolveDefinitionTarget } from "../src/markdown-target.js";
 
 describe("markdownTargetAt", () => {
   it("returns balanced destinations without optional titles", () => {
@@ -86,5 +86,14 @@ describe("markdownTargetAt", () => {
     const line = "\\`[Visible](visible.md)";
 
     expect(markdownTargetAt(line, line.indexOf("visible.md"))).toBe("visible.md");
+  });
+});
+
+describe("resolveDefinitionTarget", () => {
+  it("resolves only internal Markdown targets", () => {
+    expect(resolveDefinitionTarget("concepts/current.md", "../target.md")).toBe("target");
+    expect(resolveDefinitionTarget("concepts/current.md", "https://example.com"))
+      .toBeUndefined();
+    expect(resolveDefinitionTarget("concepts/current.md", "#details")).toBeUndefined();
   });
 });
