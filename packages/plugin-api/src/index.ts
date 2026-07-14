@@ -83,7 +83,12 @@ export function disambiguateGeneratedPaths(
   const indexesByPath = new Map<string, number[]>();
   for (const [index, file] of files.entries()) {
     const pathKey = portablePathKey(file.path);
-    indexesByPath.set(pathKey, [...(indexesByPath.get(pathKey) ?? []), index]);
+    const indexes = indexesByPath.get(pathKey);
+    if (indexes) {
+      indexes.push(index);
+    } else {
+      indexesByPath.set(pathKey, [index]);
+    }
   }
 
   const assignedPaths = files.map((file) => file.path);

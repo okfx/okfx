@@ -1,3 +1,5 @@
+import { performance } from "node:perf_hooks";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -52,6 +54,22 @@ describe("disambiguateGeneratedPaths", () => {
       { path: "tables/orders.md", identity: "project.orders", content: "B" }
     ])).toThrow("duplicate identity");
   });
+
+  it("groups large path-collision sets without repeated array copies", () => {
+    const count = 40_000;
+    const input = Array.from({ length: count }, (_, index) => ({
+      path: "tables/shared.md",
+      identity: `source-${index}`,
+      content: ""
+    }));
+    const started = performance.now();
+
+    const files = disambiguateGeneratedPaths(input);
+    const elapsedMs = performance.now() - started;
+
+    expect(new Set(files.map((file) => file.path))).toHaveLength(count);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
 });
 
 describe("Markdown generation helpers", () => {
