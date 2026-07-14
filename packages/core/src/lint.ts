@@ -698,10 +698,11 @@ function ipv4MappedAddress(host: string): string | undefined {
 
 function resourceHost(value: string): string | undefined {
   try {
-    return new URL(value).hostname
+    const host = new URL(value).hostname
       .replace(/^\[|\]$/g, "")
       .replace(/\.+$/u, "")
       .toLowerCase();
+    return host || undefined;
   } catch {
     return undefined;
   }

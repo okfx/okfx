@@ -268,6 +268,23 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("ignores hostless resources when enforcing host allowlists", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\ndescription: Demo\nresource:\n  - mailto:team@example.com\n  - urn:example:runbook\n---\n# Concept\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }), {
+        config: {
+          resourcePolicy: {
+            allowHosts: ["docs.example.com"]
+          }
+        }
+      });
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code))
+        .not.toContain("security/non-allowlisted-resource");
+    });
+  });
+
   it("does not report a private resource as an internal URL outside resources", async () => {
     await withBundle({
       "concept.md": "---\ntype: Note\ntitle: Concept\nresource: http://localhost/runbook\n---\n# Concept\n\nPublic documentation.\n"
