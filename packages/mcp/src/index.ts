@@ -172,9 +172,9 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
     async getNeighbors(id) {
       const graph = buildGraph((await loadContext()).bundle);
       return {
-        outgoing: graph.edges
+        outgoing: [...new Set(graph.edges
           .filter((edge) => edge.resolved && edge.source === id)
-          .map((edge) => edge.target)
+          .map((edge) => edge.target))]
           .sort(compareStrings),
         incoming: graph.analysis.backlinks[id] ?? []
       };

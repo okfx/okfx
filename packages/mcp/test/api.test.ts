@@ -24,6 +24,7 @@ description: Demo metric.
 # Weekly Active Users
 
 [Events](../tables/events.md)
+[Events again](../tables/events.md)
 `, "utf8");
       await writeFile(join(root, "tables/events.md"), "---\ntype: Table\ntitle: Events\n---\n# Events\n", "utf8");
 
