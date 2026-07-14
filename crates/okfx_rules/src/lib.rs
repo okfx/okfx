@@ -13,6 +13,9 @@ static EMAIL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     )
     .expect("email pattern must be valid")
 });
+static PRIVATE_KEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"-----BEGIN [A-Z ]*PRIVATE KEY-----").expect("private-key pattern must be valid")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1027,7 +1030,7 @@ fn contains_suspicious_secret(value: &str) -> bool {
 }
 
 fn contains_private_key(value: &str) -> bool {
-    value.contains("-----BEGIN ") && value.contains("PRIVATE KEY-----")
+    PRIVATE_KEY_PATTERN.is_match(value)
 }
 
 fn contains_aws_access_key(value: &str) -> bool {
@@ -1725,6 +1728,18 @@ mod tests {
                 "unexpected email in: {value}"
             );
         }
+    }
+
+    #[test]
+    fn requires_a_contiguous_private_key_header() {
+        assert!(contains_private_key("-----BEGIN RSA PRIVATE KEY-----"));
+        assert!(contains_private_key("-----BEGIN PRIVATE KEY-----"));
+        assert!(!contains_private_key(
+            "-----BEGIN unrelated section\ntext mentioning PRIVATE KEY-----"
+        ));
+        assert!(!contains_private_key(
+            "-----BEGIN lowercase PRIVATE KEY-----"
+        ));
     }
 
     fn concept(id: &str) -> ConceptRuleInput {
