@@ -108,4 +108,37 @@ export default {
       expect(Object.keys(result.plugins[0]?.rules ?? {}).sort()).toEqual(["__proto__", "constructor"]);
     });
   });
+
+  it("ignores plugin shapes and rule functions inherited from prototypes", async () => {
+    await withRoot(async (root) => {
+      await write(root, "okfx.config.ts", "export default {};\n");
+      await write(root, "inherited-plugin.ts", `
+const inheritedRule = Object.create({ run: () => [] });
+export default {
+  name: "own-plugin",
+  rules: {
+    inherited: inheritedRule,
+    own: { run: () => [] }
+  }
+};
+`);
+      await write(root, "inherited-shape.ts", `
+export default Object.create({ name: "inherited-plugin" });
+`);
+      const config = resolveConfig({
+        plugins: ["./inherited-plugin.ts", "./inherited-shape.ts"]
+      }, join(root, "okfx.config.ts"));
+
+      const result = await loadConfiguredPlugins(root, config);
+
+      expect(result.diagnostics).toEqual([
+        expect.objectContaining({
+          code: "plugin/invalid-shape",
+          path: "./inherited-shape.ts"
+        })
+      ]);
+      expect(Object.keys(result.plugins[0]?.rules ?? {})).toEqual(["own"]);
+      expect(Object.getPrototypeOf(result.plugins[0]?.rules)).toBeNull();
+    });
+  });
 });

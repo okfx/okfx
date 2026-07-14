@@ -71,16 +71,20 @@ export async function loadConfiguredPlugins(
       const imported = await jiti.import<unknown>(reference.package, { default: true });
       const plugin = unwrapPlugin(imported);
       if (!plugin) {
-        diagnostics.push(pluginDiagnostic("plugin/invalid-shape", reference, "Plugin module must export an object with a string name."));
+        diagnostics.push(pluginDiagnostic(
+          "plugin/invalid-shape",
+          reference,
+          "Plugin module must export an object with its own string name and an optional string version."
+        ));
         continue;
       }
 
       plugins.push({
         name: plugin.name,
         source: reference.package,
-        version: plugin.version,
+        version: Object.hasOwn(plugin, "version") ? plugin.version : undefined,
         options: reference.options,
-        rules: normalizePluginRules(plugin.rules)
+        rules: normalizePluginRules(Object.hasOwn(plugin, "rules") ? plugin.rules : undefined)
       });
     } catch (error) {
       diagnostics.push(pluginDiagnostic(
@@ -98,11 +102,18 @@ export async function loadConfiguredPlugins(
 }
 
 function unwrapPlugin(imported: unknown): OkfxRuntimePlugin | undefined {
-  const candidate = isRecord(imported) && "default" in imported
+  const candidate = isRecord(imported) && Object.hasOwn(imported, "default")
     ? imported.default
     : imported;
 
-  if (!isRecord(candidate) || typeof candidate.name !== "string") {
+  if (
+    !isRecord(candidate)
+    || !Object.hasOwn(candidate, "name")
+    || typeof candidate.name !== "string"
+    || (Object.hasOwn(candidate, "version")
+      && candidate.version !== undefined
+      && typeof candidate.version !== "string")
+  ) {
     return undefined;
   }
 
@@ -110,13 +121,13 @@ function unwrapPlugin(imported: unknown): OkfxRuntimePlugin | undefined {
 }
 
 function normalizePluginRules(rules: unknown): Record<string, OkfxRuntimeRule> {
+  const normalized = Object.create(null) as Record<string, OkfxRuntimeRule>;
   if (!isRecord(rules)) {
-    return {};
+    return normalized;
   }
 
-  const normalized = Object.create(null) as Record<string, OkfxRuntimeRule>;
   for (const [id, rule] of Object.entries(rules)) {
-    if (isRecord(rule) && typeof rule.run === "function") {
+    if (isRecord(rule) && Object.hasOwn(rule, "run") && typeof rule.run === "function") {
       normalized[id] = rule as unknown as OkfxRuntimeRule;
     }
   }
@@ -138,5 +149,5 @@ function pluginDiagnostic(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
