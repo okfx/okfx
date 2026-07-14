@@ -195,7 +195,17 @@ module.exports = binding;
         formatMarkdownDocumentJson: () => JSON.stringify({
           formatted: "original",
           changed: false,
-          diagnostics: [{ code: "fmt/test", message: "Bad", path: "other.md" }]
+          diagnostics: [{ code: "fmt/test", message: "Bad" }]
+        })
+      }
+    })).toThrow("invalid format diagnostic severity; expected a string");
+
+    expect(() => formatMarkdownFileAccelerated("native.md", "original", {}, {
+      binding: {
+        formatMarkdownDocumentJson: () => JSON.stringify({
+          formatted: "original",
+          changed: false,
+          diagnostics: [{ code: "fmt/test", severity: "error", message: "Bad", path: "other.md" }]
         })
       }
     })).toThrow('format diagnostic path "other.md" for "native.md"');

@@ -44,7 +44,7 @@ export interface FormatAcceleratedResult {
   changed: boolean;
   diagnostics: Array<{
     code: string;
-    severity?: DiagnosticIR["severity"];
+    severity: DiagnosticIR["severity"];
     message: string;
     path?: string;
   }>;
@@ -544,8 +544,8 @@ function normalizeFormatDiagnostic(
   expectedPath: string
 ): FormatAcceleratedResult["diagnostics"][number] {
   const diagnostic = requiredRecord(value, "format diagnostic");
-  const severity = optionalStrictString(ownValue(diagnostic, "severity"), "format diagnostic severity");
-  if (severity !== undefined && !isDiagnosticSeverity(severity)) {
+  const severity = requiredString(ownValue(diagnostic, "severity"), "format diagnostic severity");
+  if (!isDiagnosticSeverity(severity)) {
     throw new TypeError(`Unsupported format diagnostic severity from binding: ${severity}`);
   }
   const returnedPath = optionalStrictString(ownValue(diagnostic, "path"), "format diagnostic path");

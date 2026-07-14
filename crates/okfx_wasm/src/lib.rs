@@ -49,6 +49,7 @@ struct WasmFormatResult {
 #[derive(Debug, Serialize)]
 struct WasmFormatDiagnostic {
     code: String,
+    severity: String,
     message: String,
     path: Option<String>,
 }
@@ -204,6 +205,7 @@ impl From<okfx_fmt::FormatResult> for WasmFormatResult {
                 .into_iter()
                 .map(|diagnostic| WasmFormatDiagnostic {
                     code: diagnostic.code,
+                    severity: diagnostic.severity,
                     message: diagnostic.message,
                     path: diagnostic.path,
                 })
@@ -267,6 +269,15 @@ mod tests {
             .unwrap(),
         );
         assert_eq!(formatted["changed"], true);
+        let invalid = parse_value(
+            &format_markdown_document_json(
+                "concept.md".to_string(),
+                "---\ntype: [\n---\n# Title\n".to_string(),
+                "".to_string(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(invalid["diagnostics"][0]["severity"], "error");
         assert_eq!(cache_content_hash("body".to_string()).len(), 64);
     }
 

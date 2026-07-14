@@ -50,6 +50,7 @@ struct NativeFormatResult {
 #[derive(Debug, Serialize)]
 struct NativeFormatDiagnostic {
     code: String,
+    severity: String,
     message: String,
     path: Option<String>,
 }
@@ -218,6 +219,7 @@ impl From<okfx_fmt::FormatResult> for NativeFormatResult {
                 .into_iter()
                 .map(|diagnostic| NativeFormatDiagnostic {
                     code: diagnostic.code,
+                    severity: diagnostic.severity,
                     message: diagnostic.message,
                     path: diagnostic.path,
                 })
@@ -284,6 +286,15 @@ mod tests {
                 .unwrap()
                 .contains("type: Note")
         );
+        let invalid = parse_value(
+            &format_markdown_document_json(
+                "concept.md".to_string(),
+                "---\ntype: [\n---\n# Title\n".to_string(),
+                None,
+            )
+            .unwrap(),
+        );
+        assert_eq!(invalid["diagnostics"][0]["severity"], "error");
 
         assert_eq!(cache_content_hash("body".to_string()).len(), 64);
     }

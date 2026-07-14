@@ -15,6 +15,7 @@ pub const DEFAULT_FRONTMATTER_KEY_ORDER: &[&str] = &[
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatDiagnostic {
     pub code: String,
+    pub severity: String,
     pub message: String,
     pub path: Option<String>,
 }
@@ -365,6 +366,7 @@ fn trim_trailing_whitespace(line: &str) -> &str {
 fn invalid_frontmatter(path: &str, message: &str) -> FormatDiagnostic {
     FormatDiagnostic {
         code: "spec/invalid-frontmatter".to_string(),
+        severity: "error".to_string(),
         message: message.to_string(),
         path: Some(path.to_string()),
     }
