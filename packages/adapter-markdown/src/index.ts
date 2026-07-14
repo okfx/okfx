@@ -134,12 +134,14 @@ function concept(input: {
   body: string;
   timestamp: string;
 }): string {
+  const tags = input.tags.length === 0
+    ? "tags: []"
+    : `tags:\n${input.tags.map((tag) => `  - ${yamlScalar(tag)}`).join("\n")}`;
   return `---
 type: ${input.type}
 title: ${yamlScalar(input.title)}
 description: ${yamlScalar(input.description)}
-tags:
-${input.tags.map((tag) => `  - ${yamlScalar(tag)}`).join("\n")}
+${tags}
 timestamp: ${input.timestamp}
 ---
 

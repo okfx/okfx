@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { parseMarkdownDocument } from "@okfx/core";
+
 import { produceMarkdownOkf } from "../src/index.js";
 
 describe("@okfx/adapter-markdown", () => {
@@ -57,6 +59,15 @@ describe("@okfx/adapter-markdown", () => {
     expect(file?.content).toContain('title: "Safe\\nresource: https://attacker.invalid"');
     expect(file?.content).toContain('  - "safe\\nowner: attacker"');
     expect(file?.content).not.toContain("\nresource: https://attacker.invalid\n");
+  });
+
+  it("serializes empty tag arrays as YAML arrays", () => {
+    const [file] = produceMarkdownOkf([{ path: "notes/empty", body: "# Empty\n", tags: [] }]);
+    const parsed = parseMarkdownDocument(file!.path, file!.content, "notes/empty");
+
+    expect(file?.content).toContain("tags: []");
+    expect(parsed.frontmatter.tags).toEqual([]);
+    expect(parsed.diagnostics).toEqual([]);
   });
 
   it.each([
