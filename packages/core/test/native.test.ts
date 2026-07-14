@@ -10,6 +10,8 @@ import {
   contentHash,
   getNativeBackendStatusAsync,
   getNativeBackendStatus,
+  loadOptionalNativeBinding,
+  loadOptionalWasmBinding,
   nativeCapabilities,
   nativeCapabilitiesAsync,
   nativeBindingPackageNames,
@@ -156,6 +158,61 @@ module.exports = binding;
         delete process.env.OKFX_NATIVE_BINDING;
       } else {
         process.env.OKFX_NATIVE_BINDING = previousBinding;
+      }
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("caches native probes and WASM initialization for each configured path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-backend-cache-"));
+    const nativePath = join(root, "binding.cjs");
+    const wasmPath = join(root, "binding.mjs");
+    const previousNative = process.env.OKFX_NATIVE_BINDING;
+    const previousWasm = process.env.OKFX_WASM_BINDING;
+    try {
+      await writeFile(nativePath, `
+let reads = 0;
+Object.defineProperty(module.exports, "nativeCapabilitiesJson", {
+  enumerable: true,
+  get() {
+    reads += 1;
+    return () => "{}";
+  }
+});
+module.exports.probeReads = () => reads;
+`, "utf8");
+      await writeFile(wasmPath, `
+let initializations = 0;
+export default async function initialize() {
+  initializations += 1;
+  return {
+    wasm_capabilities_json: () => "{}",
+    initialization_count: () => initializations
+  };
+}
+`, "utf8");
+      process.env.OKFX_NATIVE_BINDING = nativePath;
+      process.env.OKFX_WASM_BINDING = wasmPath;
+
+      const firstNative = loadOptionalNativeBinding();
+      const secondNative = loadOptionalNativeBinding();
+      const firstWasm = await loadOptionalWasmBinding();
+      const secondWasm = await loadOptionalWasmBinding();
+
+      expect(secondNative).toBe(firstNative);
+      expect((firstNative?.probeReads as (() => number) | undefined)?.()).toBe(1);
+      expect(secondWasm).toBe(firstWasm);
+      expect((firstWasm?.initialization_count as (() => number) | undefined)?.()).toBe(1);
+    } finally {
+      if (previousNative === undefined) {
+        delete process.env.OKFX_NATIVE_BINDING;
+      } else {
+        process.env.OKFX_NATIVE_BINDING = previousNative;
+      }
+      if (previousWasm === undefined) {
+        delete process.env.OKFX_WASM_BINDING;
+      } else {
+        process.env.OKFX_WASM_BINDING = previousWasm;
       }
       await rm(root, { recursive: true, force: true });
     }

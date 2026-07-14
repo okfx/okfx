@@ -51,6 +51,8 @@ export interface FormatAcceleratedResult {
 }
 
 const requireFromHere = createRequire(import.meta.url);
+let nativeAttemptCache: { key: string; attempt: BindingLoadAttempt } | undefined;
+let wasmAttemptCache: { key: string; attempt: Promise<BindingLoadAttempt> } | undefined;
 
 export const NATIVE_PLATFORM_PACKAGES: readonly NativePlatformPackage[] = [
   {
@@ -250,6 +252,17 @@ interface BindingLoadAttempt {
 }
 
 function tryLoadNativeBinding(): BindingLoadAttempt {
+  const key = process.env.OKFX_NATIVE_BINDING ?? "";
+  if (nativeAttemptCache?.key === key) {
+    return nativeAttemptCache.attempt;
+  }
+
+  const attempt = probeNativeBinding();
+  nativeAttemptCache = { key, attempt };
+  return attempt;
+}
+
+function probeNativeBinding(): BindingLoadAttempt {
   const errors: string[] = [];
   for (const candidate of nativeBindingCandidates()) {
     try {
@@ -270,7 +283,18 @@ function tryLoadNativeBinding(): BindingLoadAttempt {
   return { errors };
 }
 
-async function tryLoadWasmBinding(): Promise<BindingLoadAttempt> {
+function tryLoadWasmBinding(): Promise<BindingLoadAttempt> {
+  const key = process.env.OKFX_WASM_BINDING ?? "";
+  if (wasmAttemptCache?.key === key) {
+    return wasmAttemptCache.attempt;
+  }
+
+  const attempt = probeWasmBinding();
+  wasmAttemptCache = { key, attempt };
+  return attempt;
+}
+
+async function probeWasmBinding(): Promise<BindingLoadAttempt> {
   const errors: string[] = [];
   for (const candidate of wasmBindingCandidates()) {
     try {
