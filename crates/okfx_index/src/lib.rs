@@ -173,5 +173,6 @@ mod tests {
             vec!["metric", "user", "weekly-active"]
         );
         assert_eq!(tokenize("中 中国 𐐀 𐐀𐐁"), vec!["中国", "𐐨𐐩"]);
+        assert_eq!(tokenize("हिंदी"), vec!["हिंदी"]);
     }
 }

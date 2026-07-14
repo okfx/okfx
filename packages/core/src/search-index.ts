@@ -79,7 +79,7 @@ function buildTermMap(documents: SearchIndexDocumentIR[]): Record<string, string
 export function tokenizeSearchText(value: string): string[] {
   return [...new Set(value
     .toLowerCase()
-    .split(/[^\p{L}\p{N}_-]+/u)
+    .split(/[^\p{Alphabetic}\p{N}_-]+/u)
     .map((term) => term.trim())
     .filter((term) => [...term].length >= 2))]
     .sort(compareStrings);
