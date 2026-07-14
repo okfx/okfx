@@ -111,6 +111,11 @@ describe("packBundle", () => {
         "---\ntype: Note\n---\n# Secret\n\n-----BEGIN PRIVATE KEY-----\nsecret\n",
         "utf8"
       );
+      await writeFile(
+        join(root, "late-secret.txt"),
+        `${"safe prefix\n".repeat(7_000)}-----BEGIN OPENSSH PRIVATE KEY-----\nsecret\n`,
+        "utf8"
+      );
       await writeFile(join(root, "certificate.pem"), "-----BEGIN CERTIFICATE-----\npublic\n-----END CERTIFICATE-----\n", "utf8");
 
       const result = await packBundle(root, { out });

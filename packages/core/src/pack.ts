@@ -277,7 +277,7 @@ function isSensitivePackPath(path: string): boolean {
 
 function containsPrivateKeyMarker(content: Buffer): boolean {
   return /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/
-    .test(content.subarray(0, 64 * 1024).toString("utf8"));
+    .test(content.toString("utf8"));
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {
