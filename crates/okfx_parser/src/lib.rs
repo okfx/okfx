@@ -392,7 +392,7 @@ fn parse_links(
         };
         let target_raw = source_line[parsed_target_start..target_end].to_string();
         let text = source_line[open_bracket + 1..close_bracket]
-            .trim()
+            .trim_matches(is_ecmascript_whitespace)
             .to_string();
         advance_utf16_position(
             source_line,
@@ -1069,6 +1069,14 @@ mod tests {
         assert_eq!(slugify_heading("alpha\u{0085}beta"), "alphabeta");
         assert_eq!(classify_link_target("\u{feff}"), LinkKind::Unknown);
         assert_eq!(classify_link_target("\u{0085}"), LinkKind::Internal);
+
+        let labels = parse_markdown_document(
+            "concept.md",
+            "[\u{feff}BOM\u{feff}](bom.md) [\u{0085}NEL\u{0085}](nel.md)",
+            "concept",
+        );
+        assert_eq!(labels.links[0].text.as_deref(), Some("BOM"));
+        assert_eq!(labels.links[1].text.as_deref(), Some("\u{0085}NEL\u{0085}"));
 
         let headings = parse_markdown_document(
             "concept.md",
