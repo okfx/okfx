@@ -328,26 +328,29 @@ async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext)
 
   for (const plugin of plugins) {
     for (const [ruleId, rule] of Object.entries(plugin.rules)) {
-      const severity = resolveRuleLevel(
-        context.config.rules[ruleId],
-        rule.meta?.defaultSeverity ?? rule.meta?.severity ?? "warning"
-      );
-      if (severity === "off") {
+      if (resolveRuleLevel(context.config.rules[ruleId], "warning") === "off") {
         continue;
       }
 
       try {
-        const ruleDiagnostics = await rule.run({
+        const severity = resolveRuleLevel(context.config.rules[ruleId], pluginRuleDefaultSeverity(rule));
+        if (severity === "off") {
+          continue;
+        }
+        const ruleDiagnostics: unknown = await rule.run({
           bundle: context.bundle,
           config: context.config,
           plugin,
           options: plugin.options
         });
-        diagnostics.push(...ruleDiagnostics.map((diagnostic) => ({
-          ...diagnostic,
-          code: diagnostic.code || ruleId,
+        if (!Array.isArray(ruleDiagnostics)) {
+          throw new TypeError("rule result must be an array of diagnostics");
+        }
+        diagnostics.push(...ruleDiagnostics.map((diagnostic) => normalizePluginDiagnostic(
+          diagnostic,
+          ruleId,
           severity
-        })));
+        )));
       } catch (error) {
         diagnostics.push({
           code: "plugin/rule-failed",
@@ -359,6 +362,108 @@ async function runPluginRules(plugins: LoadedOkfxPlugin[], context: RuleContext)
   }
 
   return diagnostics;
+}
+
+function pluginRuleDefaultSeverity(rule: LoadedOkfxPlugin["rules"][string]): DiagnosticSeverity {
+  const severity = rule.meta?.defaultSeverity ?? rule.meta?.severity ?? "warning";
+  if (severity !== "error" && severity !== "warning" && severity !== "advice" && severity !== "info") {
+    throw new TypeError(`unsupported default severity ${JSON.stringify(severity)}`);
+  }
+  return severity;
+}
+
+function normalizePluginDiagnostic(
+  value: unknown,
+  ruleId: string,
+  severity: DiagnosticSeverity
+): DiagnosticIR {
+  if (!isRecord(value)) {
+    throw new TypeError("rule diagnostics must be objects");
+  }
+
+  const code = value.code === undefined || value.code === ""
+    ? ruleId
+    : requiredPluginString(value.code, "code");
+  return {
+    code,
+    severity,
+    message: requiredPluginString(value.message, "message"),
+    ...optionalPluginStringField(value, "path"),
+    ...optionalPluginStringField(value, "conceptId"),
+    ...optionalPluginStringField(value, "docsUrl"),
+    ...normalizePluginLocation(value.location),
+    ...normalizePluginFix(value.fix)
+  };
+}
+
+function normalizePluginLocation(value: unknown): Pick<DiagnosticIR, "location"> | Record<string, never> {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new TypeError("diagnostic location must be an object");
+  }
+
+  const start = normalizePluginSourceLocation(value.start, "location.start");
+  const end = value.end === undefined
+    ? undefined
+    : normalizePluginSourceLocation(value.end, "location.end");
+  return { location: { start, ...(end ? { end } : {}) } };
+}
+
+function normalizePluginSourceLocation(value: unknown, label: string): NonNullable<DiagnosticIR["location"]>["start"] {
+  if (!isRecord(value)) {
+    throw new TypeError(`diagnostic ${label} must be an object`);
+  }
+  const line = requiredPluginInteger(value.line, `${label}.line`, 1);
+  const column = requiredPluginInteger(value.column, `${label}.column`, 1);
+  const offset = value.offset === undefined
+    ? undefined
+    : requiredPluginInteger(value.offset, `${label}.offset`, 0);
+  return { line, column, ...(offset === undefined ? {} : { offset }) };
+}
+
+function normalizePluginFix(value: unknown): Pick<DiagnosticIR, "fix"> | Record<string, never> {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new TypeError("diagnostic fix must be an object");
+  }
+  const replacement = value.replacement === undefined
+    ? undefined
+    : requiredPluginString(value.replacement, "fix.replacement");
+  return {
+    fix: {
+      description: requiredPluginString(value.description, "fix.description"),
+      ...(replacement === undefined ? {} : { replacement })
+    }
+  };
+}
+
+function optionalPluginStringField(
+  value: Record<string, unknown>,
+  key: "path" | "conceptId" | "docsUrl"
+): Partial<Pick<DiagnosticIR, typeof key>> {
+  return value[key] === undefined ? {} : { [key]: requiredPluginString(value[key], key) };
+}
+
+function requiredPluginString(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new TypeError(`diagnostic ${label} must be a string`);
+  }
+  return value;
+}
+
+function requiredPluginInteger(value: unknown, label: string, minimum: number): number {
+  if (!Number.isInteger(value) || (value as number) < minimum) {
+    throw new TypeError(`diagnostic ${label} must be an integer greater than or equal to ${minimum}`);
+  }
+  return value as number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function createRuleContext(bundle: BundleIR, config: ResolvedOkfxConfig): RuleContext {

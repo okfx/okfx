@@ -366,4 +366,37 @@ resource:
       expect(result.ok).toBe(false);
     });
   });
+
+  it("contains malformed plugin metadata and diagnostics", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    }, async (root) => {
+      const result = await lintBundleWithPlugins(
+        await loadBundle(root, { loadConfigFile: false }),
+        {
+          plugins: [{
+            name: "malformed-plugin",
+            source: "inline",
+            options: {},
+            rules: {
+              "custom/bad-output": {
+                run: () => [{ code: 42, message: "Bad" }] as never
+              },
+              "custom/bad-meta": {
+                meta: { defaultSeverity: "fatal" as never },
+                run: () => []
+              }
+            }
+          }]
+        }
+      );
+
+      const failures = result.diagnostics.filter((diagnostic) => diagnostic.code === "plugin/rule-failed");
+      expect(failures).toHaveLength(2);
+      expect(failures.map((diagnostic) => diagnostic.message)).toEqual(expect.arrayContaining([
+        expect.stringContaining("diagnostic code must be a string"),
+        expect.stringContaining("unsupported default severity")
+      ]));
+    });
+  });
 });
