@@ -48,55 +48,65 @@ export function markdownTargetAt(line: string, character: number): string | unde
 
 function maskInlineCode(line: string): string {
   const chunks: string[] = [];
+  const runs = backtickRuns(line);
+  const nextSameLength = nextBacktickRunsByLength(runs);
   let emittedThrough = 0;
-  let cursor = 0;
+  let runIndex = 0;
 
-  while (cursor < line.length) {
-    const opener = line.indexOf("`", cursor);
-    if (opener === -1) {
-      break;
-    }
-    if (isEscaped(line, opener)) {
-      cursor = opener + 1;
+  while (runIndex < runs.length) {
+    const opener = runs[runIndex]!;
+    const closingIndex = nextSameLength[runIndex];
+    const openerStart = opener.start + (opener.escaped ? 1 : 0);
+    if (closingIndex === undefined || openerStart === opener.start + opener.length) {
+      runIndex += 1;
       continue;
     }
-
-    const delimiterLength = backtickRunLength(line, opener);
-    let searchFrom = opener + delimiterLength;
-    let closingEnd: number | undefined;
-    while (searchFrom < line.length) {
-      const candidate = line.indexOf("`", searchFrom);
-      if (candidate === -1) {
-        break;
-      }
-      const candidateLength = backtickRunLength(line, candidate);
-      if (candidateLength === delimiterLength) {
-        closingEnd = candidate + candidateLength;
-        break;
-      }
-      searchFrom = candidate + candidateLength;
-    }
-
-    if (closingEnd === undefined) {
-      cursor = opener + delimiterLength;
-      continue;
-    }
-    chunks.push(line.slice(emittedThrough, opener));
-    chunks.push(" ".repeat(closingEnd - opener));
+    const closing = runs[closingIndex]!;
+    const closingEnd = closing.start + closing.length;
+    chunks.push(line.slice(emittedThrough, openerStart));
+    chunks.push(" ".repeat(closingEnd - openerStart));
     emittedThrough = closingEnd;
-    cursor = closingEnd;
+    runIndex = closingIndex + 1;
   }
 
   chunks.push(line.slice(emittedThrough));
   return chunks.join("");
 }
 
-function backtickRunLength(value: string, start: number): number {
-  let end = start;
-  while (value[end] === "`") {
-    end += 1;
+interface BacktickRun {
+  start: number;
+  length: number;
+  escaped: boolean;
+}
+
+function backtickRuns(value: string): BacktickRun[] {
+  const runs: BacktickRun[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const start = value.indexOf("`", cursor);
+    if (start === -1) {
+      break;
+    }
+    let end = start + 1;
+    while (value[end] === "`") {
+      end += 1;
+    }
+    runs.push({ start, length: end - start, escaped: isEscaped(value, start) });
+    cursor = end;
   }
-  return end - start;
+  return runs;
+}
+
+function nextBacktickRunsByLength(runs: BacktickRun[]): Array<number | undefined> {
+  const nextSameLength: Array<number | undefined> = new Array(runs.length);
+  const nextByLength = new Map<number, number>();
+  for (let index = runs.length - 1; index >= 0; index -= 1) {
+    const run = runs[index]!;
+    const openerLength = run.length - (run.escaped ? 1 : 0);
+    nextSameLength[index] = openerLength === 0 ? undefined : nextByLength.get(openerLength);
+    nextByLength.set(run.length, index);
+  }
+  return nextSameLength;
 }
 
 function lineIsFencedCode(lines: string[], lineNumber: number): boolean {

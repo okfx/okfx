@@ -1,3 +1,5 @@
+import { performance } from "node:perf_hooks";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -91,6 +93,17 @@ describe("markdownTargetAt", () => {
 
     expect(markdownTargetAt(line, line.indexOf("visible.md"))).toBe("visible.md");
   });
+
+  it("indexes unmatched backtick runs by delimiter length", () => {
+    const line = Array.from(
+      { length: 1_600 },
+      (_, index) => `${"`".repeat(index + 1)}x`
+    ).join("");
+    const started = performance.now();
+
+    expect(markdownTargetAt(line, line.length)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(1000);
+  }, 5000);
 });
 
 describe("resolveDefinitionTarget", () => {
