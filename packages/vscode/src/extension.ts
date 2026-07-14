@@ -365,11 +365,16 @@ function publishDiagnostics(root: string, entries: DiagnosticIR[]): void {
   diagnosticPathsByRoot.set(root, currentPaths);
 }
 
-function workspaceRoot(resource = vscode.window.activeTextEditor?.document.uri): string | undefined {
+function workspaceRoot(resource?: vscode.Uri): string | undefined {
   if (resource) {
-    const folder = vscode.workspace.getWorkspaceFolder(resource);
-    if (folder) {
-      return folder.uri.fsPath;
+    return vscode.workspace.getWorkspaceFolder(resource)?.uri.fsPath;
+  }
+
+  const activeResource = vscode.window.activeTextEditor?.document.uri;
+  if (activeResource) {
+    const activeFolder = vscode.workspace.getWorkspaceFolder(activeResource);
+    if (activeFolder) {
+      return activeFolder.uri.fsPath;
     }
   }
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
