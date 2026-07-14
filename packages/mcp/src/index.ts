@@ -188,8 +188,11 @@ export function createOkfBundleApi(root: string, fixedConfig?: ResolvedOkfxConfi
     },
     async explainDiff(comparisonRoot, direction = "baseline-to-current") {
       const safeComparisonRoot = await resolveSafeComparisonRoot(currentRoot, comparisonRoot);
-      const current = (await loadContext()).bundle;
-      const comparison = await loadBundle(safeComparisonRoot);
+      const { bundle: current, config } = await loadContext();
+      const comparison = await loadBundle(safeComparisonRoot, {
+        config,
+        loadConfigFile: false
+      });
       const before = direction === "baseline-to-current" ? comparison : current;
       const after = direction === "baseline-to-current" ? current : comparison;
       const diff = diffBundles(before, after);

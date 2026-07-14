@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -79,6 +79,30 @@ description: Demo metric.
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("does not execute configuration from comparison bundles", async () => {
+    const root = await mkdtemp(join(tmpdir(), "okfx-mcp-safe-diff-"));
+    try {
+      const current = join(root, "current");
+      const comparison = join(root, "comparison");
+      const sentinel = join(root, "comparison-config-ran");
+      await mkdir(current);
+      await mkdir(comparison);
+      await writeFile(join(current, "concept.md"), "---\ntype: Note\ntitle: Current\n---\n# Current\n", "utf8");
+      await writeFile(join(comparison, "concept.md"), "---\ntype: Note\ntitle: Comparison\n---\n# Comparison\n", "utf8");
+      await writeFile(join(comparison, "okfx.config.mjs"), `
+import { writeFileSync } from "node:fs";
+writeFileSync(${JSON.stringify(sentinel)}, "executed");
+export default {};
+`, "utf8");
+
+      await createOkfBundleApi(current).explainDiff(comparison);
+
+      await expect(stat(sentinel)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 
