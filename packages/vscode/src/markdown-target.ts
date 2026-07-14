@@ -1,21 +1,22 @@
 export function markdownTargetAt(line: string, character: number): string | undefined {
   const cursor = Math.max(0, Math.min(character, line.length));
+  const searchableLine = maskInlineCode(line);
   let searchFrom = cursor - 1;
   while (searchFrom >= 0) {
-    const linkStart = line.lastIndexOf("](", searchFrom);
+    const linkStart = searchableLine.lastIndexOf("](", searchFrom);
     if (linkStart === -1) {
       return undefined;
     }
     searchFrom = linkStart - 1;
-    const labelStart = findLinkLabelStart(line, linkStart);
+    const labelStart = findLinkLabelStart(searchableLine, linkStart);
     if (labelStart === undefined
-      || (line[labelStart - 1] === "!" && !isEscaped(line, labelStart - 1))
-      || linkLabelContainsLink(line, labelStart + 1, linkStart)) {
+      || (searchableLine[labelStart - 1] === "!" && !isEscaped(searchableLine, labelStart - 1))
+      || linkLabelContainsLink(searchableLine, labelStart + 1, linkStart)) {
       continue;
     }
 
     const targetStart = linkStart + 2;
-    const destination = parseDestination(line, targetStart);
+    const destination = parseDestination(searchableLine, targetStart);
     if (!destination || cursor < targetStart || cursor > destination.closingParen) {
       continue;
     }
@@ -23,6 +24,59 @@ export function markdownTargetAt(line: string, character: number): string | unde
   }
 
   return undefined;
+}
+
+function maskInlineCode(line: string): string {
+  const chunks: string[] = [];
+  let emittedThrough = 0;
+  let cursor = 0;
+
+  while (cursor < line.length) {
+    const opener = line.indexOf("`", cursor);
+    if (opener === -1) {
+      break;
+    }
+    if (isEscaped(line, opener)) {
+      cursor = opener + 1;
+      continue;
+    }
+
+    const delimiterLength = backtickRunLength(line, opener);
+    let searchFrom = opener + delimiterLength;
+    let closingEnd: number | undefined;
+    while (searchFrom < line.length) {
+      const candidate = line.indexOf("`", searchFrom);
+      if (candidate === -1) {
+        break;
+      }
+      const candidateLength = backtickRunLength(line, candidate);
+      if (candidateLength === delimiterLength) {
+        closingEnd = candidate + candidateLength;
+        break;
+      }
+      searchFrom = candidate + candidateLength;
+    }
+
+    if (closingEnd === undefined) {
+      cursor = opener + delimiterLength;
+      continue;
+    }
+    chunks.push(line.slice(emittedThrough, opener));
+    chunks.push(" ".repeat(closingEnd - opener));
+    emittedThrough = closingEnd;
+    cursor = closingEnd;
+  }
+
+  chunks.push(line.slice(emittedThrough));
+  return chunks.join("");
+}
+
+function backtickRunLength(value: string, start: number): number {
+  let end = start;
+  while (value[end] === "`") {
+    end += 1;
+  }
+  return end - start;
 }
 
 function findLinkLabelStart(line: string, closingBracket: number): number | undefined {

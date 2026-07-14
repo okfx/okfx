@@ -73,4 +73,18 @@ describe("markdownTargetAt", () => {
     expect(markdownTargetAt(line, line.indexOf("inner.md"))).toBe("inner.md");
     expect(markdownTargetAt(line, line.indexOf("outer.md"))).toBeUndefined();
   });
+
+  it("ignores link syntax inside inline code spans", () => {
+    const line = "`[Hidden](hidden.md)` ``[Also hidden](also.md)`` [Visible](visible.md)";
+
+    expect(markdownTargetAt(line, line.indexOf("hidden.md"))).toBeUndefined();
+    expect(markdownTargetAt(line, line.indexOf("also.md"))).toBeUndefined();
+    expect(markdownTargetAt(line, line.indexOf("visible.md"))).toBe("visible.md");
+  });
+
+  it("keeps links after escaped backticks visible", () => {
+    const line = "\\`[Visible](visible.md)";
+
+    expect(markdownTargetAt(line, line.indexOf("visible.md"))).toBe("visible.md");
+  });
 });
