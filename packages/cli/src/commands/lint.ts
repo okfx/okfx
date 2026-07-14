@@ -148,7 +148,7 @@ function toSarif(result: LintResult, bundle: BundleIR): unknown {
         locations: diagnostic.path ? [{
           physicalLocation: {
             artifactLocation: {
-              uri: diagnostic.path,
+              uri: sarifArtifactUri(diagnostic.path),
               uriBaseId: "BUNDLE_ROOT"
             },
             region: {
@@ -170,6 +170,10 @@ function sarifLevel(severity: string): "error" | "warning" | "note" {
     return "warning";
   }
   return "note";
+}
+
+function sarifArtifactUri(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
 }
 
 function formatDebug(input: {

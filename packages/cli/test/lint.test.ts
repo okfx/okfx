@@ -93,7 +93,7 @@ describe("okf lint", () => {
     const parent = await tempRoot();
     const root = join(parent, "bundle with spaces");
     await mkdir(root);
-    await write(root, "concept.md", "---\ntype: Note\n---\n# Concept\n");
+    await write(root, "concept # one.md", "---\ntype: Note\n---\n# Concept\n");
     const output = capture();
 
     const code = await main(["lint", root, "--format", "sarif"], output.io);
@@ -101,7 +101,10 @@ describe("okf lint", () => {
       version: string;
       runs: Array<{
         originalUriBaseIds: { BUNDLE_ROOT: { uri: string } };
-        results: Array<{ ruleId: string }>;
+        results: Array<{
+          ruleId: string;
+          locations: Array<{ physicalLocation: { artifactLocation: { uri: string } } }>;
+        }>;
       }>;
     };
 
@@ -110,6 +113,10 @@ describe("okf lint", () => {
     expect(parsed.runs[0]?.originalUriBaseIds.BUNDLE_ROOT.uri)
       .toBe(pathToFileURL(`${root}${sep}`).href);
     expect(parsed.runs[0]?.results.map((result) => result.ruleId)).toContain("hygiene/missing-title");
+    expect(parsed.runs[0]?.results
+      .find((result) => result.ruleId === "hygiene/missing-title")
+      ?.locations[0]?.physicalLocation.artifactLocation.uri)
+      .toBe("concept%20%23%20one.md");
   });
 
   it("prints debug and trace output to stderr", async () => {
