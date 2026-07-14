@@ -58,6 +58,18 @@ api_key = abcdefghijklmnopqrstuvwxyz
     });
   });
 
+  it("does not join secret assignments across line breaks", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n\ntoken\n=\nabcdefghijklmnopqrstuvwxyz\n"
+    }, async (root) => {
+      const result = lintBundle(await loadBundle(root, { loadConfigFile: false }));
+      const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+
+      expect(codes).not.toContain("security/suspicious-secret");
+      expect(codes).not.toContain("security/token-looking-value");
+    });
+  });
+
   it("checks frontmatter order with carriage-return line endings", async () => {
     await withBundle({
       "concept.md": "---\rtitle: Example\rtype: Note\r---\r# Example\r"

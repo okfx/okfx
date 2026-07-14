@@ -1966,6 +1966,9 @@ mod tests {
         assert!(!contains_token_looking_value(&format!(
             "tokenized={secret}"
         )));
+        assert!(!contains_token_looking_value(&format!(
+            "token\n=\n{secret}"
+        )));
     }
 
     #[test]

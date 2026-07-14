@@ -665,7 +665,7 @@ function containsPrivateKey(value: string): boolean {
 
 function containsTokenLookingValue(value: string): boolean {
   return /\bAKIA[0-9A-Z]{16}\b/.test(value)
-    || /\b(?:api[_-]?key|secret|token)\b\s*[:=]\s*["']?[A-Za-z0-9_.-]{20,}/i.test(value);
+    || /\b(?:api[_-]?key|secret|token)\b[^\S\r\n]*[:=][^\S\r\n]*["']?[A-Za-z0-9_.-]{20,}/i.test(value);
 }
 
 function containsUnredactedEmail(value: string): boolean {
