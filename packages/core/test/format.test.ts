@@ -62,6 +62,36 @@ timestamp: ${timestamp}
     expect(result.formatted).toBe("---\ntype: Note\ntitle: Example\n---\n\n# Example\n");
   });
 
+  it("does not rewrite frontmatter rejected by the parser", () => {
+    const aliasBomb = [
+      "a: &a [x,x,x,x,x]",
+      "b: &b [*a,*a,*a,*a,*a]",
+      "c: &c [*b,*b,*b,*b,*b]",
+      "d: &d [*c,*c,*c,*c,*c]",
+      "root: *d"
+    ].join("\n");
+    const cases = [
+      ["non-finite number", "type: Note\nvalue: .inf"],
+      ["recursive alias", "type: Note\nvalue: &value [*value]"],
+      ["non-string nested key", "type: Note\nmetadata: {1: one}"],
+      ["invalid explicit tag", "type: Note\nvalue: !!int 1.5"],
+      ["custom root tag", "!custom {type: Note}"],
+      ["excessive nesting", `type: Note\nvalue: ${"[".repeat(200)}0${"]".repeat(200)}`],
+      ["excessive alias expansion", aliasBomb]
+    ] as const;
+
+    for (const [name, frontmatter] of cases) {
+      const content = `---\n${frontmatter}\n---\n# Example   \n`;
+      const parsed = parseMarkdownDocument("concept.md", content, "concept");
+      const formatted = formatMarkdownFile("concept.md", content);
+
+      expect(parsed.diagnostics.length, name).toBeGreaterThan(0);
+      expect(formatted.diagnostics, name).toEqual(parsed.diagnostics);
+      expect(formatted.changed, name).toBe(false);
+      expect(formatted.formatted, name).toBe(content);
+    }
+  });
+
   it("preserves YAML comments and anchor relationships while ordering keys", () => {
     const result = formatMarkdownFile("concept.md", `---
 description: &summary Shared description # keep anchor comment

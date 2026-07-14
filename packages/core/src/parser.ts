@@ -1,4 +1,4 @@
-import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument } from "yaml";
+import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument, type YAMLMap } from "yaml";
 
 import { contentHash } from "./hash.js";
 import { extractMarkdown } from "./markdown.js";
@@ -17,6 +17,75 @@ export interface ParsedMarkdownDocument {
   contentHash: string;
 }
 
+export type ParsedYamlFrontmatter =
+  | {
+    ok: true;
+    document: ReturnType<typeof parseDocument>;
+    map: YAMLMap;
+    frontmatter: Record<string, unknown>;
+  }
+  | {
+    ok: false;
+    diagnostic: DiagnosticIR;
+  };
+
+export function parseYamlFrontmatter(path: string, raw: string): ParsedYamlFrontmatter {
+  try {
+    const document = parseDocument(raw.replace(/\r\n?/g, "\n"), { prettyErrors: false });
+    if (document.errors.length > 0) {
+      throw document.errors[0];
+    }
+
+    if (!isMap(document.contents) || !validRootMappingTag(document.contents.tag)) {
+      return { ok: false, diagnostic: invalidFrontmatter(path, "Frontmatter must be a YAML mapping.") };
+    }
+    if (exceedsYamlCollectionNesting(document.contents)) {
+      return { ok: false, diagnostic: invalidFrontmatter(path, YAML_NESTING_ERROR) };
+    }
+    if (!hasOnlyStringMappingKeys(document.contents)) {
+      return { ok: false, diagnostic: invalidFrontmatter(path, "Frontmatter keys must be strings.") };
+    }
+    if (!hasValidExplicitYamlTags(document.contents)) {
+      return {
+        ok: false,
+        diagnostic: invalidFrontmatter(path, "Frontmatter contains an invalid explicit YAML tag value.")
+      };
+    }
+
+    const value = document.toJSON();
+    if (!isPlainRecord(value)) {
+      return { ok: false, diagnostic: invalidFrontmatter(path, "Frontmatter must be a YAML mapping.") };
+    }
+    if (!hasOnlyStringCollectionKeys(value)) {
+      return { ok: false, diagnostic: invalidFrontmatter(path, "Frontmatter keys must be strings.") };
+    }
+    if (containsReferenceCycle(value)) {
+      return {
+        ok: false,
+        diagnostic: invalidFrontmatter(path, "Frontmatter must not contain recursive YAML aliases.")
+      };
+    }
+    if (containsNonFiniteNumber(value)) {
+      return { ok: false, diagnostic: invalidFrontmatter(path, "Frontmatter numbers must be finite.") };
+    }
+
+    return {
+      ok: true,
+      document,
+      map: document.contents,
+      frontmatter: normalizeYamlJsonValue(document.contents, value, document) as Record<string, unknown>
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      diagnostic: invalidFrontmatter(
+        path,
+        error instanceof Error ? error.message : "Could not parse YAML frontmatter."
+      )
+    };
+  }
+}
+
 export function parseMarkdownDocument(path: string, content: string, sourceConceptId: string): ParsedMarkdownDocument {
   const diagnostics: DiagnosticIR[] = [];
   const frontmatterBlock = splitFrontmatter(content);
@@ -32,36 +101,11 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
     bodyStartOffset = frontmatterBlock.bodyStartOffset;
     bodyStartLine = frontmatterBlock.bodyStartLine;
 
-    try {
-      const document = parseDocument(frontmatterRaw.replace(/\r\n?/g, "\n"), { prettyErrors: false });
-      if (document.errors.length > 0) {
-        throw document.errors[0];
-      }
-
-      if (!isMap(document.contents) || !validRootMappingTag(document.contents.tag)) {
-        diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
-      } else if (exceedsYamlCollectionNesting(document.contents)) {
-        diagnostics.push(invalidFrontmatter(path, YAML_NESTING_ERROR));
-      } else if (!hasOnlyStringMappingKeys(document.contents)) {
-        diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
-      } else if (!hasValidExplicitYamlTags(document.contents)) {
-        diagnostics.push(invalidFrontmatter(path, "Frontmatter contains an invalid explicit YAML tag value."));
-      } else {
-        const value = document.toJSON();
-        if (!isPlainRecord(value)) {
-          diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
-        } else if (!hasOnlyStringCollectionKeys(value)) {
-          diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
-        } else if (containsReferenceCycle(value)) {
-          diagnostics.push(invalidFrontmatter(path, "Frontmatter must not contain recursive YAML aliases."));
-        } else if (containsNonFiniteNumber(value)) {
-          diagnostics.push(invalidFrontmatter(path, "Frontmatter numbers must be finite."));
-        } else {
-          frontmatter = normalizeYamlJsonValue(document.contents, value, document) as Record<string, unknown>;
-        }
-      }
-    } catch (error) {
-      diagnostics.push(invalidFrontmatter(path, error instanceof Error ? error.message : "Could not parse YAML frontmatter."));
+    const parsed = parseYamlFrontmatter(path, frontmatterRaw);
+    if (parsed.ok) {
+      frontmatter = parsed.frontmatter;
+    } else {
+      diagnostics.push(parsed.diagnostic);
     }
   }
 

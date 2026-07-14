@@ -1,11 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { isAlias, isMap, isPair, isScalar, isSeq, parseDocument, type Pair, type YAMLMap } from "yaml";
+import { isAlias, isMap, isPair, isScalar, isSeq, type Pair, type YAMLMap } from "yaml";
 
 import { buildStringRanks, compareStrings } from "./compare.js";
 import { loadConfig, mergeConfig, resolveConfig, type OkfxConfig, type ResolvedOkfxConfig } from "./config.js";
 import { discoverMarkdownFiles } from "./bundle.js";
+import { parseYamlFrontmatter } from "./parser.js";
 import { resolveBundleRoot } from "./paths.js";
 import type { DiagnosticIR } from "./types.js";
 
@@ -48,19 +49,9 @@ export function formatMarkdownFile(
     };
   }
 
-  let document: ReturnType<typeof parseDocument>;
-  try {
-    document = parseDocument(split.raw.replace(/\r\n?/g, "\n"), { prettyErrors: false });
-    if (document.errors.length > 0) {
-      throw document.errors[0];
-    }
-  } catch (error) {
-    diagnostics.push({
-      code: "spec/invalid-frontmatter",
-      severity: "error",
-      message: error instanceof Error ? error.message : "Could not parse YAML frontmatter.",
-      path
-    });
+  const parsed = parseYamlFrontmatter(path, split.raw);
+  if (!parsed.ok) {
+    diagnostics.push(parsed.diagnostic);
     return {
       formatted: content,
       changed: false,
@@ -68,22 +59,8 @@ export function formatMarkdownFile(
     };
   }
 
-  if (!isMap(document.contents)) {
-    diagnostics.push({
-      code: "spec/invalid-frontmatter",
-      severity: "error",
-      message: "Frontmatter must be a YAML mapping.",
-      path
-    });
-    return {
-      formatted: content,
-      changed: false,
-      diagnostics
-    };
-  }
-
-  orderFrontmatter(document.contents, resolved.frontmatter.keyOrder);
-  const formattedFrontmatter = document.toString({ lineWidth: 0 }).trimEnd();
+  orderFrontmatter(parsed.map, resolved.frontmatter.keyOrder);
+  const formattedFrontmatter = parsed.document.toString({ lineWidth: 0 }).trimEnd();
   const formatted = `---\n${formattedFrontmatter}\n---\n\n${body}`;
 
   return {
