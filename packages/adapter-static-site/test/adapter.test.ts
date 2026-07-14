@@ -82,4 +82,40 @@ describe("@okfx/adapter-static-site", () => {
     expect(metricPage).toContain("<code>tag:analytics</code>");
     expect(tablePage).toContain('href="../metrics/wau.html"');
   });
+
+  it("encodes hrefs separately from percent-encoded page filenames", () => {
+    const bundle: BundleIR = {
+      root: "/bundle",
+      okfVersion: "0.1",
+      concepts: [{
+        id: "guides/my guide",
+        path: "guides/my guide.md",
+        type: "Note",
+        title: "My Guide",
+        frontmatter: { type: "Note", title: "My Guide" },
+        body: { raw: "# My Guide\n", text: "My Guide", headings: [] },
+        links: [],
+        contentHash: "hash"
+      }],
+      indexes: [],
+      logs: [],
+      links: [],
+      diagnostics: [],
+      stats: {
+        fileCount: 1,
+        conceptCount: 1,
+        indexCount: 0,
+        logCount: 0,
+        linkCount: 0,
+        brokenLinkCount: 0,
+        diagnosticCount: 0
+      }
+    };
+
+    const files = exportStaticSite(bundle);
+    const index = files.find((file) => file.path === "index.html")?.content ?? "";
+
+    expect(files.map((file) => file.path)).toContain("concepts/guides/my%20guide.html");
+    expect(index).toContain('href="concepts/guides/my%2520guide.html"');
+  });
 });

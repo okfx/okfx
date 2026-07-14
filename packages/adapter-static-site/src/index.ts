@@ -55,7 +55,7 @@ function indexPage(bundle: BundleIR, title: string): string {
       </dl>
       <h2>Concepts</h2>
       <ul>
-        ${concepts.map((concept) => `<li><a href="${escapeAttribute(conceptPagePath(concept.id))}">${escapeHtml(concept.title ?? concept.id)}</a> <code>${escapeHtml(concept.type)}</code></li>`).join("\n")}
+        ${concepts.map((concept) => `<li><a href="${escapeAttribute(pageHref(conceptPagePath(concept.id)))}">${escapeHtml(concept.title ?? concept.id)}</a> <code>${escapeHtml(concept.type)}</code></li>`).join("\n")}
       </ul>
     </main>
   `);
@@ -110,7 +110,12 @@ function conceptPagePath(id: string): string {
 }
 
 function relativeHref(fromPage: string, toPage: string): string {
-  return posix.relative(posix.dirname(fromPage), toPage) || posix.basename(toPage);
+  const relative = posix.relative(posix.dirname(fromPage), toPage) || posix.basename(toPage);
+  return pageHref(relative);
+}
+
+function pageHref(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
 }
 
 function uniqueSorted(values: string[]): string[] {
