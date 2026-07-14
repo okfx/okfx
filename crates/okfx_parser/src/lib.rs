@@ -315,6 +315,8 @@ fn parse_links(
     let label_ends = matching_link_label_ends(line);
     let mut links = Vec::new();
     let mut cursor = 0;
+    let mut source_byte_position = 0;
+    let mut source_utf16_position = 0;
 
     while cursor < bytes.len() {
         let Some(open_bracket_relative) = line[cursor..].find('[') else {
@@ -353,6 +355,20 @@ fn parse_links(
         };
         let target_raw = line[parsed_target_start..target_end].to_string();
         let text = line[open_bracket + 1..close_bracket].trim().to_string();
+        advance_utf16_position(
+            source_line,
+            &mut source_byte_position,
+            &mut source_utf16_position,
+            open_bracket,
+        );
+        let start_utf16 = source_utf16_position;
+        advance_utf16_position(
+            source_line,
+            &mut source_byte_position,
+            &mut source_utf16_position,
+            close_paren + 1,
+        );
+        let end_utf16 = source_utf16_position;
 
         links.push(Link {
             source_concept_id: source_concept_id.to_string(),
@@ -363,13 +379,13 @@ fn parse_links(
             location: SourceRange {
                 start: SourceLocation {
                     line: line_number,
-                    column: utf16_len(&source_line[..open_bracket]) + 1,
-                    offset: absolute_line_offset + utf16_len(&source_line[..open_bracket]),
+                    column: start_utf16 + 1,
+                    offset: absolute_line_offset + start_utf16,
                 },
                 end: Some(SourceLocation {
                     line: line_number,
-                    column: utf16_len(&source_line[..close_paren + 1]) + 1,
-                    offset: absolute_line_offset + utf16_len(&source_line[..close_paren + 1]),
+                    column: end_utf16 + 1,
+                    offset: absolute_line_offset + end_utf16,
                 }),
             },
         });
@@ -377,6 +393,17 @@ fn parse_links(
     }
 
     links
+}
+
+fn advance_utf16_position(
+    source: &str,
+    byte_position: &mut usize,
+    utf16_position: &mut usize,
+    target_byte_position: usize,
+) {
+    debug_assert!(target_byte_position >= *byte_position);
+    *utf16_position += utf16_len(&source[*byte_position..target_byte_position]);
+    *byte_position = target_byte_position;
 }
 
 fn parse_link_destination(line: &str, target_start: usize) -> Option<(usize, usize, usize)> {
@@ -1372,6 +1399,22 @@ mod tests {
         assert_eq!(
             parsed.links[0].location.end.as_ref().unwrap().offset,
             utf16_len(&content[..link_end])
+        );
+    }
+
+    #[test]
+    fn parses_many_links_without_rescanning_line_prefixes() {
+        let count = 4_000;
+        let content = "[Target](target.md) ".repeat(count);
+        let started = std::time::Instant::now();
+
+        let parsed = parse_markdown_document("many.md", content, "many");
+
+        assert_eq!(parsed.links.len(), count);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(1),
+            "single-line link parsing took {:?}",
+            started.elapsed()
         );
     }
 
