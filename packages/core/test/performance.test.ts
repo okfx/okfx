@@ -110,29 +110,45 @@ describe("performance baselines", () => {
       links: [],
       contentHash: ""
     }));
-    const bundle: BundleIR = {
-      root: "/bundle",
-      concepts,
-      indexes: [],
-      logs: [],
-      links: [],
-      diagnostics: [],
-      stats: {
-        fileCount: count,
-        conceptCount: count,
-        indexCount: 0,
-        logCount: 0,
-        linkCount: 0,
-        brokenLinkCount: 0,
-        diagnosticCount: 0
-      }
-    };
+    const bundle = bundleWithConcepts(concepts);
     const started = performance.now();
 
     const diagnostics = metricMissingSourceDiagnostics(bundle);
     const elapsedMs = performance.now() - started;
 
     expect(diagnostics).toHaveLength(count);
+    expect(elapsedMs).toBeLessThan(1000);
+  }, 5000);
+
+  it("groups many duplicate concept values without repeated array copies", () => {
+    const count = 40_000;
+    const concepts: ConceptIR[] = Array.from({ length: count }, (_, index) => ({
+      id: `concept-${index}`,
+      path: `concept-${index}.md`,
+      type: "Note",
+      title: "Shared title",
+      description: "Description",
+      frontmatter: { type: "Note", title: "Shared title", description: "Description" },
+      frontmatterRaw: "type: Note\ntitle: Shared title\ndescription: Description",
+      body: { raw: "# Body", text: "# Body", headings: [] },
+      links: [],
+      contentHash: ""
+    }));
+    const bundle = bundleWithConcepts(concepts);
+    const started = performance.now();
+
+    const result = lintBundle(bundle, {
+      config: {
+        rules: {
+          "graph/orphan-concept": "off",
+          "graph/no-backlinks": "off"
+        }
+      }
+    });
+    const elapsedMs = performance.now() - started;
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === "hygiene/duplicate-title"))
+      .toHaveLength(count);
     expect(elapsedMs).toBeLessThan(1000);
   }, 5000);
 });
@@ -178,4 +194,25 @@ async function tempRoot(name: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), `okfx-${name}-`));
   roots.push(root);
   return root;
+}
+
+function bundleWithConcepts(concepts: ConceptIR[]): BundleIR {
+  return {
+    root: "/bundle",
+    okfVersion: "0.1",
+    concepts,
+    indexes: [],
+    logs: [],
+    links: [],
+    diagnostics: [],
+    stats: {
+      fileCount: concepts.length,
+      conceptCount: concepts.length,
+      indexCount: 0,
+      logCount: 0,
+      linkCount: 0,
+      brokenLinkCount: 0,
+      diagnosticCount: 0
+    }
+  };
 }

@@ -569,7 +569,12 @@ function duplicateConceptValues(
     const values = getValues(concept);
     const normalizedValues = Array.isArray(values) ? values : values ? [values] : [];
     for (const value of new Set(normalizedValues.filter(Boolean))) {
-      conceptsByValue.set(value, [...(conceptsByValue.get(value) ?? []), concept]);
+      const duplicates = conceptsByValue.get(value);
+      if (duplicates) {
+        duplicates.push(concept);
+      } else {
+        conceptsByValue.set(value, [concept]);
+      }
     }
   }
 
