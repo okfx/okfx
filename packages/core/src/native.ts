@@ -610,15 +610,16 @@ function normalizeDiagnostic(value: unknown, fallbackPath: string, bounds: Sourc
   if (severity !== "error" && severity !== "warning" && severity !== "advice" && severity !== "info") {
     throw new TypeError(`Unsupported diagnostic severity from binding: ${severity}`);
   }
+  const conceptId = optionalStrictString(
+    field(diagnostic, "conceptId", "concept_id"),
+    "diagnostic concept ID"
+  );
   return {
     code: requiredString(ownValue(diagnostic, "code"), "diagnostic code"),
     severity,
     message: requiredString(ownValue(diagnostic, "message"), "diagnostic message"),
     path: returnedPath,
-    conceptId: optionalStrictString(
-      field(diagnostic, "conceptId", "concept_id"),
-      "diagnostic concept ID"
-    ),
+    ...(conceptId === undefined ? {} : { conceptId }),
     location: ownValue(diagnostic, "location") === null || ownValue(diagnostic, "location") === undefined
       ? undefined
       : normalizeRange(ownValue(diagnostic, "location"), bounds)

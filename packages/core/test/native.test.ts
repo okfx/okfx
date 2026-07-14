@@ -91,6 +91,27 @@ describe("native wrapper", () => {
     expect(Object.keys(accelerated.links[0] ?? {})).toEqual(Object.keys(fallback.links[0] ?? {}));
   });
 
+  it("matches fallback diagnostic property presence without a concept ID", () => {
+    const content = "---\ntype: [\n---\n";
+    const fallback = parseMarkdownDocumentAccelerated("native.md", content, "native", { binding: null });
+    const binding: NativeJsonBinding = {
+      parseMarkdownDocumentJson: () => JSON.stringify({
+        path: "native.md",
+        frontmatter_raw: "type: [\n",
+        body: fallback.body,
+        links: [],
+        diagnostics: fallback.diagnostics,
+        content_hash: contentHash(content)
+      })
+    };
+
+    const accelerated = parseMarkdownDocumentAccelerated("native.md", content, "native", { binding });
+
+    expect(accelerated.diagnostics).toEqual(fallback.diagnostics);
+    expect(Object.keys(accelerated.diagnostics[0] ?? {}))
+      .toEqual(Object.keys(fallback.diagnostics[0] ?? {}));
+  });
+
   it("ignores binding functions inherited through the prototype chain", () => {
     const binding = Object.create({
       parseMarkdownDocumentJson: () => {
