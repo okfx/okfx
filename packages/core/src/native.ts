@@ -585,13 +585,14 @@ function normalizeLink(value: unknown, fallbackSourceConceptId: string, bounds: 
   if (!isLinkKind(kind)) {
     throw new TypeError(`Unsupported link kind from binding: ${kind}`);
   }
+  const targetConceptId = optionalStrictString(
+    field(link, "targetConceptId", "target_concept_id"),
+    "link target concept ID"
+  );
   return {
     sourceConceptId: fallbackSourceConceptId,
     targetRaw: requiredString(field(link, "targetRaw", "target_raw"), "link target"),
-    targetConceptId: optionalStrictString(
-      field(link, "targetConceptId", "target_concept_id"),
-      "link target concept ID"
-    ),
+    ...(targetConceptId === undefined ? {} : { targetConceptId }),
     text: optionalStrictString(ownValue(link, "text"), "link text"),
     kind,
     resolved: requiredBoolean(ownValue(link, "resolved"), "link resolved state"),

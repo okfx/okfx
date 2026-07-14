@@ -62,6 +62,35 @@ describe("native wrapper", () => {
     expect(formatMarkdownFileAccelerated("native.md", "", {}, { binding }).formatted).toBe("native");
   });
 
+  it("matches fallback link property presence for unresolved native links", () => {
+    const content = "[](!)";
+    const binding: NativeJsonBinding = {
+      parseMarkdownDocumentJson: () => JSON.stringify({
+        path: "native.md",
+        body: { raw: content, text: "", headings: [] },
+        links: [{
+          source_concept_id: "native",
+          target_raw: "!",
+          text: null,
+          kind: "internal",
+          resolved: false,
+          location: {
+            start: { line: 1, column: 1, offset: 0 },
+            end: { line: 1, column: 6, offset: 5 }
+          }
+        }],
+        diagnostics: [],
+        content_hash: contentHash(content)
+      })
+    };
+
+    const fallback = parseMarkdownDocumentAccelerated("native.md", content, "native", { binding: null });
+    const accelerated = parseMarkdownDocumentAccelerated("native.md", content, "native", { binding });
+
+    expect(accelerated.links).toEqual(fallback.links);
+    expect(Object.keys(accelerated.links[0] ?? {})).toEqual(Object.keys(fallback.links[0] ?? {}));
+  });
+
   it("ignores binding functions inherited through the prototype chain", () => {
     const binding = Object.create({
       parseMarkdownDocumentJson: () => {
