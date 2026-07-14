@@ -88,7 +88,7 @@ function assertDbtManifest(value: unknown): asserts value is DbtManifest {
       }
     }
     if (node.depends_on !== undefined) {
-      if (!isRecord(node.depends_on) || (node.depends_on.nodes !== undefined && (!Array.isArray(node.depends_on.nodes) || node.depends_on.nodes.some((entry) => typeof entry !== "string")))) {
+      if (!isRecord(node.depends_on) || (node.depends_on.nodes !== undefined && (!Array.isArray(node.depends_on.nodes) || Array.from(node.depends_on.nodes).some((entry) => typeof entry !== "string")))) {
         throw new TypeError(`dbt node ${JSON.stringify(id)} depends_on.nodes must be an array of strings.`);
       }
     }

@@ -60,6 +60,13 @@ describe("@okfx/adapter-markdown", () => {
       .toThrow("must be an array");
   });
 
+  it("rejects sparse tag arrays", () => {
+    const tags = new Array<string>(1);
+
+    expect(() => produceMarkdownOkf([{ path: "note", body: "# Note", tags }]))
+      .toThrow("tags at index 0 must be an array of strings");
+  });
+
   it("disambiguates source paths that normalize to the same output", () => {
     const files = produceMarkdownOkf([
       { path: "notes/archive/../demo", body: "# Archived\n" },

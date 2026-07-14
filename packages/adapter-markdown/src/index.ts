@@ -153,7 +153,7 @@ function assertMarkdownSources(value: unknown): asserts value is MarkdownSource[
     if (source.title !== undefined && typeof source.title !== "string") {
       throw new TypeError(`Markdown source title at index ${index} must be a string.`);
     }
-    if (source.tags !== undefined && (!Array.isArray(source.tags) || source.tags.some((tag) => typeof tag !== "string"))) {
+    if (source.tags !== undefined && (!Array.isArray(source.tags) || Array.from(source.tags).some((tag) => typeof tag !== "string"))) {
       throw new TypeError(`Markdown source tags at index ${index} must be an array of strings.`);
     }
   }

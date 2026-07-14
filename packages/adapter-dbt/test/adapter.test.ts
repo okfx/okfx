@@ -40,4 +40,18 @@ describe("@okfx/adapter-dbt", () => {
 
     expect(parseMarkdownDocument(file!.path, file!.content, "model").links).toEqual([]);
   });
+
+  it("rejects sparse dependency arrays", () => {
+    const nodes = new Array<string>(1);
+
+    expect(() => produceDbtOkf({
+      nodes: {
+        model: {
+          resource_type: "model",
+          name: "orders",
+          depends_on: { nodes }
+        }
+      }
+    })).toThrow("depends_on.nodes must be an array of strings");
+  });
 });
