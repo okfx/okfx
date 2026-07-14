@@ -9,7 +9,7 @@ fn main() -> ExitCode {
     match run(env::args().skip(1).collect()) {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("okfx: {error}");
+            eprintln!("okfx: {}", terminal_value(&error));
             ExitCode::from(2)
         }
     }
@@ -72,7 +72,7 @@ fn fmt_command(args: &[String]) -> Result<ExitCode, String> {
 
     if check {
         if result.changed {
-            eprintln!("{} needs formatting", path);
+            eprintln!("{} needs formatting", terminal_value(path));
             return Ok(ExitCode::from(1));
         }
         return Ok(ExitCode::SUCCESS);
@@ -91,10 +91,24 @@ fn format_format_diagnostic(
 ) -> String {
     format!(
         "{} {}: {}",
-        diagnostic.code,
-        diagnostic.path.as_deref().unwrap_or(fallback_path),
-        diagnostic.message
+        terminal_value(&diagnostic.code),
+        terminal_value(diagnostic.path.as_deref().unwrap_or(fallback_path)),
+        terminal_value(&diagnostic.message)
     )
+}
+
+fn terminal_value(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            character if character.is_control() => result.extend(character.escape_unicode()),
+            character => result.push(character),
+        }
+    }
+    result
 }
 
 fn rules_command(args: &[String]) -> Result<ExitCode, String> {
@@ -196,6 +210,21 @@ mod tests {
             format_format_diagnostic(&diagnostic, "fallback.md"),
             "spec/invalid-frontmatter bad.md: Frontmatter must be a YAML mapping."
         );
+    }
+
+    #[test]
+    fn escapes_control_characters_in_terminal_fields() {
+        let diagnostic = okfx_fmt::FormatDiagnostic {
+            code: "test/injected\n::group::code".to_string(),
+            message: "bad\r\n::add-mask::secret\tend".to_string(),
+            path: Some("bad.md\u{1b}]52;c;value\u{7}".to_string()),
+        };
+        let formatted = format_format_diagnostic(&diagnostic, "fallback.md");
+
+        assert!(!formatted.chars().any(char::is_control));
+        assert!(formatted.contains("test/injected\\n::group::code"));
+        assert!(formatted.contains("bad\\r\\n::add-mask::secret\\tend"));
+        assert!(formatted.contains(r"bad.md\u{1b}]52;c;value\u{7}"));
     }
 
     fn temp_file(name: &str, content: &str) -> String {
