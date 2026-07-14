@@ -9,6 +9,8 @@ use std::sync::LazyLock;
 
 pub const CRATE_NAME: &str = "okfx_parser";
 const MAX_LINK_DESTINATION_NESTING: usize = 64;
+const MAX_YAML_COLLECTION_NESTING: usize = 200;
+const YAML_NESTING_ERROR: &str = "Frontmatter must not contain more than 200 nested collections.";
 static EXPLICIT_FLOAT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^(?:[-+]?\.(?:inf|Inf|INF)|\.nan|\.NaN|\.NAN|[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)[eE][-+]?[0-9]+|[-+]?(?:\.[0-9]+|[0-9]+\.[0-9]*))$",
@@ -187,6 +189,7 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
 
     let (saphyr_input, tag_validation) = match prepare_saphyr_input(&normalized) {
         Ok(prepared) => prepared,
+        Err(error) if error == YAML_NESTING_ERROR => return Err(error),
         Err(error) => {
             return match serde_yaml::from_str::<serde_yaml::Value>(&normalized) {
                 Ok(value) => finish_frontmatter(value),
@@ -197,6 +200,9 @@ fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, S
 
     if tag_validation.invalid_collection_tag {
         return Err("Frontmatter contains an invalid explicit YAML tag value.".to_string());
+    }
+    if tag_validation.excessive_collection_nesting {
+        return Err(YAML_NESTING_ERROR.to_string());
     }
 
     let mut documents = load_tagged_yaml_documents(&saphyr_input)?;
@@ -240,6 +246,8 @@ fn finish_frontmatter(
 #[derive(Default)]
 struct YamlTagValidator {
     invalid_collection_tag: bool,
+    collection_depth: usize,
+    excessive_collection_nesting: bool,
 }
 
 impl<'input> EventReceiver<'input> for YamlTagValidator {
@@ -247,15 +255,24 @@ impl<'input> EventReceiver<'input> for YamlTagValidator {
         match event {
             Event::Scalar(_, _, _, _) => {}
             Event::SequenceStart(_, tag) => {
+                self.collection_depth += 1;
+                self.excessive_collection_nesting |=
+                    self.collection_depth > MAX_YAML_COLLECTION_NESTING;
                 self.invalid_collection_tag |= tag.as_deref().is_some_and(|tag| {
                     tag.is_yaml_core_schema()
                         && !matches!(tag.suffix.as_str(), "seq" | "omap" | "pairs")
                 });
             }
             Event::MappingStart(_, tag) => {
+                self.collection_depth += 1;
+                self.excessive_collection_nesting |=
+                    self.collection_depth > MAX_YAML_COLLECTION_NESTING;
                 self.invalid_collection_tag |= tag.as_deref().is_some_and(|tag| {
                     tag.is_yaml_core_schema() && !matches!(tag.suffix.as_str(), "map" | "set")
                 });
+            }
+            Event::SequenceEnd | Event::MappingEnd => {
+                self.collection_depth = self.collection_depth.saturating_sub(1);
             }
             _ => {}
         }
@@ -423,6 +440,9 @@ fn prepare_saphyr_input(raw: &str) -> Result<(String, YamlTagValidator), String>
             Err(error)
                 if error.info() == "':' must be followed by a valid YAML whitespace"
                     && replace_separator_tab(&mut input, error.marker()) => {}
+            Err(error) if error.info() == "recursion limit exceeded" => {
+                return Err(YAML_NESTING_ERROR.to_string());
+            }
             Err(error) => return Err(error.to_string()),
         }
     }
@@ -1906,6 +1926,32 @@ mod tests {
         assert_eq!(parsed.diagnostics.len(), 1);
         assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
         assert_eq!(parsed.diagnostics[0].severity, DiagnosticSeverity::Error);
+    }
+
+    #[test]
+    fn bounds_yaml_collection_nesting_before_converting_values() {
+        let accepted_depth = MAX_YAML_COLLECTION_NESTING - 1;
+        let accepted = format!(
+            "---\nvalue: {}0{}\n---\n",
+            "[".repeat(accepted_depth),
+            "]".repeat(accepted_depth)
+        );
+        let rejected_depth = MAX_YAML_COLLECTION_NESTING;
+        let rejected = format!(
+            "---\nvalue: {}0{}\n---\n",
+            "[".repeat(rejected_depth),
+            "]".repeat(rejected_depth)
+        );
+
+        assert!(
+            parse_markdown_document("deep.md", accepted, "deep")
+                .diagnostics
+                .is_empty()
+        );
+        let parsed = parse_markdown_document("deep.md", rejected, "deep");
+        assert!(parsed.frontmatter.is_none());
+        assert_eq!(parsed.diagnostics[0].code, "spec/invalid-frontmatter");
+        assert_eq!(parsed.diagnostics[0].message, YAML_NESTING_ERROR);
     }
 
     #[test]

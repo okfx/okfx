@@ -247,6 +247,28 @@ describe("parseMarkdownDocument", () => {
     });
   });
 
+  it("bounds YAML collection nesting before converting values", () => {
+    const acceptedDepth = 199;
+    const accepted = parseMarkdownDocument(
+      "concepts/deep.md",
+      `---\nvalue: ${"[".repeat(acceptedDepth)}0${"]".repeat(acceptedDepth)}\n---\n`,
+      "concepts/deep"
+    );
+    const rejectedDepth = 200;
+    const rejected = parseMarkdownDocument(
+      "concepts/deep.md",
+      `---\nvalue: ${"[".repeat(rejectedDepth)}0${"]".repeat(rejectedDepth)}\n---\n`,
+      "concepts/deep"
+    );
+
+    expect(accepted.diagnostics).toEqual([]);
+    expect(rejected.frontmatter).toBeUndefined();
+    expect(rejected.diagnostics[0]).toMatchObject({
+      code: "spec/invalid-frontmatter",
+      message: "Frontmatter must not contain more than 200 nested collections."
+    });
+  });
+
   it.each(["1: one", "[a, b]: sequence", "metadata: {1: one}", "metadata: !!omap [{1: one}]"])(
     "rejects non-string frontmatter key %j",
     (entry) => {

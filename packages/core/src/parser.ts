@@ -4,6 +4,9 @@ import { contentHash } from "./hash.js";
 import { extractMarkdown } from "./markdown.js";
 import type { DiagnosticIR, LinkIR, MarkdownBodyIR } from "./types.js";
 
+const MAX_YAML_COLLECTION_NESTING = 200;
+const YAML_NESTING_ERROR = "Frontmatter must not contain more than 200 nested collections.";
+
 export interface ParsedMarkdownDocument {
   path: string;
   frontmatter?: Record<string, unknown>;
@@ -37,6 +40,8 @@ export function parseMarkdownDocument(path: string, content: string, sourceConce
 
       if (!isMap(document.contents) || !validRootMappingTag(document.contents.tag)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter must be a YAML mapping."));
+      } else if (exceedsYamlCollectionNesting(document.contents)) {
+        diagnostics.push(invalidFrontmatter(path, YAML_NESTING_ERROR));
       } else if (!hasOnlyStringMappingKeys(document.contents)) {
         diagnostics.push(invalidFrontmatter(path, "Frontmatter keys must be strings."));
       } else if (!hasValidExplicitYamlTags(document.contents)) {
@@ -124,6 +129,35 @@ function invalidFrontmatter(path: string, message: string): DiagnosticIR {
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function exceedsYamlCollectionNesting(value: unknown): boolean {
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: value, depth: 0 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop() ?? { node: undefined, depth: 0 };
+    if (isPair(node)) {
+      stack.push({ node: node.key, depth }, { node: node.value, depth });
+      continue;
+    }
+    if (!isMap(node) && !isSeq(node)) {
+      continue;
+    }
+
+    const childDepth = depth + 1;
+    if (childDepth > MAX_YAML_COLLECTION_NESTING) {
+      return true;
+    }
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        stack.push({ node: pair, depth: childDepth });
+      }
+    } else {
+      for (const item of node.items) {
+        stack.push({ node: item, depth: childDepth });
+      }
+    }
+  }
+  return false;
 }
 
 function hasOnlyStringMappingKeys(value: unknown): boolean {
