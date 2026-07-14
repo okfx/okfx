@@ -1,12 +1,25 @@
+import { sep } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { conceptIdFromPath, relativeMarkdownTarget, resolveMarkdownTarget } from "../src/index.js";
+import { conceptIdFromPath, relativeMarkdownTarget, relativePosixPath, resolveMarkdownTarget } from "../src/index.js";
 
 describe("conceptIdFromPath", () => {
   it("removes the Markdown suffix even when it is the entire filename", () => {
     expect(conceptIdFromPath(".md")).toBe("");
     expect(conceptIdFromPath("concepts/.md")).toBe("concepts/");
     expect(conceptIdFromPath("concepts/.hidden.md")).toBe("concepts/.hidden");
+  });
+});
+
+describe("relativePosixPath", () => {
+  it("rejects literal backslashes in POSIX filenames instead of changing their identity", () => {
+    if (sep === "\\") {
+      return;
+    }
+
+    expect(() => relativePosixPath("/bundle", "/bundle/evil\\name.md"))
+      .toThrow("non-portable backslash");
   });
 });
 

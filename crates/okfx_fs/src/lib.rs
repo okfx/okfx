@@ -48,6 +48,7 @@ pub struct DiscoveredFile {
 pub enum FsError {
     Io { path: PathBuf, message: String },
     OutsideRoot { root: PathBuf, path: PathBuf },
+    NonPortablePath { path: PathBuf },
 }
 
 impl fmt::Display for FsError {
@@ -61,6 +62,11 @@ impl fmt::Display for FsError {
                 "path {} is outside bundle root {}",
                 path.display(),
                 root.display()
+            ),
+            FsError::NonPortablePath { path } => write!(
+                formatter,
+                "filesystem path contains a non-portable backslash: {}",
+                path.display()
             ),
         }
     }
@@ -163,6 +169,12 @@ pub fn relative_posix_path(
             root: root.to_path_buf(),
             path: file_path.to_path_buf(),
         })?;
+    #[cfg(not(windows))]
+    if relative.to_string_lossy().contains('\\') {
+        return Err(FsError::NonPortablePath {
+            path: file_path.to_path_buf(),
+        });
+    }
     Ok(normalize_relative_path(relative.to_string_lossy()))
 }
 
@@ -564,6 +576,20 @@ mod tests {
             vec![".hidden/kept.md", "concepts/wau.md", "index.md"]
         );
         assert_eq!(files[2].kind, MarkdownFileKind::Index);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn rejects_literal_backslashes_in_filesystem_names() {
+        let root = temp_root("backslash-name");
+        write(&root, r"evil\name.md", "# Ambiguous");
+
+        assert!(matches!(
+            discover_files(&root, &DiscoveryOptions::default()),
+            Err(FsError::NonPortablePath { .. })
+        ));
 
         fs::remove_dir_all(root).unwrap();
     }

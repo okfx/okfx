@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 
@@ -12,6 +12,23 @@ import { packBundle } from "../src/index.js";
 const execFileAsync = promisify(execFile);
 
 describe("packBundle", () => {
+  it("rejects POSIX filenames with literal backslashes before staging them", async () => {
+    if (sep === "\\") {
+      return;
+    }
+    const root = await mkdtemp(join(tmpdir(), "okfx-pack-backslash-"));
+    const out = join(root, "..", "backslash.okf.tar.gz");
+    try {
+      await writeFile(join(root, "evil\\name.md"), "# Evil\n", "utf8");
+
+      await expect(packBundle(root, { out, writeMetadata: false }))
+        .rejects.toThrow("non-portable backslash");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(out, { force: true });
+    }
+  });
+
   it("writes metadata and archive", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-pack-"));
     const out = join(root, "..", "knowledge.okf.tar.gz");

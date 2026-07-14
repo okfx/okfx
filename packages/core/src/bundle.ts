@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import fg from "fast-glob";
 
@@ -25,7 +25,7 @@ export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxCo
   await assertBundleRoot(root);
   const entries = await fg(config.include, {
     cwd: root,
-    absolute: true,
+    absolute: false,
     onlyFiles: true,
     unique: true,
     dot: true,
@@ -34,16 +34,17 @@ export async function discoverMarkdownFiles(root: string, config: ResolvedOkfxCo
   });
 
   return entries.map((entry) => {
-    const relativePath = relative(root, entry);
+    const absoluteEntry = isAbsolute(entry) ? entry : resolve(root, entry);
+    const relativePath = relative(root, absoluteEntry);
     if (
       !relativePath
       || relativePath === ".."
       || relativePath.startsWith(`..${sep}`)
       || isAbsolute(relativePath)
     ) {
-      throw new Error(`Discovered Markdown file escapes the OKF bundle root: ${entry}`);
+      throw new Error(`Discovered Markdown file escapes the OKF bundle root: ${absoluteEntry}`);
     }
-    return relativePosixPath(root, entry);
+    return relativePosixPath(root, absoluteEntry);
   }).sort(compareStrings);
 }
 

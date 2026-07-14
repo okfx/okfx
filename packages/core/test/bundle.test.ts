@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -183,6 +183,17 @@ type: Metric
     } finally {
       await rm(outside, { force: true });
     }
+  });
+
+  it("rejects POSIX filenames with literal backslashes before reading them", async () => {
+    if (sep === "\\") {
+      return;
+    }
+    const root = await tempBundle();
+    await write(root, "evil\\name.md", "---\ntype: Note\n---\n# Evil\n");
+
+    await expect(loadBundle(root, { loadConfigFile: false }))
+      .rejects.toThrow("non-portable backslash");
   });
 
   it("loads okfx.config.ts files", async () => {

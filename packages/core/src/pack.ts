@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, open, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import fg from "fast-glob";
@@ -240,7 +240,7 @@ async function writePackMetadata(
 async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: string): Promise<string[]> {
   const entries = await fg(["**/*"], {
     cwd: root,
-    absolute: true,
+    absolute: false,
     onlyFiles: true,
     unique: true,
     dot: true,
@@ -249,6 +249,7 @@ async function discoverPackFiles(root: string, config: ResolvedOkfxConfig, out: 
   });
 
   const paths = entries
+    .map((entry) => isAbsolute(entry) ? entry : resolve(root, entry))
     .filter((entry) => resolve(entry) !== out)
     .map((entry) => relativePosixPath(root, entry))
     .sort(compareStrings);

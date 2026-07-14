@@ -18,7 +18,11 @@ export function normalizeRelativePath(path: string): string {
 }
 
 export function relativePosixPath(root: string, filePath: string): string {
-  return normalizeRelativePath(toPosixPath(relative(root, filePath)));
+  const relativePath = relative(root, filePath);
+  if (sep !== "\\" && relativePath.includes("\\")) {
+    throw new TypeError(`Filesystem path contains a non-portable backslash: ${JSON.stringify(relativePath)}`);
+  }
+  return normalizeRelativePath(relativePath.split(sep).join("/"));
 }
 
 export function resolveBundleRoot(root: string): string {
