@@ -58,6 +58,7 @@ describe("native wrapper", () => {
   });
 
   it("supports WASM-style async bindings and normalizes Rust JSON field names", async () => {
+    const content = "---\ntype: Note\n---\n# WASM\n[Other](other.md)\n";
     const binding: NativeJsonBinding = {
       wasm_capabilities_json: () => JSON.stringify({ crate: "okfx_wasm", capabilities: ["parse", "format"] }),
       parse_markdown_document_json: () => JSON.stringify({
@@ -65,13 +66,13 @@ describe("native wrapper", () => {
         frontmatter: { type: "Note" },
         frontmatter_raw: "type: Note\n",
         body: {
-          raw: "# WASM\n",
+          raw: "# WASM\n[Other](other.md)\n",
           text: "WASM",
           headings: [{
             level: 1,
             title: "WASM",
             slug: "wasm",
-            location: { start: { line: 4, column: 1, offset: 20 }, end: null }
+            location: { start: { line: 4, column: 1, offset: 19 }, end: null }
           }]
         },
         links: [{
@@ -80,10 +81,10 @@ describe("native wrapper", () => {
           text: "Other",
           kind: "internal",
           resolved: false,
-          location: { start: { line: 5, column: 1, offset: 27 }, end: null }
+          location: { start: { line: 5, column: 1, offset: 26 }, end: null }
         }],
         diagnostics: [],
-        content_hash: contentHash("")
+        content_hash: contentHash(content)
       }),
       format_markdown_document_json: () => JSON.stringify({
         formatted: "wasm",
@@ -92,13 +93,13 @@ describe("native wrapper", () => {
       })
     };
 
-    const parsed = await parseMarkdownDocumentAcceleratedAsync("wasm.md", "", "wasm", { binding });
+    const parsed = await parseMarkdownDocumentAcceleratedAsync("wasm.md", content, "wasm", { binding });
     const formatted = await formatMarkdownFileAcceleratedAsync("wasm.md", "", {}, { binding });
 
     expect(await nativeCapabilitiesAsync(binding)).toMatchObject({ crate: "okfx_wasm" });
     expect(parsed).toMatchObject({
       frontmatterRaw: "type: Note\n",
-      contentHash: contentHash(""),
+      contentHash: contentHash(content),
       links: [{ sourceConceptId: "wasm", targetRaw: "other.md" }]
     });
     expect(formatted.formatted).toBe("wasm");
@@ -139,7 +140,7 @@ describe("native wrapper", () => {
   it("rejects inconsistent parsed document identities, hashes, and locations", () => {
     const parsedDocument = (overrides: Record<string, unknown> = {}) => ({
       path: "native.md",
-      body: { raw: "", text: "", headings: [] },
+      body: { raw: "input", text: "input", headings: [] },
       links: [],
       diagnostics: [],
       contentHash: contentHash("input"),
@@ -156,6 +157,9 @@ describe("native wrapper", () => {
     expect(() => parseWith(parsedDocument({ contentHash: contentHash("other") })))
       .toThrow("content hash");
     expect(() => parseWith(parsedDocument({
+      body: { raw: "other", text: "other", headings: [] }
+    }))).toThrow("body.raw");
+    expect(() => parseWith(parsedDocument({
       links: [{
         sourceConceptId: "other",
         targetRaw: "target.md",
@@ -166,7 +170,7 @@ describe("native wrapper", () => {
     }))).toThrow("link source concept ID");
     expect(() => parseWith(parsedDocument({
       body: {
-        raw: "",
+        raw: "input",
         text: "",
         headings: [{
           level: 7,
@@ -178,7 +182,7 @@ describe("native wrapper", () => {
     }))).toThrow("heading level");
     expect(() => parseWith(parsedDocument({
       body: {
-        raw: "",
+        raw: "input",
         text: "",
         headings: [{
           level: 1,
@@ -190,7 +194,7 @@ describe("native wrapper", () => {
     }))).toThrow("source line");
     expect(() => parseWith(parsedDocument({
       body: {
-        raw: "",
+        raw: "input",
         text: "",
         headings: [{
           level: 1,

@@ -450,20 +450,23 @@ function normalizeParsedDocument(
     field(document, "contentHash", "content_hash"),
     "parsed document content hash"
   );
+  const frontmatterRaw = optionalStrictString(
+    field(document, "frontmatterRaw", "frontmatter_raw"),
+    "parsed document frontmatter raw"
+  );
+  const bodyRaw = requiredString(body.raw, "parsed document body.raw");
   const expectedContentHash = contentHash(content);
   if (returnedContentHash !== expectedContentHash) {
     throw new TypeError("Binding returned parsed document content hash that does not match the input.");
   }
+  assertParsedContentSlices(content, frontmatterRaw, bodyRaw);
 
   return {
     path: fallbackPath,
     frontmatter,
-    frontmatterRaw: optionalStrictString(
-      field(document, "frontmatterRaw", "frontmatter_raw"),
-      "parsed document frontmatter raw"
-    ),
+    frontmatterRaw,
     body: {
-      raw: requiredString(body.raw, "parsed document body.raw"),
+      raw: bodyRaw,
       text: requiredString(body.text, "parsed document body.text"),
       headings
     },
@@ -471,6 +474,33 @@ function normalizeParsedDocument(
     diagnostics,
     contentHash: returnedContentHash
   };
+}
+
+function assertParsedContentSlices(
+  content: string,
+  frontmatterRaw: string | undefined,
+  bodyRaw: string
+): void {
+  if (frontmatterRaw === undefined) {
+    if (bodyRaw !== content) {
+      throw new TypeError("Binding returned parsed document body.raw that does not match the input.");
+    }
+    return;
+  }
+
+  const opening = /^---(?:\r\n|\n|\r)/.exec(content);
+  if (!opening) {
+    throw new TypeError("Binding returned parsed document frontmatter raw for input without frontmatter.");
+  }
+  const afterOpening = content.slice(opening[0].length);
+  if (!afterOpening.startsWith(frontmatterRaw)) {
+    throw new TypeError("Binding returned parsed document frontmatter raw that does not match the input.");
+  }
+  const afterFrontmatter = afterOpening.slice(frontmatterRaw.length);
+  const closing = /^---[ \t]*(?:\r\n|\n|\r|$)/.exec(afterFrontmatter);
+  if (!closing || bodyRaw !== afterFrontmatter.slice(closing[0].length)) {
+    throw new TypeError("Binding returned parsed document body.raw that does not match the input.");
+  }
 }
 
 function normalizeFormatResult(value: unknown, originalContent: string): FormatAcceleratedResult {
