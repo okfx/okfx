@@ -9,4 +9,5 @@ repository.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
+okfx_parser = { path = "../okfx_parser" }
 serde_yaml = "0.9"

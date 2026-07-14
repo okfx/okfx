@@ -187,7 +187,7 @@ fn split_frontmatter(content: &str) -> Option<FrontmatterSplit<'_>> {
     None
 }
 
-fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, String> {
+pub fn parse_frontmatter(raw: &str) -> Result<BTreeMap<String, serde_yaml::Value>, String> {
     let normalized = raw.replace("\r\n", "\n").replace('\r', "\n");
 
     let (saphyr_input, tag_validation) = match prepare_saphyr_input(&normalized) {

@@ -52,21 +52,13 @@ pub fn format_markdown_document_with_key_order(
 
     let mut diagnostics = Vec::new();
     let normalized_frontmatter = split.raw.replace("\r\n", "\n").replace('\r', "\n");
-    let frontmatter = match serde_yaml::from_str::<Value>(&normalized_frontmatter) {
-        Ok(Value::Mapping(mapping)) => mapping,
-        Ok(_) => {
-            diagnostics.push(invalid_frontmatter(
-                &path,
-                "Frontmatter must be a YAML mapping.",
-            ));
-            return FormatResult {
-                formatted: content.to_string(),
-                changed: false,
-                diagnostics,
-            };
-        }
+    let frontmatter = match okfx_parser::parse_frontmatter(&normalized_frontmatter) {
+        Ok(frontmatter) => frontmatter
+            .into_iter()
+            .map(|(key, value)| (Value::String(key), value))
+            .collect::<Mapping>(),
         Err(error) => {
-            diagnostics.push(invalid_frontmatter(&path, &error.to_string()));
+            diagnostics.push(invalid_frontmatter(&path, &error));
             return FormatResult {
                 formatted: content.to_string(),
                 changed: false,
@@ -400,6 +392,31 @@ mod tests {
             result.formatted,
             "---\ntype: Note\ntitle: Example\ntags:\n- b\n- a\ntimestamp: 2026-07-07T00:00:00.000Z\n---\n\n# Example\n\nBody\n"
         );
+    }
+
+    #[test]
+    fn preserves_parser_semantics_for_yaml_number_syntax() {
+        let input = "---\ntype: Note\nzero: 00\ndecimal: 012\nbinary_like: 0b101\noctal: 0o17\nhex: 0x10\nlarge: 18446744073709551616\nexponent: 1e3\n---\n# Example\n";
+        let before = okfx_parser::parse_frontmatter(
+            split_frontmatter(input)
+                .expect("test input should contain frontmatter")
+                .raw,
+        )
+        .expect("test frontmatter should parse");
+
+        let result = format_markdown_document("concept.md", input);
+
+        assert!(result.diagnostics.is_empty());
+        let after = okfx_parser::parse_frontmatter(
+            split_frontmatter(&result.formatted)
+                .expect("formatted output should contain frontmatter")
+                .raw,
+        )
+        .expect("formatted frontmatter should parse");
+        assert_eq!(after, before);
+        assert!(result.formatted.contains("zero: 0\n"));
+        assert!(result.formatted.contains("decimal: 12\n"));
+        assert!(!result.formatted.contains("binary_like: 5\n"));
     }
 
     #[test]

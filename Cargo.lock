@@ -406,6 +406,7 @@ dependencies = [
 name = "okfx_fmt"
 version = "0.1.0"
 dependencies = [
+ "okfx_parser",
  "serde_yaml",
 ]
 
