@@ -189,6 +189,16 @@ module.exports = binding;
         })
       }
     })).toThrow("Unsupported format diagnostic severity");
+
+    expect(() => formatMarkdownFileAccelerated("native.md", "original", {}, {
+      binding: {
+        formatMarkdownDocumentJson: () => JSON.stringify({
+          formatted: "original",
+          changed: false,
+          diagnostics: [{ code: "fmt/test", message: "Bad", path: "other.md" }]
+        })
+      }
+    })).toThrow('format diagnostic path "other.md" for "native.md"');
   });
 
   it("does not accept native result fields inherited from Object.prototype", () => {

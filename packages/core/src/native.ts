@@ -228,7 +228,8 @@ export function formatMarkdownFileAccelerated(
   const resolved = resolveConfig(config);
   return normalizeFormatResult(
     parseJson(formatNative(path, content, JSON.stringify(resolved.frontmatter.keyOrder))),
-    content
+    content,
+    path
   );
 }
 
@@ -518,7 +519,11 @@ function assertParsedContentSlices(
   }
 }
 
-function normalizeFormatResult(value: unknown, originalContent: string): FormatAcceleratedResult {
+function normalizeFormatResult(
+  value: unknown,
+  originalContent: string,
+  expectedPath: string
+): FormatAcceleratedResult {
   const result = requiredRecord(value, "format result");
   const formatted = requiredString(ownValue(result, "formatted"), "format result.formatted");
   const changed = requiredBoolean(ownValue(result, "changed"), "format result.changed");
@@ -530,20 +535,27 @@ function normalizeFormatResult(value: unknown, originalContent: string): FormatA
     formatted,
     changed,
     diagnostics: requiredArray(ownValue(result, "diagnostics"), "format result diagnostics")
-      .map(normalizeFormatDiagnostic)
+      .map((diagnostic) => normalizeFormatDiagnostic(diagnostic, expectedPath))
   };
 }
 
-function normalizeFormatDiagnostic(value: unknown): FormatAcceleratedResult["diagnostics"][number] {
+function normalizeFormatDiagnostic(
+  value: unknown,
+  expectedPath: string
+): FormatAcceleratedResult["diagnostics"][number] {
   const diagnostic = requiredRecord(value, "format diagnostic");
   const severity = optionalStrictString(ownValue(diagnostic, "severity"), "format diagnostic severity");
   if (severity !== undefined && !isDiagnosticSeverity(severity)) {
     throw new TypeError(`Unsupported format diagnostic severity from binding: ${severity}`);
   }
+  const returnedPath = optionalStrictString(ownValue(diagnostic, "path"), "format diagnostic path");
+  if (returnedPath !== undefined && returnedPath !== expectedPath) {
+    throw new TypeError(`Binding returned format diagnostic path "${returnedPath}" for "${expectedPath}".`);
+  }
   return {
     code: requiredString(ownValue(diagnostic, "code"), "format diagnostic code"),
     message: requiredString(ownValue(diagnostic, "message"), "format diagnostic message"),
-    path: optionalStrictString(ownValue(diagnostic, "path"), "format diagnostic path"),
+    path: returnedPath,
     severity
   };
 }
