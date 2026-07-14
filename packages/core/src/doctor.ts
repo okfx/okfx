@@ -65,11 +65,15 @@ export function doctorBundle(bundle: BundleIR, options: DoctorOptions = {}): Doc
 
 function resolveDoctorConfig(input: OkfxConfig | ResolvedOkfxConfig | undefined): ResolvedOkfxConfig {
   const base = input ?? {};
-  const presets = [...(base.presets ?? defaultConfig.presets)];
+  const configuredPresets = Object.hasOwn(base, "presets") ? base.presets : undefined;
+  const presets = [...(configuredPresets ?? defaultConfig.presets)];
   if (!presets.some((preset) => preset.replace(/^@okfx\/preset-/, "").replace(/^preset-/, "") === "agent-ready")) {
     presets.push("agent-ready");
   }
-  const configPath = "configPath" in base && typeof base.configPath === "string" ? base.configPath : undefined;
+  const configuredPath = Object.hasOwn(base, "configPath")
+    ? (base as ResolvedOkfxConfig).configPath
+    : undefined;
+  const configPath = typeof configuredPath === "string" ? configuredPath : undefined;
   return resolveConfig({ ...base, presets }, configPath);
 }
 
@@ -96,7 +100,8 @@ function configuredDoctorRule(
   defaultSeverity: DiagnosticSeverity,
   diagnostics: DiagnosticIR[]
 ): DiagnosticIR[] {
-  const severity = resolveRuleLevel(config.rules[id], defaultSeverity);
+  const configuredLevel = Object.hasOwn(config.rules, id) ? config.rules[id] : undefined;
+  const severity = resolveRuleLevel(configuredLevel, defaultSeverity);
   return severity === "off" ? [] : diagnostics.map((diagnostic) => ({ ...diagnostic, severity }));
 }
 

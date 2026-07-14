@@ -121,6 +121,30 @@ description: Weekly active users.
     });
   });
 
+  it("ignores inherited doctor presets and rule levels", async () => {
+    await withBundle({
+      "concept.md": "---\ntype: Note\ntitle: Concept\n---\n# Concept\n"
+    }, async (root) => {
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      const inheritedConfig = Object.create({ presets: ["strict"] });
+      Object.defineProperty(Object.prototype, "agent/missing-index", {
+        configurable: true,
+        value: "off"
+      });
+
+      const result = (() => {
+        try {
+          return doctorBundle(bundle, { config: inheritedConfig });
+        } finally {
+          delete (Object.prototype as Record<string, unknown>)["agent/missing-index"];
+        }
+      })();
+
+      expect(result.failOn).toBe("error");
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain("agent/missing-index");
+    });
+  });
+
   it("requires meaningful readiness metadata and recognized auth headings", async () => {
     await withBundle({
       "author.md": `---
