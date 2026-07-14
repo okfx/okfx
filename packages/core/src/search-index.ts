@@ -45,7 +45,7 @@ export function buildSearchIndex(bundle: BundleIR): SearchIndexIR {
     mode: "full-text",
     generated_from: {
       okf_version: bundle.okfVersion,
-      concept_count: bundle.stats.conceptCount
+      concept_count: documents.length
     },
     documents,
     terms

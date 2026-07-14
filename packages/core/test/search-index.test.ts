@@ -25,7 +25,8 @@ tags:
 Counts active users.
 `, "utf8");
 
-      const index = buildSearchIndex(await loadBundle(root, { loadConfigFile: false }));
+      const bundle = await loadBundle(root, { loadConfigFile: false });
+      const index = buildSearchIndex(bundle);
 
       expect(index.mode).toBe("full-text");
       expect(index.documents[0]).toMatchObject({
@@ -34,6 +35,15 @@ Counts active users.
       });
       expect(index.terms.analytics).toEqual(["concepts/wau"]);
       expect(index.terms.weekly).toEqual(["concepts/wau"]);
+
+      const staleStatsIndex = buildSearchIndex({
+        ...bundle,
+        stats: {
+          ...bundle.stats,
+          conceptCount: 99
+        }
+      });
+      expect(staleStatsIndex.generated_from.concept_count).toBe(staleStatsIndex.documents.length);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
