@@ -45,13 +45,12 @@ export function reservedFileKind(path: string): "index" | "log" | undefined {
 }
 
 export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): string | undefined {
-  const [withoutHash] = targetRaw.split("#", 1);
-  const [withoutQuery] = withoutHash.split("?", 1);
-  if (!withoutQuery) {
+  const withoutSuffix = stripMarkdownSuffix(targetRaw);
+  if (!withoutSuffix) {
     return undefined;
   }
 
-  const decodedTarget = decodeMarkdownPath(withoutQuery);
+  const decodedTarget = decodeMarkdownPath(withoutSuffix);
 
   const targetPath = decodedTarget.startsWith("/")
     ? decodedTarget.slice(1)
@@ -63,6 +62,25 @@ export function resolveMarkdownTarget(sourcePath: string, targetRaw: string): st
   }
 
   return conceptIdFromPath(normalized);
+}
+
+function stripMarkdownSuffix(value: string): string {
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if ((character === "#" || character === "?") && !isMarkdownEscaped(value, index)) {
+      return value.slice(0, index);
+    }
+  }
+
+  return value;
+}
+
+function isMarkdownEscaped(value: string, index: number): boolean {
+  let backslashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === "\\"; cursor -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
 }
 
 function decodeMarkdownPath(value: string): string {

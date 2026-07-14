@@ -27,6 +27,10 @@ describe("relativeMarkdownTarget", () => {
       .toBe("docs/hello world");
     expect(resolveMarkdownTarget("index.md", "docs/topic%23one.md"))
       .toBe("docs/topic#one");
+    expect(resolveMarkdownTarget("index.md", String.raw`docs/topic\#one.md`))
+      .toBe("docs/topic#one");
+    expect(resolveMarkdownTarget("index.md", String.raw`docs/topic\?draft.md`))
+      .toBe("docs/topic?draft");
     expect(resolveMarkdownTarget("index.md", "docs/100%.md"))
       .toBe("docs/100%");
   });

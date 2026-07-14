@@ -178,13 +178,12 @@ pub fn resolve_markdown_target(
     target_raw: impl AsRef<str>,
 ) -> Option<String> {
     let target_raw = target_raw.as_ref();
-    let without_hash = target_raw.split('#').next().unwrap_or_default();
-    let without_query = without_hash.split('?').next().unwrap_or_default();
-    if without_query.is_empty() {
+    let without_suffix = strip_markdown_suffix(target_raw);
+    if without_suffix.is_empty() {
         return None;
     }
 
-    let decoded_target = decode_markdown_path(without_query);
+    let decoded_target = decode_markdown_path(without_suffix);
 
     let target_path = if let Some(root_relative) = decoded_target.strip_prefix('/') {
         root_relative.to_string()
@@ -203,6 +202,27 @@ pub fn resolve_markdown_target(
     }
 
     Some(concept_id_from_path(normalized))
+}
+
+fn strip_markdown_suffix(value: &str) -> &str {
+    let bytes = value.as_bytes();
+    for (index, byte) in bytes.iter().enumerate() {
+        if matches!(byte, b'#' | b'?') && !is_markdown_escaped(bytes, index) {
+            return &value[..index];
+        }
+    }
+
+    value
+}
+
+fn is_markdown_escaped(value: &[u8], index: usize) -> bool {
+    let mut cursor = index;
+    let mut backslashes = 0;
+    while cursor > 0 && value[cursor - 1] == b'\\' {
+        backslashes += 1;
+        cursor -= 1;
+    }
+    backslashes % 2 == 1
 }
 
 fn decode_markdown_path(value: &str) -> String {
@@ -458,6 +478,14 @@ mod tests {
         assert_eq!(
             resolve_markdown_target("index.md", "docs/topic%23one.md"),
             Some("docs/topic#one".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("index.md", r"docs/topic\#one.md"),
+            Some("docs/topic#one".to_string())
+        );
+        assert_eq!(
+            resolve_markdown_target("index.md", r"docs/topic\?draft.md"),
+            Some("docs/topic?draft".to_string())
         );
         assert_eq!(
             resolve_markdown_target("index.md", "docs/100%.md"),
