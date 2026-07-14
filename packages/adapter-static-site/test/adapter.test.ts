@@ -118,4 +118,48 @@ describe("@okfx/adapter-static-site", () => {
     expect(files.map((file) => file.path)).toContain("concepts/guides/my%20guide.html");
     expect(index).toContain('href="concepts/guides/my%2520guide.html"');
   });
+
+  it("produces portable, collision-free page paths for arbitrary concept IDs", () => {
+    const concepts = ["CON", "Case", "case", "danger*"].map((id) => ({
+      id,
+      path: `${id}.md`,
+      type: "Note",
+      title: id,
+      frontmatter: { type: "Note", title: id },
+      body: { raw: `# ${id}\n`, text: id, headings: [] },
+      links: [],
+      contentHash: "hash"
+    }));
+    const bundle: BundleIR = {
+      root: "/bundle",
+      okfVersion: "0.1",
+      concepts,
+      indexes: [],
+      logs: [],
+      links: [],
+      diagnostics: [],
+      stats: {
+        fileCount: concepts.length,
+        conceptCount: concepts.length,
+        indexCount: 0,
+        logCount: 0,
+        linkCount: 0,
+        brokenLinkCount: 0,
+        diagnosticCount: 0
+      }
+    };
+
+    const files = exportStaticSite(bundle);
+    const pagePaths = files.filter((file) => file.path !== "index.html").map((file) => file.path);
+    const index = files.find((file) => file.path === "index.html")?.content ?? "";
+
+    expect(pagePaths).toContain("concepts/%43ON.html");
+    expect(pagePaths).toContain("concepts/danger%2A.html");
+    expect(new Set(pagePaths.map((path) => path.normalize("NFC").toLowerCase())))
+      .toHaveLength(concepts.length);
+    expect(pagePaths.filter((path) => /concepts\/(?:Case|case)-[a-z0-9]{7}\.html/u.test(path)))
+      .toHaveLength(2);
+    expect(index).toContain('href="concepts/%2543ON.html"');
+    expect(index).toContain('href="concepts/danger%252A.html"');
+  });
 });

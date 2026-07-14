@@ -1,6 +1,6 @@
 import { posix } from "node:path";
 
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin, disambiguateGeneratedPaths } from "@okfx/plugin-api";
 import { compareStrings, type BundleIR, type ConceptIR, type OkfxGraphIR } from "@okfx/core";
 
 export interface StaticSiteFile {
@@ -15,11 +15,19 @@ export interface StaticSiteOptions {
 
 export function exportStaticSite(bundle: BundleIR, options: StaticSiteOptions = {}): StaticSiteFile[] {
   const title = options.title ?? "OKF Bundle";
-  const conceptPages = new Map(bundle.concepts.map((concept) => [concept.id, conceptPagePath(concept.id)]));
+  const pageFiles = disambiguateGeneratedPaths(bundle.concepts.map((concept) => ({
+    path: conceptPagePath(concept.id),
+    identity: concept.id,
+    content: ""
+  })));
+  const conceptPages = new Map(bundle.concepts.map((concept, index) => [
+    concept.id,
+    pageFiles[index]!.path
+  ]));
   return [
     {
       path: "index.html",
-      content: indexPage(bundle, title)
+      content: indexPage(bundle, title, conceptPages)
     },
     ...bundle.concepts.map((concept) => ({
       path: conceptPages.get(concept.id)!,
@@ -43,7 +51,7 @@ export default definePlugin({
   }
 });
 
-function indexPage(bundle: BundleIR, title: string): string {
+function indexPage(bundle: BundleIR, title: string, conceptPages: Map<string, string>): string {
   const concepts = [...bundle.concepts].sort((a, b) => compareStrings(a.id, b.id));
   return html(title, `
     <main>
@@ -55,7 +63,7 @@ function indexPage(bundle: BundleIR, title: string): string {
       </dl>
       <h2>Concepts</h2>
       <ul>
-        ${concepts.map((concept) => `<li><a href="${escapeAttribute(pageHref(conceptPagePath(concept.id)))}">${escapeHtml(concept.title ?? concept.id)}</a> <code>${escapeHtml(concept.type)}</code></li>`).join("\n")}
+        ${concepts.map((concept) => `<li><a href="${escapeAttribute(pageHref(conceptPages.get(concept.id)!))}">${escapeHtml(concept.title ?? concept.id)}</a> <code>${escapeHtml(concept.type)}</code></li>`).join("\n")}
       </ul>
     </main>
   `);
@@ -106,7 +114,33 @@ function linkList(ids: string[], currentPage: string, conceptPages: Map<string, 
 }
 
 function conceptPagePath(id: string): string {
-  return `concepts/${id.split("/").map(encodeURIComponent).join("/")}.html`;
+  return `concepts/${id.split("/").map(portablePageSegment).join("/")}.html`;
+}
+
+function portablePageSegment(value: string): string {
+  let encoded = encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  if (!encoded) {
+    encoded = "%00";
+  }
+  if (encoded === "." || encoded === ".." || encoded.endsWith(".")) {
+    encoded = encoded.replace(/\./g, "%2E");
+  }
+
+  const deviceName = encoded.split(".", 1)[0]?.toUpperCase();
+  if (
+    deviceName === "CON"
+    || deviceName === "PRN"
+    || deviceName === "AUX"
+    || deviceName === "NUL"
+    || /^COM[1-9]$/.test(deviceName ?? "")
+    || /^LPT[1-9]$/.test(deviceName ?? "")
+  ) {
+    encoded = `%${encoded.charCodeAt(0).toString(16).toUpperCase()}${encoded.slice(1)}`;
+  }
+
+  return encoded;
 }
 
 function relativeHref(fromPage: string, toPage: string): string {
