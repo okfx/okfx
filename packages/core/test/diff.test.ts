@@ -94,4 +94,43 @@ owner: data
       await after.cleanup();
     }
   });
+
+  it("does not report reordered nested frontmatter mappings", async () => {
+    const before = await bundle({
+      "concept.md": `---
+type: Note
+title: Concept
+metadata:
+  owner: data
+  settings:
+    tier: 1
+    enabled: true
+---
+# Concept
+`
+    });
+    const after = await bundle({
+      "concept.md": `---
+metadata:
+  settings:
+    enabled: true
+    tier: 1
+  owner: data
+title: Concept
+type: Note
+---
+# Concept
+`
+    });
+
+    try {
+      const diff = diffBundles(before.loaded, after.loaded);
+
+      expect(diff.changedConcepts).toEqual([]);
+      expect(diff.stats.changedCount).toBe(0);
+    } finally {
+      await before.cleanup();
+      await after.cleanup();
+    }
+  });
 });

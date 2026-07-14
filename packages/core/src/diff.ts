@@ -151,5 +151,29 @@ function linkSet(concept: ConceptIR): Set<string> {
 }
 
 function stableEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (left === right || (typeof left === "number" && typeof right === "number" && Number.isNaN(left) && Number.isNaN(right))) {
+    return true;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => stableEqual(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) {
+    return false;
+  }
+
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index] && stableEqual(left[key], right[key]));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === Object.prototype || prototype === null;
 }
