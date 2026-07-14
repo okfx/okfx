@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -100,8 +101,20 @@ pub fn discover_files(
     options: &DiscoveryOptions,
 ) -> Result<Vec<DiscoveredFile>, FsError> {
     let root = resolve_bundle_root(root)?;
+    let canonical_root = fs::canonicalize(&root).map_err(|error| FsError::Io {
+        path: root.clone(),
+        message: error.to_string(),
+    })?;
     let mut files = Vec::new();
-    walk_directory(&root, &root, options, &mut files)?;
+    let mut visited_directories = BTreeSet::from([canonical_root.clone()]);
+    walk_directory(
+        &root,
+        &canonical_root,
+        &root,
+        options,
+        &mut visited_directories,
+        &mut files,
+    )?;
     files.sort_by(|left, right| left.path.cmp(&right.path));
     files.dedup_by(|left, right| left.path == right.path);
     Ok(files)
@@ -272,8 +285,10 @@ fn hex_value(value: u8) -> Option<u8> {
 
 fn walk_directory(
     root: &Path,
+    canonical_root: &Path,
     directory: &Path,
     options: &DiscoveryOptions,
+    visited_directories: &mut BTreeSet<PathBuf>,
     files: &mut Vec<DiscoveredFile>,
 ) -> Result<(), FsError> {
     let mut entries = fs::read_dir(directory)
@@ -290,6 +305,21 @@ fn walk_directory(
 
     for entry in entries {
         let path = entry.path();
+        let canonical_path = if options.follow_symlinks {
+            let canonical_path = fs::canonicalize(&path).map_err(|error| FsError::Io {
+                path: path.clone(),
+                message: error.to_string(),
+            })?;
+            if !canonical_path.starts_with(canonical_root) {
+                return Err(FsError::OutsideRoot {
+                    root: canonical_root.to_path_buf(),
+                    path,
+                });
+            }
+            Some(canonical_path)
+        } else {
+            None
+        };
         let metadata = if options.follow_symlinks {
             fs::metadata(&path)
         } else {
@@ -309,7 +339,19 @@ fn walk_directory(
         }
 
         if metadata.is_dir() {
-            walk_directory(root, &path, options, files)?;
+            if canonical_path
+                .is_some_and(|canonical_path| !visited_directories.insert(canonical_path))
+            {
+                continue;
+            }
+            walk_directory(
+                root,
+                canonical_root,
+                &path,
+                options,
+                visited_directories,
+                files,
+            )?;
             continue;
         }
 
@@ -529,6 +571,36 @@ mod tests {
         assert_eq!(files, vec!["concepts/active/a.md"]);
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn contains_followed_symlinks_and_skips_directory_cycles() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_root("discover-symlinks");
+        let outside = temp_root("discover-outside");
+        write(&root, "inside.md", "# Inside");
+        write(&outside, "outside.md", "# Outside");
+        symlink(&root, root.join("loop")).unwrap();
+
+        let options = DiscoveryOptions {
+            follow_symlinks: true,
+            ..DiscoveryOptions::default()
+        };
+        assert_eq!(
+            discover_markdown_files(&root, &options).unwrap(),
+            vec!["inside.md"]
+        );
+
+        symlink(&outside, root.join("outside")).unwrap();
+        assert!(matches!(
+            discover_markdown_files(&root, &options),
+            Err(FsError::OutsideRoot { .. })
+        ));
+
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     fn temp_root(name: &str) -> PathBuf {
