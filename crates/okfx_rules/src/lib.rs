@@ -1279,21 +1279,62 @@ fn resource_host(value: &str) -> Option<String> {
     {
         return None;
     }
+    let is_special_scheme = matches!(
+        scheme.to_ascii_lowercase().as_str(),
+        "ftp" | "http" | "https" | "ws" | "wss"
+    );
     let authority = rest
-        .split(['/', '?', '#'])
+        .split(|character| {
+            matches!(character, '/' | '?' | '#') || (is_special_scheme && character == '\\')
+        })
         .next()
         .unwrap_or_default()
         .rsplit('@')
         .next()
         .unwrap_or_default();
-    let host = authority
+    let decoded_host = if let Some(host) = authority
         .strip_prefix('[')
         .and_then(|host| host.split_once(']').map(|(host, _)| host))
-        .unwrap_or_else(|| authority.split(':').next().unwrap_or_default())
-        .trim()
-        .trim_end_matches('.')
-        .to_lowercase();
+    {
+        host.to_string()
+    } else {
+        decode_url_host(authority.split(':').next().unwrap_or_default())?
+    };
+    let host = decoded_host.trim().trim_end_matches('.').to_lowercase();
     (!host.is_empty()).then_some(host)
+}
+
+fn decode_url_host(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        if bytes[cursor] == b'%' {
+            let high = url_hex_value(*bytes.get(cursor + 1)?)?;
+            let low = url_hex_value(*bytes.get(cursor + 2)?)?;
+            decoded.push((high << 4) | low);
+            cursor += 3;
+        } else {
+            decoded.push(bytes[cursor]);
+            cursor += 1;
+        }
+    }
+
+    let decoded = String::from_utf8(decoded).ok()?;
+    (!decoded
+        .chars()
+        .any(|character| matches!(character, '/' | '\\' | '?' | '#' | '@' | ':')))
+    .then_some(decoded)
+}
+
+fn url_hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn normalize_configured_host(value: &str) -> String {
@@ -1533,6 +1574,34 @@ mod tests {
         assert_eq!(messages_for("security/non-allowlisted-resource").len(), 2);
         assert_eq!(messages_for("security/private-url").len(), 1);
         assert!(messages_for("security/private-url")[0].contains("s3://localhost/private"));
+    }
+
+    #[test]
+    fn canonicalizes_special_url_hosts_for_resource_security() {
+        let diagnostics = run_builtin_rules(RuleInput {
+            concepts: vec![
+                concept("resources")
+                    .with_resource("http://localhost\\admin")
+                    .with_resource("http://%31%32%37.0.0.1/admin")
+                    .with_resource("https://%64ocs.example.com/guide"),
+            ],
+            options: RuleOptions {
+                resource_allow_hosts: vec!["docs.example.com".to_string()],
+                ..RuleOptions::default()
+            },
+            ..RuleInput::default()
+        });
+
+        let messages_for = |code: &str| {
+            diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic.code == code)
+                .map(|diagnostic| diagnostic.message.as_str())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(messages_for("security/private-url").len(), 2);
+        assert_eq!(messages_for("security/non-allowlisted-resource").len(), 2);
     }
 
     #[test]
