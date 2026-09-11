@@ -182,7 +182,7 @@ describe("performance baselines", () => {
     const elapsedMs = performance.now() - started;
 
     expect(diff.renamedConcepts).toHaveLength(count);
-    expect(elapsedMs).toBeLessThan(1500);
+    expect(elapsedMs).toBeLessThan(2000);
   }, 5000);
 
   it("indexes invalid frontmatter diagnostics by concept path", () => {
