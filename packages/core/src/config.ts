@@ -432,7 +432,7 @@ function resolvePreset(name: string): OkfxConfig {
 
 function normalizePresetName(name: string): string {
   return name
-    .replace(/^@okfx\/preset-/, "")
+    .replace(/^@okfxjs\/preset-/, "")
     .replace(/^preset-/, "");
 }
 

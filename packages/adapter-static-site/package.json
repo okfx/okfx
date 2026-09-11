@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/adapter-static-site",
-  "version": "0.1.0",
+  "name": "@okfxjs/adapter-static-site",
+  "version": "0.1.1",
   "description": "OKF bundle to static site consumer adapter.",
   "license": "MIT",
   "type": "module",
@@ -16,8 +16,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/core": "workspace:*",
-    "@okfx/plugin-api": "workspace:*"
+    "@okfxjs/core": "workspace:*",
+    "@okfxjs/plugin-api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

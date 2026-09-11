@@ -9,7 +9,7 @@
 
 `okfx` validates, lints, formats, graphs, diffs, packages, indexes, and serves OKF
 bundles to humans, CI systems, and AI agents. Its default command is `okf`, and its
-packages live under the `@okfx/*` namespace.
+packages live under the `@okfxjs/*` namespace.
 
 Think of it as:
 
@@ -129,9 +129,9 @@ and doctor advice).
 ### Install the CLI
 
 ```bash
-pnpm add -g @okfx/cli
+pnpm add -g okfx
 # or run without installing
-pnpm dlx @okfx/cli --help
+pnpm dlx okfx --help
 ```
 
 ### Create and check a bundle
@@ -205,7 +205,7 @@ documented in [`docs/commands/reference.md`](./docs/commands/reference.md).
 [`docs/config/reference.md`](./docs/config/reference.md).
 
 ```ts
-import { defineConfig } from "@okfx/core";
+import { defineConfig } from "@okfxjs/core";
 
 export default defineConfig({
   okfVersion: "0.1",
@@ -246,12 +246,12 @@ export default defineConfig({
 
 ### Presets
 
-- `@okfx/preset-recommended` — balanced defaults (spec errors, common hygiene warnings, broken-link warnings, light agent advice).
-- `@okfx/preset-strict` — CI-oriented; promotes many warnings to errors and sets `failOn: "warning"`.
-- `@okfx/preset-agent-ready` — agent-oriented; checks summaries, backlinks, metric source links, owners, and usage sections.
+- `@okfxjs/preset-recommended` — balanced defaults (spec errors, common hygiene warnings, broken-link warnings, light agent advice).
+- `@okfxjs/preset-strict` — CI-oriented; promotes many warnings to errors and sets `failOn: "warning"`.
+- `@okfxjs/preset-agent-ready` — agent-oriented; checks summaries, backlinks, metric source links, owners, and usage sections.
 
 Presets may be referenced by short name (`recommended`) or full package name
-(`@okfx/preset-recommended`).
+(`@okfxjs/preset-recommended`).
 
 ---
 
@@ -286,7 +286,7 @@ Exit codes:
 
 ## MCP server
 
-`@okfx/mcp` exposes an OKF bundle to AI agents over the Model Context Protocol. The
+`@okfxjs/mcp` exposes an OKF bundle to AI agents over the Model Context Protocol. The
 server is **read-only, local-only, and makes no network or LLM calls** by default. Full
 details: [`docs/mcp/server.md`](./docs/mcp/server.md).
 
@@ -325,7 +325,7 @@ Example MCP client entry:
 
 ## GitHub Action
 
-`@okfx/github-action` provides a CI quality gate that validates, lints, graphs, and
+`@okfxjs/github-action` provides a CI quality gate that validates, lints, graphs, and
 doctors a bundle, then writes a job summary and (optionally) a PR comment.
 
 ```yaml
@@ -342,7 +342,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: okfx/okfx/packages/github-action@v0
         with:
-          cli-version: "0.1.0"
+          cli-version: "0.1.1"
           bundle: ./knowledge
           lint-format: json
           graph-out: okf-graph.json
@@ -362,15 +362,15 @@ recommended workflow is import → format → lint → review → commit. See
 
 Producer adapters (`okf import <adapter> --input <file.json>`):
 
-- `@okfx/adapter-markdown`
-- `@okfx/adapter-openapi`
-- `@okfx/adapter-dbt`
-- `@okfx/adapter-datahub`
-- `@okfx/adapter-bigquery`
+- `@okfxjs/adapter-markdown`
+- `@okfxjs/adapter-openapi`
+- `@okfxjs/adapter-dbt`
+- `@okfxjs/adapter-datahub`
+- `@okfxjs/adapter-bigquery`
 
 Consumer adapters (`okf export <target>`):
 
-- `@okfx/adapter-static-site` — export a self-contained static site.
+- `@okfxjs/adapter-static-site` — export a self-contained static site.
 
 ```bash
 okf import dbt --input ./target/manifest.json --out ./knowledge --dry-run
@@ -382,7 +382,7 @@ okf fmt ./knowledge && okf lint ./knowledge
 
 ## Editor integration
 
-`@okfx/vscode` is a VS Code extension that surfaces inline diagnostics, format-on-save,
+`@okfxjs/vscode` is a VS Code extension that surfaces inline diagnostics, format-on-save,
 frontmatter and concept-link completion, go-to-concept, a graph preview, a doctor panel,
 a backlinks panel, and quick fixes for common missing-frontmatter diagnostics.
 
@@ -401,8 +401,8 @@ intermediate representation (IR). See [`docs/architecture/overview.md`](./docs/a
                             │
 ┌───────────────────────────────────────────────────────────┐
 │                   TypeScript ecosystem                     │
-│  @okfx/core  @okfx/cli  @okfx/mcp  @okfx/plugin-api        │
-│  @okfx/adapter-*  @okfx/preset-*  @okfx/github-action      │
+│  @okfxjs/core  okfx  @okfxjs/mcp  @okfxjs/plugin-api        │
+│  @okfxjs/adapter-*  @okfxjs/preset-*  @okfxjs/github-action      │
 └───────────────────────────────────────────────────────────┘
                             │  JSON IR over N-API / WASM
 ┌───────────────────────────────────────────────────────────┐
@@ -416,7 +416,7 @@ intermediate representation (IR). See [`docs/architecture/overview.md`](./docs/a
 └───────────────────────────────────────────────────────────┘
 ```
 
-- **`@okfx/core`** owns the deterministic TypeScript engines and the JSON IR
+- **`@okfxjs/core`** owns the deterministic TypeScript engines and the JSON IR
   (`BundleIR`, `ConceptIR`, `LinkIR`, `DiagnosticIR`, `GraphIR`, …). It is the default
   runtime today.
 - The **Rust crates** provide opt-in accelerated parsing and formatting through N-API
@@ -434,7 +434,7 @@ This is a pnpm + Cargo monorepo.
 ```text
 okfx/
   crates/        Rust core crates and native/WASM/CLI bindings
-  packages/      TypeScript packages published under @okfx/*
+  packages/      TypeScript packages published under @okfxjs/*
   examples/      Runnable example bundles
   fixtures/      Golden-file and case fixtures for tests
   fuzz/          cargo-fuzz targets for the parser and resolver
@@ -446,15 +446,15 @@ okfx/
 
 | Package | Responsibility |
 | --- | --- |
-| `@okfx/core` | Data model, JSON IR, and deterministic engines (parse, validate, lint, fmt, graph, diff, pack, index, doctor). |
-| `@okfx/cli` | `okf` command-line interface. |
-| `@okfx/mcp` | Read-only MCP server for OKF bundles. |
-| `@okfx/plugin-api` | Public plugin authoring API (`definePlugin`). |
-| `@okfx/preset-recommended` · `-strict` · `-agent-ready` | Rule presets. |
-| `@okfx/adapter-markdown` · `-openapi` · `-dbt` · `-datahub` · `-bigquery` | Producer adapters. |
-| `@okfx/adapter-static-site` | Static-site consumer adapter. |
-| `@okfx/github-action` | CI quality-gate action wrapper. |
-| `@okfx/vscode` | VS Code extension. |
+| `@okfxjs/core` | Data model, JSON IR, and deterministic engines (parse, validate, lint, fmt, graph, diff, pack, index, doctor). |
+| `okfx` | `okf` command-line interface. |
+| `@okfxjs/mcp` | Read-only MCP server for OKF bundles. |
+| `@okfxjs/plugin-api` | Public plugin authoring API (`definePlugin`). |
+| `@okfxjs/preset-recommended` · `-strict` · `-agent-ready` | Rule presets. |
+| `@okfxjs/adapter-markdown` · `-openapi` · `-dbt` · `-datahub` · `-bigquery` | Producer adapters. |
+| `@okfxjs/adapter-static-site` | Static-site consumer adapter. |
+| `@okfxjs/github-action` | CI quality-gate action wrapper. |
+| `@okfxjs/vscode` | VS Code extension. |
 
 ### Rust crates (`crates/*`)
 

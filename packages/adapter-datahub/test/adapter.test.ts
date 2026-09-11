@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMarkdownDocument } from "@okfx/core";
+import { parseMarkdownDocument } from "@okfxjs/core";
 
 import { produceDataHubOkf } from "../src/index.js";
 
-describe("@okfx/adapter-datahub", () => {
+describe("@okfxjs/adapter-datahub", () => {
   it("produces dataset concepts", () => {
     const files = produceDataHubOkf(
       [{ urn: "urn:li:dataset:(snowflake,orders,PROD)", name: "orders", platform: "snowflake" }],

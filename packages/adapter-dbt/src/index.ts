@@ -5,7 +5,7 @@ import {
   escapeMarkdownText,
   generationTimestamp,
   type OkfxGenerationOptions
-} from "@okfx/plugin-api";
+} from "@okfxjs/plugin-api";
 
 export interface DbtManifest {
   nodes?: Record<string, { resource_type?: string; name?: string; description?: string; depends_on?: { nodes?: string[] } }>;
@@ -39,7 +39,7 @@ export function produceDbtOkf(
 }
 
 export default definePlugin({
-  name: "@okfx/adapter-dbt",
+  name: "@okfxjs/adapter-dbt",
   adapters: {
     dbt: {
       async produce() {

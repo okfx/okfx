@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/core",
-  "version": "0.1.0",
+  "name": "@okfxjs/core",
+  "version": "0.1.1",
   "description": "Core TypeScript APIs for OKF bundle tooling.",
   "license": "MIT",
   "type": "module",

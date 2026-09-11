@@ -417,7 +417,7 @@ describe("parseMarkdownDocument", () => {
 describe("resolveConfig", () => {
   it("expands built-in presets and keeps explicit rule overrides", () => {
     const config = resolveConfig({
-      presets: ["@okfx/preset-strict", "agent-ready"],
+      presets: ["@okfxjs/preset-strict", "agent-ready"],
       plugins: [
         "@acme/okfx-plugin",
         {

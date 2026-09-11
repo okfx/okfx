@@ -34,7 +34,7 @@ CLI users can disable configured plugins with `okf lint --no-plugins`.
 ## Package Shape
 
 ```ts
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin } from "@okfxjs/plugin-api";
 
 export default definePlugin({
   name: "@acme/okfx-plugin-data-platform",

@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/core-linux-x64-gnu",
-  "version": "0.1.0",
+  "name": "@okfxjs/core-linux-x64-gnu",
+  "version": "0.1.1",
   "description": "Native okfx N-API binding for Linux x64 glibc.",
   "license": "MIT",
   "main": "./okfx_napi.node",

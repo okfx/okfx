@@ -6,7 +6,7 @@ import {
   generationTimestamp,
   markdownCodeSpan,
   type OkfxGenerationOptions
-} from "@okfx/plugin-api";
+} from "@okfxjs/plugin-api";
 
 export interface OpenApiDocument {
   info?: { title?: string; description?: string };
@@ -55,7 +55,7 @@ export function produceOpenApiOkf(
 }
 
 export default definePlugin({
-  name: "@okfx/adapter-openapi",
+  name: "@okfxjs/adapter-openapi",
   adapters: {
     openapi: {
       async produce() {

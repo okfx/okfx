@@ -2,9 +2,9 @@ name: OKF
 description: Validate, lint, graph, and doctor an Open Knowledge Format bundle.
 inputs:
   cli-version:
-    description: Exact @okfx/cli version to install.
+    description: Exact okfx version to install.
     required: false
-    default: "0.1.0"
+    default: "0.1.1"
   bundle:
     description: OKF bundle root.
     required: false
@@ -64,7 +64,7 @@ runs:
         }
         fs.writeFileSync("package.json", `${JSON.stringify({
           private: true,
-          dependencies: { "@okfx/cli": version }
+          dependencies: { "okfx": version }
         })}\n`);
         NODE
         pnpm install --prod --ignore-scripts

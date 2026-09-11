@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/plugin-api",
-  "version": "0.1.0",
+  "name": "@okfxjs/plugin-api",
+  "version": "0.1.1",
   "description": "Public plugin API types and helpers for okfx.",
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/core": "workspace:*"
+    "@okfxjs/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

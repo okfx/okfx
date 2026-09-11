@@ -1,4 +1,4 @@
-# @okfx/core
+# @okfxjs/core
 
 Core TypeScript APIs and deterministic engines for [okfx](https://github.com/okfx/okfx),
 the developer toolkit for Open Knowledge Format (OKF) bundles.
@@ -11,7 +11,7 @@ probe a Rust/N-API binding, then WASM, and fall back to TypeScript.
 ## Install
 
 ```bash
-pnpm add @okfx/core
+pnpm add @okfxjs/core
 ```
 
 ## Usage
@@ -24,7 +24,7 @@ import {
   buildGraph,
   doctorBundle,
   defineConfig
-} from "@okfx/core";
+} from "@okfxjs/core";
 
 const bundle = await loadBundle("./knowledge");
 

@@ -1,4 +1,4 @@
-import { classifyLinkTarget, resolveMarkdownTarget } from "@okfx/core";
+import { classifyLinkTarget, resolveMarkdownTarget } from "@okfxjs/core";
 
 const MAX_LINK_DESTINATION_NESTING = 64;
 

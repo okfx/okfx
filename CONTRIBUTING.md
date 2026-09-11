@@ -18,7 +18,7 @@ By participating you agree to keep the project's core invariants intact: `okfx` 
   - `rustup target add wasm32-unknown-unknown` for the WASM fallback
   - `cargo install cargo-fuzz` for fuzzing (optional)
 
-You do **not** need Rust to work on the TypeScript packages: `@okfx/core` runs a pure
+You do **not** need Rust to work on the TypeScript packages: `@okfxjs/core` runs a pure
 TypeScript implementation and only uses the native binding when it is available.
 
 ---
@@ -43,7 +43,7 @@ pnpm okf doctor ./examples/data-platform-bundle
 
 ```text
 crates/        Rust core crates + native (N-API) / WASM / standalone CLI bindings
-packages/      TypeScript packages published under @okfx/*
+packages/      TypeScript packages published under @okfxjs/*
 examples/      Runnable example bundles (minimal, data-platform, api, metric)
 fixtures/      Case + golden-file fixtures used by tests
 fuzz/          cargo-fuzz targets for the parser and resolver
@@ -53,7 +53,7 @@ docs/          Documentation, authored as an OKF-style bundle
 
 The engines live in `packages/core/src` (`parser`, `validation`, `lint`, `format`,
 `graph`, `diff`, `pack`, `search-index`, `doctor`, `plugins`, `config`). The `okf` CLI
-in `packages/cli/src/commands` is a thin layer over `@okfx/core`.
+in `packages/cli/src/commands` is a thin layer over `@okfxjs/core`.
 
 ---
 
@@ -120,10 +120,10 @@ and cover it in `packages/core/test/doctor.test.ts`.
 
 ### Write a plugin (external package)
 
-Plugins are executable code that receive only the JSON IR. Use `@okfx/plugin-api`:
+Plugins are executable code that receive only the JSON IR. Use `@okfxjs/plugin-api`:
 
 ```ts
-import { definePlugin } from "@okfx/plugin-api";
+import { definePlugin } from "@okfxjs/plugin-api";
 
 export default definePlugin({
   name: "@acme/okfx-plugin-governance",

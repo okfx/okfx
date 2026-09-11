@@ -1,6 +1,6 @@
 {
-  "name": "okfx",
-  "version": "0.1.0",
+  "name": "okfx-workspace",
+  "version": "0.1.1",
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "description": "Developer toolkit for Open Knowledge Format bundles.",
@@ -22,7 +22,7 @@
     "okf": "okf"
   },
   "devDependencies": {
-    "@okfx/core": "workspace:*",
+    "@okfxjs/core": "workspace:*",
     "@types/node": "^22.20.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"

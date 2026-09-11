@@ -6,8 +6,8 @@ not install every platform package.
 
 Release packaging should copy the matching `okfx_napi.node` artifact into one
 of these directories, run `npm pack`, then publish the package with the same
-version as `@okfx/core`.
+version as `@okfxjs/core`.
 
-The explicit async acceleration helpers in `@okfx/core` probe the platform package
-first and then fall back to `@okfx/native`, local development artifacts, WASM, and
+The explicit async acceleration helpers in `@okfxjs/core` probe the platform package
+first and then fall back to `@okfxjs/native`, local development artifacts, WASM, and
 TypeScript. Regular Core and CLI APIs stay on the TypeScript implementation.

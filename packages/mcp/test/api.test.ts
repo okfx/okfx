@@ -6,11 +6,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 
-import { resolveConfig } from "@okfx/core";
+import { resolveConfig } from "@okfxjs/core";
 
 import { createOkfBundleApi, createOkfMcpServer, getOkfMcpTools } from "../src/index.js";
 
-describe("@okfx/mcp bundle API", () => {
+describe("@okfxjs/mcp bundle API", () => {
   it("searches concepts and returns graph context", async () => {
     const root = await mkdtemp(join(tmpdir(), "okfx-mcp-"));
     try {

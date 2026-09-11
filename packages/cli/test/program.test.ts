@@ -26,13 +26,13 @@ function capture(): { io: CliIO; stdout: () => string; stderr: () => string } {
   };
 }
 
-describe("@okfx/cli command shell", () => {
+describe("okfx command shell", () => {
   it("prints the version", async () => {
     const output = capture();
     const code = await main(["--version"], output.io);
 
     expect(code).toBe(0);
-    expect(output.stdout()).toBe("0.1.0\n");
+    expect(output.stdout()).toBe("0.1.1\n");
     expect(output.stderr()).toBe("");
   });
 

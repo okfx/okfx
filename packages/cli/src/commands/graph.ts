@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
-import { buildGraph, graphToCytoscape, graphToDot, graphToHtml, loadBundle, type OkfxGraphIR } from "@okfx/core";
+import { buildGraph, graphToCytoscape, graphToDot, graphToHtml, loadBundle, type OkfxGraphIR } from "@okfxjs/core";
 
 import { writeOutput } from "../output.js";
 import type { CliContext } from "../program.js";

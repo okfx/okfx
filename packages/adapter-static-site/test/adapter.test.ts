@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGraph, type BundleIR } from "@okfx/core";
+import { buildGraph, type BundleIR } from "@okfxjs/core";
 
 import { exportStaticSite } from "../src/index.js";
 
-describe("@okfx/adapter-static-site", () => {
+describe("@okfxjs/adapter-static-site", () => {
   it("exports index, concept pages, and graph json", () => {
     const conceptLink = {
       sourceConceptId: "metrics/wau",

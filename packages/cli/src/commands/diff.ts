@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
-import { diffBundles, loadBundle, type BundleDiffIR } from "@okfx/core";
+import { diffBundles, loadBundle, type BundleDiffIR } from "@okfxjs/core";
 
 import { terminalValue, writeOutput } from "../output.js";
 import type { CliContext } from "../program.js";

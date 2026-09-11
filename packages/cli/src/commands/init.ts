@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 
 import { InvalidArgumentError, Command } from "commander";
 
-import { generationTimestamp } from "@okfx/plugin-api";
+import { generationTimestamp } from "@okfxjs/plugin-api";
 
 import { terminalValue } from "../output.js";
 import type { CliContext, CliRuntime } from "../program.js";

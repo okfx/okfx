@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/cli",
-  "version": "0.1.0",
+  "name": "okfx",
+  "version": "0.1.1",
   "description": "Command line interface for OKF bundle tooling.",
   "license": "MIT",
   "type": "module",
@@ -21,15 +21,15 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/adapter-bigquery": "workspace:*",
-    "@okfx/adapter-datahub": "workspace:*",
-    "@okfx/adapter-dbt": "workspace:*",
-    "@okfx/adapter-markdown": "workspace:*",
-    "@okfx/adapter-openapi": "workspace:*",
-    "@okfx/adapter-static-site": "workspace:*",
-    "@okfx/core": "workspace:*",
-    "@okfx/mcp": "workspace:*",
-    "@okfx/plugin-api": "workspace:*",
+    "@okfxjs/adapter-bigquery": "workspace:*",
+    "@okfxjs/adapter-datahub": "workspace:*",
+    "@okfxjs/adapter-dbt": "workspace:*",
+    "@okfxjs/adapter-markdown": "workspace:*",
+    "@okfxjs/adapter-openapi": "workspace:*",
+    "@okfxjs/adapter-static-site": "workspace:*",
+    "@okfxjs/core": "workspace:*",
+    "@okfxjs/mcp": "workspace:*",
+    "@okfxjs/plugin-api": "workspace:*",
     "commander": "^15.0.0"
   },
   "devDependencies": {

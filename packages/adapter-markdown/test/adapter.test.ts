@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMarkdownDocument } from "@okfx/core";
+import { parseMarkdownDocument } from "@okfxjs/core";
 
 import { produceMarkdownOkf } from "../src/index.js";
 
-describe("@okfx/adapter-markdown", () => {
+describe("@okfxjs/adapter-markdown", () => {
   it("produces OKF notes", () => {
     const files = produceMarkdownOkf(
       [{ path: "notes/demo", body: "# Demo\n" }],

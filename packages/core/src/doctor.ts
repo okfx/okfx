@@ -67,7 +67,7 @@ function resolveDoctorConfig(input: OkfxConfig | ResolvedOkfxConfig | undefined)
   const base = input ?? {};
   const configuredPresets = Object.hasOwn(base, "presets") ? base.presets : undefined;
   const presets = [...(configuredPresets ?? defaultConfig.presets)];
-  if (!presets.some((preset) => preset.replace(/^@okfx\/preset-/, "").replace(/^preset-/, "") === "agent-ready")) {
+  if (!presets.some((preset) => preset.replace(/^@okfxjs\/preset-/, "").replace(/^preset-/, "") === "agent-ready")) {
     presets.push("agent-ready");
   }
   const configuredPath = Object.hasOwn(base, "configPath")

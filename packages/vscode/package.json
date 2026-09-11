@@ -1,7 +1,7 @@
 {
-  "name": "@okfx/vscode",
+  "name": "@okfxjs/vscode",
   "displayName": "okfx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "VS Code extension scaffold for OKF diagnostics and formatting.",
   "license": "MIT",
   "type": "module",
@@ -85,7 +85,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/core": "workspace:*"
+    "@okfxjs/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

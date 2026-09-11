@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/wasm",
-  "version": "0.1.0",
+  "name": "@okfxjs/wasm",
+  "version": "0.1.1",
   "description": "WASM fallback build for okfx core.",
   "license": "MIT",
   "type": "module",

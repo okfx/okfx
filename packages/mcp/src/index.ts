@@ -24,7 +24,7 @@ import {
   type ConceptIR,
   type LintResult,
   type ResolvedOkfxConfig
-} from "@okfx/core";
+} from "@okfxjs/core";
 
 export interface OkfMcpServerOptions {
   root: string;

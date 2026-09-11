@@ -13,7 +13,7 @@ import {
   type BundleIR,
   type LintResult,
   type ResolvedOkfxConfig
-} from "@okfx/core";
+} from "@okfxjs/core";
 
 import { formatDiagnosticGroups, terminalValue, writeOutput } from "../output.js";
 import type { CliContext } from "../program.js";

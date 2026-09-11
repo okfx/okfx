@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: okfx/okfx/packages/github-action@v0
         with:
-          cli-version: "0.1.0"
+          cli-version: "0.1.1"
           bundle: ./knowledge
           lint-format: json
           graph-out: okf-graph.json

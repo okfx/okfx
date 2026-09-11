@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { compareStrings, defineConfig, okfxVersion } from "../src/index.js";
 
-describe("@okfx/core", () => {
+describe("@okfxjs/core", () => {
   it("exports the okfx version", () => {
-    expect(okfxVersion).toBe("0.1.0");
+    expect(okfxVersion).toBe("0.1.1");
   });
 
   it("returns typed config unchanged", () => {

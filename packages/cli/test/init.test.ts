@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { lintBundle, loadBundle, loadConfig } from "@okfx/core";
+import { lintBundle, loadBundle, loadConfig } from "@okfxjs/core";
 
 import { main } from "../src/index.js";
 import type { CliIO } from "../src/program.js";

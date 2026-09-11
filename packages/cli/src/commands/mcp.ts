@@ -2,8 +2,8 @@ import { resolve } from "node:path";
 
 import { Command } from "commander";
 
-import { loadConfig } from "@okfx/core";
-import { getOkfMcpTools, OKF_MCP_PROMPTS, startStdioServer } from "@okfx/mcp";
+import { loadConfig } from "@okfxjs/core";
+import { getOkfMcpTools, OKF_MCP_PROMPTS, startStdioServer } from "@okfxjs/mcp";
 
 import { terminalValue } from "../output.js";
 import type { CliContext } from "../program.js";

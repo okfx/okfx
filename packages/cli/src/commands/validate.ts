@@ -7,7 +7,7 @@ import {
   validateBundle,
   type BundleIR,
   type ValidationResult
-} from "@okfx/core";
+} from "@okfxjs/core";
 
 import { formatDiagnosticGroups, parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";

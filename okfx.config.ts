@@ -1,4 +1,4 @@
-import { defineConfig } from "@okfx/core";
+import { defineConfig } from "@okfxjs/core";
 
 export default defineConfig({
   okfVersion: "0.1",

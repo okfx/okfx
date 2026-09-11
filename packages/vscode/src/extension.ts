@@ -18,7 +18,7 @@ import {
   type BundleIR,
   type DiagnosticIR,
   type DiagnosticSeverity
-} from "@okfx/core";
+} from "@okfxjs/core";
 
 import { markdownTargetAtDocument, resolveDefinitionTarget } from "./markdown-target.js";
 import { LatestRunTracker } from "./latest-run.js";

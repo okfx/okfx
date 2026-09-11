@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 
 import { Command } from "commander";
 
-import { packBundle, type PackResult } from "@okfx/core";
+import { packBundle, type PackResult } from "@okfxjs/core";
 
 import { parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";

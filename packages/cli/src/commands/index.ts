@@ -2,7 +2,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
-import { buildSearchIndex, loadBundle, type SearchIndexIR } from "@okfx/core";
+import { buildSearchIndex, loadBundle, type SearchIndexIR } from "@okfxjs/core";
 
 import {
   ensureSafeGeneratedParent,

@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/adapter-datahub",
-  "version": "0.1.0",
+  "name": "@okfxjs/adapter-datahub",
+  "version": "0.1.1",
   "description": "DataHub metadata to OKF producer adapter.",
   "license": "MIT",
   "type": "module",
@@ -16,7 +16,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@okfx/plugin-api": "workspace:*"
+    "@okfxjs/plugin-api": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",

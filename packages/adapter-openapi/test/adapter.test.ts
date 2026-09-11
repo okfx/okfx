@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMarkdownDocument } from "@okfx/core";
+import { parseMarkdownDocument } from "@okfxjs/core";
 
 import { produceOpenApiOkf } from "../src/index.js";
 
-describe("@okfx/adapter-openapi", () => {
+describe("@okfxjs/adapter-openapi", () => {
   it("produces API concepts", () => {
     const files = produceOpenApiOkf(
       { paths: { "/orders": { get: { summary: "List Orders" } } } },

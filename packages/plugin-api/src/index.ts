@@ -1,4 +1,4 @@
-import { compareStrings, type BundleIR, type DiagnosticIR, type OkfxGraphIR, type ResolvedOkfxConfig } from "@okfx/core";
+import { compareStrings, type BundleIR, type DiagnosticIR, type OkfxGraphIR, type ResolvedOkfxConfig } from "@okfxjs/core";
 
 export { compareStrings };
 

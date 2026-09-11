@@ -8,7 +8,7 @@ importers:
 
   .:
     devDependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:packages/core
       '@types/node':
@@ -23,7 +23,7 @@ importers:
 
   packages/adapter-bigquery:
     dependencies:
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
     devDependencies:
@@ -36,7 +36,7 @@ importers:
 
   packages/adapter-datahub:
     dependencies:
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
     devDependencies:
@@ -49,7 +49,7 @@ importers:
 
   packages/adapter-dbt:
     dependencies:
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
     devDependencies:
@@ -62,7 +62,7 @@ importers:
 
   packages/adapter-markdown:
     dependencies:
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
     devDependencies:
@@ -75,7 +75,7 @@ importers:
 
   packages/adapter-openapi:
     dependencies:
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
     devDependencies:
@@ -88,10 +88,10 @@ importers:
 
   packages/adapter-static-site:
     dependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
     devDependencies:
@@ -104,31 +104,31 @@ importers:
 
   packages/cli:
     dependencies:
-      '@okfx/adapter-bigquery':
+      '@okfxjs/adapter-bigquery':
         specifier: workspace:*
         version: link:../adapter-bigquery
-      '@okfx/adapter-datahub':
+      '@okfxjs/adapter-datahub':
         specifier: workspace:*
         version: link:../adapter-datahub
-      '@okfx/adapter-dbt':
+      '@okfxjs/adapter-dbt':
         specifier: workspace:*
         version: link:../adapter-dbt
-      '@okfx/adapter-markdown':
+      '@okfxjs/adapter-markdown':
         specifier: workspace:*
         version: link:../adapter-markdown
-      '@okfx/adapter-openapi':
+      '@okfxjs/adapter-openapi':
         specifier: workspace:*
         version: link:../adapter-openapi
-      '@okfx/adapter-static-site':
+      '@okfxjs/adapter-static-site':
         specifier: workspace:*
         version: link:../adapter-static-site
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
-      '@okfx/mcp':
+      '@okfxjs/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@okfx/plugin-api':
+      '@okfxjs/plugin-api':
         specifier: workspace:*
         version: link:../plugin-api
       commander:
@@ -178,7 +178,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@4.6.1)
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -194,7 +194,7 @@ importers:
 
   packages/plugin-api:
     dependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -207,7 +207,7 @@ importers:
 
   packages/preset-agent-ready:
     dependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -220,7 +220,7 @@ importers:
 
   packages/preset-recommended:
     dependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -233,7 +233,7 @@ importers:
 
   packages/preset-strict:
     dependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -246,7 +246,7 @@ importers:
 
   packages/vscode:
     dependencies:
-      '@okfx/core':
+      '@okfxjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

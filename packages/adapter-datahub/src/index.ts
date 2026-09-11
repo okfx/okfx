@@ -6,7 +6,7 @@ import {
   generationTimestamp,
   markdownCodeSpan,
   type OkfxGenerationOptions
-} from "@okfx/plugin-api";
+} from "@okfxjs/plugin-api";
 
 export interface DataHubEntity {
   urn: string;
@@ -50,7 +50,7 @@ DataHub URN: ${markdownCodeSpan(entity.urn)}
 }
 
 export default definePlugin({
-  name: "@okfx/adapter-datahub",
+  name: "@okfxjs/adapter-datahub",
   adapters: {
     datahub: {
       async produce() {

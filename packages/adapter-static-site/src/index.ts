@@ -1,7 +1,7 @@
 import { posix } from "node:path";
 
-import { definePlugin, disambiguateGeneratedPaths } from "@okfx/plugin-api";
-import { backlinksForConcept, compareStrings, type BundleIR, type ConceptIR, type OkfxGraphIR } from "@okfx/core";
+import { definePlugin, disambiguateGeneratedPaths } from "@okfxjs/plugin-api";
+import { backlinksForConcept, compareStrings, type BundleIR, type ConceptIR, type OkfxGraphIR } from "@okfxjs/core";
 
 export interface StaticSiteFile {
   path: string;
@@ -41,7 +41,7 @@ export function exportStaticSite(bundle: BundleIR, options: StaticSiteOptions = 
 }
 
 export default definePlugin({
-  name: "@okfx/adapter-static-site",
+  name: "@okfxjs/adapter-static-site",
   adapters: {
     "static-site": {
       async consume({ bundle, graph }) {

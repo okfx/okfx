@@ -20,15 +20,15 @@ mutate existing knowledge or publish generated content without human review.
 
 Producer packages:
 
-- `@okfx/adapter-markdown`
-- `@okfx/adapter-openapi`
-- `@okfx/adapter-dbt`
-- `@okfx/adapter-datahub`
-- `@okfx/adapter-bigquery`
+- `@okfxjs/adapter-markdown`
+- `@okfxjs/adapter-openapi`
+- `@okfxjs/adapter-dbt`
+- `@okfxjs/adapter-datahub`
+- `@okfxjs/adapter-bigquery`
 
 Consumer packages:
 
-- `@okfx/adapter-static-site`
+- `@okfxjs/adapter-static-site`
 
 ## Consumer Workflow
 

@@ -10,7 +10,7 @@ import {
   type DiagnosticIR,
   type DoctorResult,
   type ResolvedOkfxConfig
-} from "@okfx/core";
+} from "@okfxjs/core";
 
 import { formatDiagnostic, parseOutputFormat, terminalValue, writeOutput, type CliOutputFormat } from "../output.js";
 import type { CliContext } from "../program.js";

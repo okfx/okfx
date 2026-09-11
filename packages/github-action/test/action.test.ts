@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { exampleWorkflow, formatOkfSummary } from "../src/index.js";
 
-describe("@okfx/github-action", () => {
+describe("@okfxjs/github-action", () => {
   it("ships composite action metadata", async () => {
     const action = await readFile(new URL("../action.yml", import.meta.url), "utf8");
 
@@ -31,8 +31,8 @@ describe("@okfx/github-action", () => {
     expect(action).not.toContain("Math.max(0, ...");
     expect(action).not.toContain("fs.existsSync(process.env.OKF_DOCTOR_JSON)");
     expect(action.match(/doctor \? `- Doctor JSON:/g)).toHaveLength(2);
-    expect(action).toContain('default: "0.1.0"');
-    expect(action).not.toContain('@okfx/cli":"latest"');
+    expect(action).toContain('default: "0.1.1"');
+    expect(action).not.toContain('okfx":"latest"');
     expect(runBlockLines(action).some((line) => line.includes("${{ inputs."))).toBe(false);
     expect(runBlockLines(action)
       .map((line) => line.trim())
@@ -49,7 +49,7 @@ describe("@okfx/github-action", () => {
   it("exports an example workflow", () => {
     expect(exampleWorkflow).toContain("actions/checkout@v4");
     expect(exampleWorkflow).toContain("okfx/okfx/packages/github-action@v0");
-    expect(exampleWorkflow).toContain('cli-version: "0.1.0"');
+    expect(exampleWorkflow).toContain('cli-version: "0.1.1"');
     expect(exampleWorkflow).toContain("pr-comment");
   });
 

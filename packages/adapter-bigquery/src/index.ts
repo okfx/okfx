@@ -6,7 +6,7 @@ import {
   generationTimestamp,
   markdownCodeSpan,
   type OkfxGenerationOptions
-} from "@okfx/plugin-api";
+} from "@okfxjs/plugin-api";
 
 export interface BigQueryTable {
   project: string;
@@ -57,7 +57,7 @@ ${(table.columns ?? []).length === 0 ? "No columns provided." : table.columns!.m
 }
 
 export default definePlugin({
-  name: "@okfx/adapter-bigquery",
+  name: "@okfxjs/adapter-bigquery",
   adapters: {
     bigquery: {
       async produce() {

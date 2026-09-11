@@ -2,8 +2,8 @@ import { resolve } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
-import { exportStaticSite } from "@okfx/adapter-static-site";
-import { buildGraph, loadBundle } from "@okfx/core";
+import { exportStaticSite } from "@okfxjs/adapter-static-site";
+import { buildGraph, loadBundle } from "@okfxjs/core";
 
 import {
   ensureSafeGeneratedParent,

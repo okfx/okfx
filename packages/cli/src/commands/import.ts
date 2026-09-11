@@ -3,11 +3,11 @@ import { resolve } from "node:path";
 
 import { Command, InvalidArgumentError } from "commander";
 
-import { produceBigQueryOkf } from "@okfx/adapter-bigquery";
-import { produceDataHubOkf } from "@okfx/adapter-datahub";
-import { produceDbtOkf } from "@okfx/adapter-dbt";
-import { produceMarkdownOkf } from "@okfx/adapter-markdown";
-import { produceOpenApiOkf } from "@okfx/adapter-openapi";
+import { produceBigQueryOkf } from "@okfxjs/adapter-bigquery";
+import { produceDataHubOkf } from "@okfxjs/adapter-datahub";
+import { produceDbtOkf } from "@okfxjs/adapter-dbt";
+import { produceMarkdownOkf } from "@okfxjs/adapter-markdown";
+import { produceOpenApiOkf } from "@okfxjs/adapter-openapi";
 
 import {
   ensureSafeGeneratedParent,

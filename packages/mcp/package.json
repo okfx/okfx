@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/mcp",
-  "version": "0.1.0",
+  "name": "@okfxjs/mcp",
+  "version": "0.1.1",
   "description": "Read-only MCP server for OKF bundles.",
   "license": "MIT",
   "type": "module",
@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@okfx/core": "workspace:*",
+    "@okfxjs/core": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

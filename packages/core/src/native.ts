@@ -64,33 +64,33 @@ const FORMAT_BINDING_FUNCTIONS = [
 
 export const NATIVE_PLATFORM_PACKAGES: readonly NativePlatformPackage[] = [
   {
-    packageName: "@okfx/core-darwin-arm64",
+    packageName: "@okfxjs/core-darwin-arm64",
     os: "darwin",
     arch: "arm64",
     binary: "okfx_napi.node"
   },
   {
-    packageName: "@okfx/core-darwin-x64",
+    packageName: "@okfxjs/core-darwin-x64",
     os: "darwin",
     arch: "x64",
     binary: "okfx_napi.node"
   },
   {
-    packageName: "@okfx/core-linux-x64-gnu",
+    packageName: "@okfxjs/core-linux-x64-gnu",
     os: "linux",
     arch: "x64",
     libc: "gnu",
     binary: "okfx_napi.node"
   },
   {
-    packageName: "@okfx/core-linux-x64-musl",
+    packageName: "@okfxjs/core-linux-x64-musl",
     os: "linux",
     arch: "x64",
     libc: "musl",
     binary: "okfx_napi.node"
   },
   {
-    packageName: "@okfx/core-win32-x64-msvc",
+    packageName: "@okfxjs/core-win32-x64-msvc",
     os: "win32",
     arch: "x64",
     binary: "okfx_napi.node"
@@ -174,14 +174,14 @@ export function nativeBindingPackageNames(
   const platformPackage = nativePlatformPackageName(platform, arch, libc);
   return [
     ...(platformPackage ? [platformPackage] : []),
-    "@okfx/native"
+    "@okfxjs/native"
   ];
 }
 
 export function wasmBindingPackageNames(): string[] {
   return [
-    "@okfx/wasm",
-    "@okfx/core-wasm"
+    "@okfxjs/wasm",
+    "@okfxjs/core-wasm"
   ];
 }
 

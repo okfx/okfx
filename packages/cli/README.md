@@ -1,4 +1,4 @@
-# @okfx/cli
+# okfx
 
 Command-line interface for [okfx](https://github.com/okfx/okfx) — the developer toolkit
 for Open Knowledge Format (OKF) bundles. Installs the `okf` command.
@@ -6,9 +6,9 @@ for Open Knowledge Format (OKF) bundles. Installs the `okf` command.
 ## Install
 
 ```bash
-pnpm add -g @okfx/cli
+pnpm add -g okfx
 # or
-pnpm dlx @okfx/cli --help
+pnpm dlx okfx --help
 ```
 
 ## Usage

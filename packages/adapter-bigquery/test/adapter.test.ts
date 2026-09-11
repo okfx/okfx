@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMarkdownDocument } from "@okfx/core";
+import { parseMarkdownDocument } from "@okfxjs/core";
 
 import { produceBigQueryOkf } from "../src/index.js";
 
-describe("@okfx/adapter-bigquery", () => {
+describe("@okfxjs/adapter-bigquery", () => {
   it("produces table concepts", () => {
     const files = produceBigQueryOkf(
       [{ project: "p", dataset: "d", table: "orders" }],

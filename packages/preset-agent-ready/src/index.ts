@@ -1,4 +1,4 @@
-import type { OkfxConfig } from "@okfx/core";
+import type { OkfxConfig } from "@okfxjs/core";
 
 const preset: OkfxConfig = {
   rules: {

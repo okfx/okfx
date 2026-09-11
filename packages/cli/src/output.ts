@@ -4,7 +4,7 @@ import { InvalidArgumentError } from "commander";
 
 import { ensureSafeGeneratedParent, inspectGeneratedPath, writeGeneratedFile } from "./generated-files.js";
 import type { CliIO } from "./program.js";
-import type { DiagnosticIR } from "@okfx/core";
+import type { DiagnosticIR } from "@okfxjs/core";
 
 export type CliOutputFormat = "pretty" | "json";
 

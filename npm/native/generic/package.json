@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/native",
-  "version": "0.1.0",
+  "name": "@okfxjs/native",
+  "version": "0.1.1",
   "description": "Portable native okfx N-API binding package.",
   "license": "MIT",
   "main": "./okfx_napi.node",

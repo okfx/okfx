@@ -1,6 +1,6 @@
 {
-  "name": "@okfx/github-action",
-  "version": "0.1.0",
+  "name": "@okfxjs/github-action",
+  "version": "0.1.1",
   "description": "GitHub Action wrapper metadata for okfx CI quality gates.",
   "license": "MIT",
   "type": "module",

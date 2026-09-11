@@ -1,6 +1,6 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 
-import { okfxVersion } from "@okfx/core";
+import { okfxVersion } from "@okfxjs/core";
 
 import { createInitCommand } from "./commands/init.js";
 import { createDoctorCommand } from "./commands/doctor.js";

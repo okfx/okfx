@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseMarkdownDocument } from "@okfx/core";
+import { parseMarkdownDocument } from "@okfxjs/core";
 
 import { produceDbtOkf } from "../src/index.js";
 
-describe("@okfx/adapter-dbt", () => {
+describe("@okfxjs/adapter-dbt", () => {
   it("produces table concepts from dbt models", () => {
     const files = produceDbtOkf(
       { nodes: { model: { resource_type: "model", name: "orders" } } },

@@ -3,7 +3,7 @@ import {
   disambiguateGeneratedPaths,
   generationTimestamp,
   type OkfxGenerationOptions
-} from "@okfx/plugin-api";
+} from "@okfxjs/plugin-api";
 
 export interface MarkdownSource {
   path: string;
@@ -44,7 +44,7 @@ export function produceMarkdownOkf(
 }
 
 export default definePlugin({
-  name: "@okfx/adapter-markdown",
+  name: "@okfxjs/adapter-markdown",
   adapters: {
     markdown: {
       async produce() {

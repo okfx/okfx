@@ -19,9 +19,9 @@ agents without requiring network access or LLM calls.
 
 ## Boundaries
 
-- `@okfx/core` owns deterministic TypeScript APIs and JSON IR.
-- `@okfx/cli` owns command UX and exit-code behavior.
-- `@okfx/mcp` owns read-only MCP resources, tools, and prompts.
+- `@okfxjs/core` owns deterministic TypeScript APIs and JSON IR.
+- `okfx` owns command UX and exit-code behavior.
+- `@okfxjs/mcp` owns read-only MCP resources, tools, and prompts.
 - Adapter packages produce reviewable files and MUST NOT silently mutate a bundle.
 - Rust crates expose explicit JSON-boundary acceleration helpers and do not own the
   default Core/CLI runtime behavior.
@@ -30,9 +30,9 @@ agents without requiring network access or LLM calls.
 
 ```mermaid
 flowchart TD
-  CLI["@okfx/cli"] --> Core["@okfx/core"]
-  MCP["@okfx/mcp"] --> Core
-  Adapters["@okfx/adapter-*"] --> Files["Reviewable OKF files"]
+  CLI["okfx"] --> Core["@okfxjs/core"]
+  MCP["@okfxjs/mcp"] --> Core
+  Adapters["@okfxjs/adapter-*"] --> Files["Reviewable OKF files"]
   Core --> Bundle["Markdown + YAML bundle"]
   Rust["crates/okfx_*"] -. opt-in N-API / WASM helpers .-> Core
 ```
