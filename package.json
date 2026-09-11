@@ -15,13 +15,16 @@
     "check:release-version": "node scripts/check-release-version.mjs",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
     "clean": "pnpm -r --if-present run clean",
-    "test": "vitest run",
+    "test": "pnpm test:unit && pnpm test:performance",
+    "test:performance": "vitest run packages/core/test/performance.test.ts",
+    "test:unit": "vitest run --exclude packages/core/test/performance.test.ts",
     "typecheck": "tsc -b tsconfig.json",
     "okf": "okf"
   },
   "devDependencies": {
+    "@okfx/core": "workspace:*",
     "@types/node": "^22.20.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
