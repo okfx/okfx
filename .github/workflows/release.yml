@@ -68,6 +68,52 @@ jobs:
       - name: Dry-run all workspace packages
         run: pnpm --filter './packages/*' pack --dry-run
 
+  publish-npm:
+    name: Publish npm packages
+    needs: verify
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build TypeScript packages
+        run: pnpm build
+
+      - name: Publish npm packages in dependency order
+        run: |
+          set -euo pipefail
+          pnpm --filter '@okfxjs/core' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/github-action' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/plugin-api' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/mcp' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/preset-agent-ready' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/preset-recommended' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/preset-strict' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/vscode' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/adapter-bigquery' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/adapter-datahub' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/adapter-dbt' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/adapter-markdown' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/adapter-openapi' publish --access public --tag latest --no-git-checks
+          pnpm --filter '@okfxjs/adapter-static-site' publish --access public --tag latest --no-git-checks
+          pnpm --filter 'okfx' publish --access public --tag latest --no-git-checks
+
   binaries:
     name: Build standalone binary ${{ matrix.target }}
     needs: verify
@@ -122,6 +168,7 @@ jobs:
     needs:
       - verify
       - binaries
+      - publish-npm
     permissions:
       contents: write
     runs-on: ubuntu-latest
