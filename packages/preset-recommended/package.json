@@ -1,6 +1,6 @@
 {
   "name": "@okfxjs/preset-recommended",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Recommended okfx rule preset.",
   "license": "MIT",
   "type": "module",

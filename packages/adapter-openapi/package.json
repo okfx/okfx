@@ -1,6 +1,6 @@
 {
   "name": "@okfxjs/adapter-openapi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenAPI to OKF producer adapter.",
   "license": "MIT",
   "type": "module",

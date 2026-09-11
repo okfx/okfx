@@ -1,6 +1,6 @@
 {
   "name": "@okfxjs/adapter-static-site",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OKF bundle to static site consumer adapter.",
   "license": "MIT",
   "type": "module",

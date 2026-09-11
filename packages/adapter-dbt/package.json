@@ -1,6 +1,6 @@
 {
   "name": "@okfxjs/adapter-dbt",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "dbt manifest to OKF producer adapter.",
   "license": "MIT",
   "type": "module",

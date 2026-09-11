@@ -1,7 +1,7 @@
 {
   "name": "@okfxjs/vscode",
   "displayName": "okfx",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "VS Code extension scaffold for OKF diagnostics and formatting.",
   "license": "MIT",
   "type": "module",

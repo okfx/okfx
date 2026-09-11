@@ -22,8 +22,11 @@
     "okf": "okf"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.2",
     "@okfxjs/core": "workspace:*",
     "@types/node": "^22.20.0",
+    "commitizen": "^4.3.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }

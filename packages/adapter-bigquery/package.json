@@ -1,6 +1,6 @@
 {
   "name": "@okfxjs/adapter-bigquery",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "BigQuery metadata to OKF producer adapter.",
   "license": "MIT",
   "type": "module",
