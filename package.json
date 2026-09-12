@@ -15,11 +15,17 @@
     "check:release-version": "node scripts/check-release-version.mjs",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings",
     "clean": "pnpm -r --if-present run clean",
+    "commit": "cz",
     "test": "pnpm test:unit && pnpm test:performance",
     "test:performance": "vitest run packages/core/test/performance.test.ts",
     "test:unit": "vitest run --exclude packages/core/test/performance.test.ts",
     "typecheck": "tsc -b tsconfig.json",
     "okf": "okf"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
@@ -27,6 +33,7 @@
     "@okfxjs/core": "workspace:*",
     "@types/node": "^22.20.0",
     "commitizen": "^4.3.2",
+    "cz-conventional-changelog": "^3.3.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   }

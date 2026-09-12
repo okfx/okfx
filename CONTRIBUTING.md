@@ -175,6 +175,14 @@ cargo fuzz run resolver
 
 ## Commits and pull requests
 
+Stage the files you want to commit, then use the Commitizen prompt to compose a
+Conventional Commit:
+
+```bash
+git add <files>
+pnpm commit
+```
+
 - This project uses [Conventional Commits](https://www.conventionalcommits.org/):
   `feat(scope): …`, `fix(scope): …`, `docs: …`, `chore: …`, `test: …`, `refactor: …`.
 - Keep pull requests focused, and update docs and tests alongside behavior changes.
