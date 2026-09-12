@@ -98,19 +98,19 @@ Weekly Active Users measures unique users who performed a qualifying event in th
 
 ## Features
 
-| Capability | Command | Description |
-| --- | --- | --- |
-| **Validate** | `okf validate` | Hard OKF conformance: parseable frontmatter, non-empty `type`, valid paths, reserved filenames, supported OKF version. |
-| **Lint** | `okf lint` | Opinionated quality, hygiene, graph, style, and security rules with configurable severities. |
-| **Format** | `okf fmt` | Conservative, deterministic formatting of YAML frontmatter and Markdown (`--check` for CI). |
-| **Graph** | `okf graph` | Concept graph with backlinks, orphans, cycles, hubs, and stale-subgraph analysis. Exports JSON, DOT, HTML, or Cytoscape. |
-| **Doctor** | `okf doctor` | Agent-readiness and production checks with a 0–100 readiness score. |
-| **Diff** | `okf diff` | Semantic diff of two bundles: added/removed/renamed/changed concepts, link changes, and readiness delta. |
-| **Pack** | `okf pack` | Portable, verifiable artifact with `manifest.json`, `checksums.json`, `provenance.json`, and a `.okf.tar.gz`. |
-| **Index** | `okf index` | Deterministic local full-text search index (vector/hybrid modes are opt-in). |
-| **Import** | `okf import` | Produce reviewable OKF draft files from Markdown, OpenAPI, dbt, DataHub, or BigQuery metadata. |
-| **Export** | `okf export` | Export a bundle to a consumer surface such as a static site. |
-| **MCP** | `okf mcp` | Serve a bundle to AI agents over the Model Context Protocol (read-only by default). |
+| Capability   | Command        | Description                                                                                                              |
+| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Validate** | `okf validate` | Hard OKF conformance: parseable frontmatter, non-empty `type`, valid paths, reserved filenames, supported OKF version.   |
+| **Lint**     | `okf lint`     | Opinionated quality, hygiene, graph, style, and security rules with configurable severities.                             |
+| **Format**   | `okf fmt`      | Conservative, deterministic formatting of YAML frontmatter and Markdown (`--check` for CI).                              |
+| **Graph**    | `okf graph`    | Concept graph with backlinks, orphans, cycles, hubs, and stale-subgraph analysis. Exports JSON, DOT, HTML, or Cytoscape. |
+| **Doctor**   | `okf doctor`   | Agent-readiness and production checks with a 0–100 readiness score.                                                      |
+| **Diff**     | `okf diff`     | Semantic diff of two bundles: added/removed/renamed/changed concepts, link changes, and readiness delta.                 |
+| **Pack**     | `okf pack`     | Portable, verifiable artifact with `manifest.json`, `checksums.json`, `provenance.json`, and a `.okf.tar.gz`.            |
+| **Index**    | `okf index`    | Deterministic local full-text search index (vector/hybrid modes are opt-in).                                             |
+| **Import**   | `okf import`   | Produce reviewable OKF draft files from Markdown, OpenAPI, dbt, DataHub, or BigQuery metadata.                           |
+| **Export**   | `okf export`   | Export a bundle to a consumer surface such as a static site.                                                             |
+| **MCP**      | `okf mcp`      | Serve a bundle to AI agents over the Model Context Protocol (read-only by default).                                      |
 
 Design principles: **local-first** (no network, no telemetry, no LLM calls by default),
 **deterministic** (stable sorting, hashes, diagnostics, and IDs for reliable CI and diffs),
@@ -181,20 +181,20 @@ Agent readiness:
 All commands accept a bundle root (default `.`). Full behavior and exit codes are
 documented in [`docs/commands/reference.md`](./docs/commands/reference.md).
 
-| Command | Purpose | Notable options |
-| --- | --- | --- |
-| `okf init [bundle]` | Create a starter OKF bundle | `--template <name>`, `--force` |
-| `okf validate [bundle]` | Check hard OKF conformance | `--format pretty\|json`, `--json`, `--out`, `--okf-version` |
-| `okf lint [bundle]` | Run quality and style rules | `--format pretty\|json\|sarif`, `--no-plugins`, `--debug`, `--timings` |
-| `okf fmt [bundle]` | Format Markdown and frontmatter | `--check` |
-| `okf graph [bundle]` | Build the concept graph | `--format json\|dot\|html\|cytoscape`, `--out` |
-| `okf doctor [bundle]` | Agent-readiness diagnostics + score | `--json`, `--out` |
-| `okf diff <before> <after>` | Compare two bundles semantically | `--format pretty\|json\|markdown` |
-| `okf pack [bundle]` | Create a portable bundle artifact | `--out`, `--name`, `--json` |
-| `okf index [bundle]` | Build a local search index | `--mode full-text\|vector\|hybrid`, `--vector-provider`, `--out` |
-| `okf import <adapter>` | Produce reviewable OKF drafts | `--input`, `--out`, `--write`, `--dry-run` |
-| `okf export <target> [bundle]` | Export to a consumer surface | `--out`, `--write`, `--dry-run` |
-| `okf mcp [bundle]` | Run a read-only MCP server | `--readonly`, `--allow-write`, `--describe` |
+| Command                        | Purpose                             | Notable options                                                        |
+| ------------------------------ | ----------------------------------- | ---------------------------------------------------------------------- |
+| `okf init [bundle]`            | Create a starter OKF bundle         | `--template <name>`, `--force`                                         |
+| `okf validate [bundle]`        | Check hard OKF conformance          | `--format pretty\|json`, `--json`, `--out`, `--okf-version`            |
+| `okf lint [bundle]`            | Run quality and style rules         | `--format pretty\|json\|sarif`, `--no-plugins`, `--debug`, `--timings` |
+| `okf fmt [bundle]`             | Format Markdown and frontmatter     | `--check`                                                              |
+| `okf graph [bundle]`           | Build the concept graph             | `--format json\|dot\|html\|cytoscape`, `--out`                         |
+| `okf doctor [bundle]`          | Agent-readiness diagnostics + score | `--json`, `--out`                                                      |
+| `okf diff <before> <after>`    | Compare two bundles semantically    | `--format pretty\|json\|markdown`                                      |
+| `okf pack [bundle]`            | Create a portable bundle artifact   | `--out`, `--name`, `--json`                                            |
+| `okf index [bundle]`           | Build a local search index          | `--mode full-text\|vector\|hybrid`, `--vector-provider`, `--out`       |
+| `okf import <adapter>`         | Produce reviewable OKF drafts       | `--input`, `--out`, `--write`, `--dry-run`                             |
+| `okf export <target> [bundle]` | Export to a consumer surface        | `--out`, `--write`, `--dry-run`                                        |
+| `okf mcp [bundle]`             | Run a read-only MCP server          | `--readonly`, `--allow-write`, `--describe`                            |
 
 ---
 
@@ -221,26 +221,26 @@ export default defineConfig({
     "graph/broken-internal-link": "warning",
     "graph/orphan-concept": "advice",
     "agent/metric-missing-source": "warning",
-    "security/suspicious-secret": "error"
+    "security/suspicious-secret": "error",
   },
 
   // fail the command when a diagnostic reaches this severity
   failOn: "error",
 
   frontmatter: {
-    keyOrder: ["type", "title", "description", "resource", "tags", "timestamp"]
+    keyOrder: ["type", "title", "description", "resource", "tags", "timestamp"],
   },
 
   // restrict allowed resource hosts (no network requests are ever made)
   resourcePolicy: {
-    allowHosts: ["docs.example.com", "github.com", "cloud.google.com"]
+    allowHosts: ["docs.example.com", "github.com", "cloud.google.com"],
   },
 
   mcp: {
     readonly: true,
     exposeDiagnostics: true,
-    exposeGraph: true
-  }
+    exposeGraph: true,
+  },
 });
 ```
 
@@ -259,11 +259,11 @@ Presets may be referenced by short name (`recommended`) or full package name
 
 `okfx` cleanly separates three questions:
 
-| Mode | Question | Failure means |
-| --- | --- | --- |
-| `validate` | Is this valid OKF? | The bundle violates the base spec. |
-| `lint` | Is this maintainable OKF? | The bundle has quality/style/security issues. |
-| `doctor` | Is this useful for agents and production? | The bundle works but is weak context. |
+| Mode       | Question                                  | Failure means                                 |
+| ---------- | ----------------------------------------- | --------------------------------------------- |
+| `validate` | Is this valid OKF?                        | The bundle violates the base spec.            |
+| `lint`     | Is this maintainable OKF?                 | The bundle has quality/style/security issues. |
+| `doctor`   | Is this useful for agents and production? | The bundle works but is weak context.         |
 
 Every diagnostic has a stable `code` (`<category>/<rule-name>`), a `severity`, a message,
 and an optional path/location and fix. Categories: `spec`, `hygiene`, `graph`, `style`,
@@ -275,12 +275,12 @@ improvement), `info` (informational).
 
 Exit codes:
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Success; no diagnostics crossed the failure threshold. |
-| `1` | Diagnostics, diff changes, or format-check differences crossed the threshold. |
-| `2` | Invalid config, arguments, or runtime failure. |
-| `3` | Plugin load or execution failure. |
+| Code | Meaning                                                                       |
+| ---- | ----------------------------------------------------------------------------- |
+| `0`  | Success; no diagnostics crossed the failure threshold.                        |
+| `1`  | Diagnostics, diff changes, or format-check differences crossed the threshold. |
+| `2`  | Invalid config, arguments, or runtime failure.                                |
+| `3`  | Plugin load or execution failure.                                             |
 
 ---
 
@@ -395,24 +395,24 @@ intermediate representation (IR). See [`docs/architecture/overview.md`](./docs/a
 
 ```text
 ┌───────────────────────────────────────────────────────────┐
-│                     User interfaces                        │
-│   CLI (okf)   VS Code   GitHub Action   MCP server         │
+│                     User interfaces                       │
+│   CLI (okf)   VS Code   GitHub Action   MCP server        │
 └───────────────────────────────────────────────────────────┘
                             │
 ┌───────────────────────────────────────────────────────────┐
-│                   TypeScript ecosystem                     │
-│  @okfxjs/core  okfx  @okfxjs/mcp  @okfxjs/plugin-api        │
-│  @okfxjs/adapter-*  @okfxjs/preset-*  @okfxjs/github-action      │
+│                   TypeScript ecosystem                    │
+│  @okfxjs/core  okfx  @okfxjs/mcp  @okfxjs/plugin-api      │
+│ @okfxjs/adapter-*  @okfxjs/preset-*  @okfxjs/github-action│
 └───────────────────────────────────────────────────────────┘
                             │  JSON IR over N-API / WASM
 ┌───────────────────────────────────────────────────────────┐
-│                        Rust core                           │
-│  okfx_parser  okfx_resolver  okfx_rules  okfx_fmt          │
-│  okfx_graph  okfx_index  okfx_pack  okfx_fs  okfx_cache    │
+│                        Rust core                          │
+│  okfx_parser  okfx_resolver  okfx_rules  okfx_fmt         │
+│  okfx_graph  okfx_index  okfx_pack  okfx_fs  okfx_cache   │
 └───────────────────────────────────────────────────────────┘
                             │
 ┌───────────────────────────────────────────────────────────┐
-│         Knowledge bundle (Markdown + YAML + links)         │
+│         Knowledge bundle (Markdown + YAML + links)        │
 └───────────────────────────────────────────────────────────┘
 ```
 
@@ -444,36 +444,36 @@ okfx/
 
 ### TypeScript packages (`packages/*`)
 
-| Package | Responsibility |
-| --- | --- |
-| `@okfxjs/core` | Data model, JSON IR, and deterministic engines (parse, validate, lint, fmt, graph, diff, pack, index, doctor). |
-| `okfx` | `okf` command-line interface. |
-| `@okfxjs/mcp` | Read-only MCP server for OKF bundles. |
-| `@okfxjs/plugin-api` | Public plugin authoring API (`definePlugin`). |
-| `@okfxjs/preset-recommended` · `-strict` · `-agent-ready` | Rule presets. |
-| `@okfxjs/adapter-markdown` · `-openapi` · `-dbt` · `-datahub` · `-bigquery` | Producer adapters. |
-| `@okfxjs/adapter-static-site` | Static-site consumer adapter. |
-| `@okfxjs/github-action` | CI quality-gate action wrapper. |
-| `@okfxjs/vscode` | VS Code extension. |
+| Package                                                                     | Responsibility                                                                                                 |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `@okfxjs/core`                                                              | Data model, JSON IR, and deterministic engines (parse, validate, lint, fmt, graph, diff, pack, index, doctor). |
+| `okfx`                                                                      | `okf` command-line interface.                                                                                  |
+| `@okfxjs/mcp`                                                               | Read-only MCP server for OKF bundles.                                                                          |
+| `@okfxjs/plugin-api`                                                        | Public plugin authoring API (`definePlugin`).                                                                  |
+| `@okfxjs/preset-recommended` · `-strict` · `-agent-ready`                   | Rule presets.                                                                                                  |
+| `@okfxjs/adapter-markdown` · `-openapi` · `-dbt` · `-datahub` · `-bigquery` | Producer adapters.                                                                                             |
+| `@okfxjs/adapter-static-site`                                               | Static-site consumer adapter.                                                                                  |
+| `@okfxjs/github-action`                                                     | CI quality-gate action wrapper.                                                                                |
+| `@okfxjs/vscode`                                                            | VS Code extension.                                                                                             |
 
 ### Rust crates (`crates/*`)
 
-| Crate | Responsibility |
-| --- | --- |
-| `okfx_core` | Shared core types and diagnostics. |
-| `okfx_fs` | File discovery, ignore rules, path normalization. |
-| `okfx_parser` | Markdown + YAML frontmatter parsing, headings, links, content hashing. |
-| `okfx_resolver` | Concept ID and Markdown link resolution, backlinks. |
-| `okfx_rules` | Built-in validation and lint rules. |
-| `okfx_fmt` | Formatter and safe file edits. |
-| `okfx_graph` | Graph construction and analysis. |
-| `okfx_diff` | Semantic diff between bundles. |
-| `okfx_pack` | Manifest, checksums, and pack metadata. |
-| `okfx_index` | Local search index. |
-| `okfx_cache` | Incremental cache keys and hashing. |
-| `okfx_napi` | Native Node.js binding (JSON IR boundary). |
-| `okfx_wasm` | WASM fallback binding. |
-| `okfx_cli` | Standalone Rust `okfx` binary. |
+| Crate           | Responsibility                                                         |
+| --------------- | ---------------------------------------------------------------------- |
+| `okfx_core`     | Shared core types and diagnostics.                                     |
+| `okfx_fs`       | File discovery, ignore rules, path normalization.                      |
+| `okfx_parser`   | Markdown + YAML frontmatter parsing, headings, links, content hashing. |
+| `okfx_resolver` | Concept ID and Markdown link resolution, backlinks.                    |
+| `okfx_rules`    | Built-in validation and lint rules.                                    |
+| `okfx_fmt`      | Formatter and safe file edits.                                         |
+| `okfx_graph`    | Graph construction and analysis.                                       |
+| `okfx_diff`     | Semantic diff between bundles.                                         |
+| `okfx_pack`     | Manifest, checksums, and pack metadata.                                |
+| `okfx_index`    | Local search index.                                                    |
+| `okfx_cache`    | Incremental cache keys and hashing.                                    |
+| `okfx_napi`     | Native Node.js binding (JSON IR boundary).                             |
+| `okfx_wasm`     | WASM fallback binding.                                                 |
+| `okfx_cli`      | Standalone Rust `okfx` binary.                                         |
 
 ---
 
@@ -527,12 +527,12 @@ This repository currently includes the planned TypeScript, Rust, agent, adapter,
 packaging, and index surfaces. Future releases should focus on compatibility hardening,
 performance, and public API stability rather than filling missing command surfaces.
 
-| Area | Status |
-| --- | --- |
-| TypeScript toolkit | `validate`, `lint`, `fmt`, `graph`, `doctor`, `diff`, `pack`, `index`, config, presets, plugins. |
-| Rust core | Parser, resolver, rules, formatter, graph, diff, pack, index, cache, N-API, WASM, standalone CLI. |
-| Agent and automation | Read-only MCP server, GitHub Action, VS Code extension, SARIF and PR-summary surfaces. |
-| Adapters | Markdown, OpenAPI, dbt, DataHub, BigQuery importers, plus static-site export. |
+| Area                 | Status                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| TypeScript toolkit   | `validate`, `lint`, `fmt`, `graph`, `doctor`, `diff`, `pack`, `index`, config, presets, plugins.  |
+| Rust core            | Parser, resolver, rules, formatter, graph, diff, pack, index, cache, N-API, WASM, standalone CLI. |
+| Agent and automation | Read-only MCP server, GitHub Action, VS Code extension, SARIF and PR-summary surfaces.            |
+| Adapters             | Markdown, OpenAPI, dbt, DataHub, BigQuery importers, plus static-site export.                     |
 
 Versioning is semver; `0.x` APIs are unstable and may change between minor releases.
 
