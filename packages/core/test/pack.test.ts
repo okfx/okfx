@@ -69,7 +69,7 @@ describe("packBundle", () => {
 
       expect((await stat(out)).size).toBeGreaterThan(0);
       expect(manifest).toMatchObject({
-        okfx_version: "0.1.1",
+        okfx_version: "0.1.2",
         okf_version: "0.1",
         concept_count: 1,
         file_count: 2

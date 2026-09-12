@@ -4,7 +4,7 @@ import { compareStrings, defineConfig, okfxVersion } from "../src/index.js";
 
 describe("@okfxjs/core", () => {
   it("exports the okfx version", () => {
-    expect(okfxVersion).toBe("0.1.1");
+    expect(okfxVersion).toBe("0.1.2");
   });
 
   it("returns typed config unchanged", () => {

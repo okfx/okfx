@@ -31,7 +31,7 @@ describe("@okfxjs/github-action", () => {
     expect(action).not.toContain("Math.max(0, ...");
     expect(action).not.toContain("fs.existsSync(process.env.OKF_DOCTOR_JSON)");
     expect(action.match(/doctor \? `- Doctor JSON:/g)).toHaveLength(2);
-    expect(action).toContain('default: "0.1.1"');
+    expect(action).toContain('default: "0.1.2"');
     expect(action).not.toContain('okfx":"latest"');
     expect(runBlockLines(action).some((line) => line.includes("${{ inputs."))).toBe(false);
     expect(runBlockLines(action)
@@ -49,7 +49,7 @@ describe("@okfxjs/github-action", () => {
   it("exports an example workflow", () => {
     expect(exampleWorkflow).toContain("actions/checkout@v4");
     expect(exampleWorkflow).toContain("okfx/okfx/packages/github-action@v0");
-    expect(exampleWorkflow).toContain('cli-version: "0.1.1"');
+    expect(exampleWorkflow).toContain('cli-version: "0.1.2"');
     expect(exampleWorkflow).toContain("pr-comment");
   });
 

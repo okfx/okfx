@@ -4,7 +4,7 @@ inputs:
   cli-version:
     description: Exact okfx version to install.
     required: false
-    default: "0.1.1"
+    default: "0.1.2"
   bundle:
     description: OKF bundle root.
     required: false

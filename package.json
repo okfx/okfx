@@ -1,6 +1,6 @@
 {
   "name": "okfx-workspace",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "description": "Developer toolkit for Open Knowledge Format bundles.",

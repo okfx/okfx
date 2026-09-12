@@ -32,7 +32,7 @@ describe("okfx command shell", () => {
     const code = await main(["--version"], output.io);
 
     expect(code).toBe(0);
-    expect(output.stdout()).toBe("0.1.1\n");
+    expect(output.stdout()).toBe("0.1.2\n");
     expect(output.stderr()).toBe("");
   });
 
